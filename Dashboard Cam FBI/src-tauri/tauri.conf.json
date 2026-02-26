@@ -10,9 +10,11 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "title": "dashboard-cam-fbi",
-        "width": 800,
-        "height": 600
+        "title": "Olho de Deus",
+        "width": 1280,
+        "height": 720,
+        "maximized": true,
+        "decorations": false
       }
     ],
     "security": {
