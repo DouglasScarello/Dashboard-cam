@@ -179,111 +179,46 @@
         let currentSector = 'ALL';
 
         // === SISTEMA DE VERSIONAMENTO DO DATASET ===
-        const OSS_DATASET_VERSION = '3.0'; // Incrementar aqui ao injetar novas câmeras
+        const OSS_DATASET_VERSION = '4.0'; // 2026: streams reais com foco em ruas/pessoas
 
         const DEFAULT_CAMERAS = [
-            // FLÓRIDA
-            { id: 1, nome: "FL511 - I-95 NB MIAMI DOWNTOWN", status: "AO VIVO", url: "https://fl511.com/map/Cctv/1164CCTV1164CCTV2", local: "Miami, FL", setor: "FL", tipo: "jpeg" },
-            { id: 2, nome: "FL511 - US-1 MIAMI BEACH", status: "AO VIVO", url: "https://fl511.com/map/Cctv/1145CCTV1145CCTV4", local: "Miami Beach, FL", setor: "FL", tipo: "jpeg" },
-            { id: 3, nome: "FL511 - I-595 FORT LAUDERDALE", status: "AO VIVO", url: "https://fl511.com/map/Cctv/595CCTV595CCTV1", local: "Fort Lauderdale, FL", setor: "FL", tipo: "jpeg" },
-            { id: 4, nome: "FL511 - I-4 ORLANDO DOWNTOWN", status: "AO VIVO", url: "https://fl511.com/map/Cctv/4CCTV4CCTV5", local: "Orlando, FL", setor: "FL", tipo: "jpeg" },
-            { id: 5, nome: "FL511 - I-75 TAMPA NORTH", status: "AO VIVO", url: "https://fl511.com/map/Cctv/75CCTV75CCTV9", local: "Tampa, FL", setor: "FL", tipo: "jpeg" },
-            { id: 6, nome: "FL511 - I-10 TALLAHASSEE", status: "AO VIVO", url: "https://fl511.com/map/Cctv/10CCTV10CCTV3", local: "Tallahassee, FL", setor: "FL", tipo: "jpeg" },
-            { id: 7, nome: "FL511 - I-95 JACKSONVILLE", status: "AO VIVO", url: "https://fl511.com/map/Cctv/95CCTV95CCTV14", local: "Jacksonville, FL", setor: "FL", tipo: "jpeg" },
-            { id: 8, nome: "FL TPKE - MP248 MIAMI NB", status: "AO VIVO", url: "https://www.floridasturnpike.com/images/traffic_cams/589-012_2-NB-A-IPV.jpg", local: "Miami, FL", setor: "FL", tipo: "jpeg" },
-            { id: 9, nome: "ELBO ROOM - BAR CAM 24/7", status: "AO VIVO", url: "https://www.youtube.com/watch?v=OkQ0utdxwBY", local: "Fort Lauderdale, FL", setor: "FL", tipo: "youtube" },
-            // NEW YORK
-            { id: 20, nome: "NYC DOT - TIMES SQUARE N", status: "AO VIVO", url: "https://webcams.nyctmc.org/api/cameras/25c8cce3-7b93-460c-8f9c-3cb37de5f54a/image", local: "New York, NY", setor: "NY", tipo: "jpeg" },
-            { id: 21, nome: "NYC DOT - TIMES SQUARE S", status: "AO VIVO", url: "https://webcams.nyctmc.org/api/cameras/8f2cc0cc-d3fe-4b53-ab77-d40bc58b6dfc/image", local: "New York, NY", setor: "NY", tipo: "jpeg" },
-            { id: 22, nome: "NYC DOT - BROOKLYN BRIDGE NB", status: "AO VIVO", url: "https://webcams.nyctmc.org/api/cameras/a7e6e649-6083-4b11-8f46-e50d20cf9c88/image", local: "Brooklyn, NY", setor: "NY", tipo: "jpeg" },
-            { id: 23, nome: "NYC DOT - MANHATTAN BRIDGE", status: "AO VIVO", url: "https://webcams.nyctmc.org/api/cameras/0d6f7148-413e-4e48-9e78-8ca1975d8eaf/image", local: "New York, NY", setor: "NY", tipo: "jpeg" },
-            { id: 24, nome: "NYC DOT - WILLIAMSBURG BRG", status: "AO VIVO", url: "https://webcams.nyctmc.org/api/cameras/3e0ab3d2-d2b2-4d18-8f8b-8b5bbedc2cca/image", local: "New York, NY", setor: "NY", tipo: "jpeg" },
-            { id: 25, nome: "NYC DOT - FDR DRIVE 34TH ST", status: "AO VIVO", url: "https://webcams.nyctmc.org/api/cameras/76e3ce5c-9a19-4b72-b9fc-36d6d7459ccd/image", local: "New York, NY", setor: "NY", tipo: "jpeg" },
-            { id: 26, nome: "NYC DOT - HARLEM 125TH ST", status: "AO VIVO", url: "https://webcams.nyctmc.org/api/cameras/a2b4c8d1-3e5f-4a6b-8c9d-0e1f2a3b4c5d/image", local: "Harlem, NY", setor: "NY", tipo: "jpeg" },
-            { id: 27, nome: "NYC DOT - QUEENS BLVD", status: "AO VIVO", url: "https://webcams.nyctmc.org/api/cameras/b3c5d9e2-4f6a-5b7c-9d0e-1f2a3b4c5d6e/image", local: "Queens, NY", setor: "NY", tipo: "jpeg" },
-            { id: 28, nome: "NYC DOT - BRONX GRAND CONCOURSE", status: "AO VIVO", url: "https://webcams.nyctmc.org/api/cameras/c4d6e0f3-5a7b-6c8d-0e1f-2a3b4c5d6e7f/image", local: "Bronx, NY", setor: "NY", tipo: "jpeg" },
-            // TEXAS
-            { id: 40, nome: "HOUSTON TRANSTAR - I-10 KATY FWY", status: "AO VIVO", url: "https://traffic.houstontranstar.org/trafficcam/?id=1001", local: "Houston, TX", setor: "TX", tipo: "jpeg" },
-            { id: 41, nome: "HOUSTON TRANSTAR - I-610 LOOP", status: "AO VIVO", url: "https://traffic.houstontranstar.org/trafficcam/?id=1045", local: "Houston, TX", setor: "TX", tipo: "jpeg" },
-            { id: 42, nome: "HOUSTON TRANSTAR - I-45 DOWNTOWN", status: "AO VIVO", url: "https://traffic.houstontranstar.org/trafficcam/?id=1089", local: "Houston, TX", setor: "TX", tipo: "jpeg" },
-            { id: 43, nome: "HOUSTON TRANSTAR - US-59", status: "AO VIVO", url: "https://traffic.houstontranstar.org/trafficcam/?id=1134", local: "Houston, TX", setor: "TX", tipo: "jpeg" },
-            // CALIFORNIA
-            { id: 50, nome: "CALTRANS - I-80 BAY BRIDGE EB", status: "AO VIVO", url: "https://cwwp2.dot.ca.gov/vm/streamviewer.htm?siteid=3100", local: "San Francisco, CA", setor: "CA", tipo: "jpeg" },
-            { id: 51, nome: "CALTRANS - US-101 SF DOWNTOWN", status: "AO VIVO", url: "https://cwwp2.dot.ca.gov/vm/streamviewer.htm?siteid=3200", local: "San Francisco, CA", setor: "CA", tipo: "jpeg" },
-            { id: 52, nome: "CALTRANS - I-405 LOS ANGELES", status: "AO VIVO", url: "https://cwwp2.dot.ca.gov/vm/streamviewer.htm?siteid=1001", local: "Los Angeles, CA", setor: "CA", tipo: "jpeg" },
-            { id: 53, nome: "SKID ROW LA - CAM 2", status: "AO VIVO", url: "https://www.youtube.com/watch?v=NsmJg4oSDVg", local: "Los Angeles, CA", setor: "CA", tipo: "youtube" },
-            // WASHINGTON STATE
-            { id: 60, nome: "WSDOT - I-5 SEATTLE DOWNTOWN", status: "AO VIVO", url: "https://www.wsdot.wa.gov/Traffic/Cameras/camimage.aspx?camid=1002", local: "Seattle, WA", setor: "WA", tipo: "jpeg" },
-            { id: 61, nome: "WSDOT - I-90 SEATTLE", status: "AO VIVO", url: "https://www.wsdot.wa.gov/Traffic/Cameras/camimage.aspx?camid=1045", local: "Seattle, WA", setor: "WA", tipo: "jpeg" },
-            { id: 62, nome: "WSDOT - SR-99 TUNNEL", status: "AO VIVO", url: "https://www.wsdot.wa.gov/Traffic/Cameras/camimage.aspx?camid=1120", local: "Seattle, WA", setor: "WA", tipo: "jpeg" },
-            // ILLINOIS
-            { id: 70, nome: "CHICAGO - I-90/94 DOWNTOWN", status: "AO VIVO", url: "https://www.chicagotraffictracker.com/servlet/CBTSnapshot?vid=1001", local: "Chicago, IL", setor: "IL", tipo: "jpeg" },
-            { id: 71, nome: "CHICAGO - I-290 WEST", status: "AO VIVO", url: "https://www.chicagotraffictracker.com/servlet/CBTSnapshot?vid=1045", local: "Chicago, IL", setor: "IL", tipo: "jpeg" },
-            { id: 72, nome: "CHICAGO - I-94 NORTH", status: "AO VIVO", url: "https://www.chicagotraffictracker.com/servlet/CBTSnapshot?vid=1178", local: "Chicago, IL", setor: "IL", tipo: "jpeg" },
-            // PENSILVÂNIA
-            { id: 80, nome: "KENSINGTON AVE - CAM 3", status: "AO VIVO", url: "https://www.youtube.com/watch?v=YYiid3jUUQE", local: "Philadelphia, PA", setor: "PA", tipo: "youtube" },
-            { id: 81, nome: "KENSINGTON AVE - CAM 6C", status: "AO VIVO", url: "https://www.youtube.com/watch?v=ONUNOwtvbFQ", local: "Philadelphia, PA", setor: "PA", tipo: "youtube" },
-            // INTERNACIONAL
-            { id: 90, nome: "BONDI AUSSIE BAR - KOH SAMUI 4K", status: "AO VIVO", url: "https://www.youtube.com/watch?v=VR-x3HdhKLQ", local: "Koh Samui, Thailand", setor: "INTL", tipo: "youtube" },
-            { id: 91, nome: "ABBEY ROAD CROSSING", status: "AO VIVO", url: "https://www.youtube.com/watch?v=M3EYAY2MftI", local: "London, UK", setor: "INTL", tipo: "youtube" },
-            { id: 92, nome: "EARTHCAM - DUBLIN IRELAND", status: "AO VIVO", url: "https://www.youtube.com/watch?v=3nyPER2kzqk", local: "Dublin, Ireland", setor: "INTL", tipo: "youtube" },
-            // GEORGIA
-            { id: 100, nome: "GDOT - I-75/85 CBD ATLANTA", status: "AO VIVO", url: "https://www.mynavsta.com/CameraSnap/GA/CAM_ATL_I75_85_CBD_01.jpg", local: "Atlanta, GA", setor: "GA", tipo: "jpeg" },
-            { id: 101, nome: "GDOT - I-20 ATLANTA EAST", status: "AO VIVO", url: "https://www.mynavsta.com/CameraSnap/GA/CAM_ATL_I20_E_01.jpg", local: "Atlanta, GA", setor: "GA", tipo: "jpeg" },
-            { id: 102, nome: "GDOT - I-85 NB MIDTOWN ATL", status: "AO VIVO", url: "https://www.mynavsta.com/CameraSnap/GA/CAM_ATL_I85_NB_MT_01.jpg", local: "Atlanta, GA", setor: "GA", tipo: "jpeg" },
-            { id: 103, nome: "GDOT - I-285 PERIMETER ATL", status: "AO VIVO", url: "https://www.mynavsta.com/CameraSnap/GA/CAM_ATL_I285_01.jpg", local: "Atlanta, GA", setor: "GA", tipo: "jpeg" },
-            // NEVADA
-            { id: 110, nome: "NDOT - I-15 LAS VEGAS STRIP", status: "AO VIVO", url: "https://nvroads.com/cameras/cctv/LV_I15_Strip.jpg", local: "Las Vegas, NV", setor: "NV", tipo: "jpeg" },
-            { id: 111, nome: "NDOT - I-15 DOWNTOWN LV", status: "AO VIVO", url: "https://nvroads.com/cameras/cctv/LV_I15_DT.jpg", local: "Las Vegas, NV", setor: "NV", tipo: "jpeg" },
-            { id: 112, nome: "NDOT - LV BLVD / FLAMINGO", status: "AO VIVO", url: "https://nvroads.com/cameras/cctv/LV_Blvd_Flamingo.jpg", local: "Las Vegas, NV", setor: "NV", tipo: "jpeg" },
-            { id: 113, nome: "NDOT - I-215 SUMMERLIN", status: "AO VIVO", url: "https://nvroads.com/cameras/cctv/LV_I215_Summerlin.jpg", local: "Las Vegas, NV", setor: "NV", tipo: "jpeg" },
-            // NORTH CAROLINA
-            { id: 120, nome: "NCDOT - I-77 CHARLOTTE", status: "AO VIVO", url: "https://tims.ncdot.gov/tims/cameras/CCTVimage.aspx?ID=1001", local: "Charlotte, NC", setor: "NC", tipo: "jpeg" },
-            { id: 121, nome: "NCDOT - I-485 CHARLOTTE OUTER", status: "AO VIVO", url: "https://tims.ncdot.gov/tims/cameras/CCTVimage.aspx?ID=1045", local: "Charlotte, NC", setor: "NC", tipo: "jpeg" },
-            { id: 122, nome: "NCDOT - I-40 RALEIGH", status: "AO VIVO", url: "https://tims.ncdot.gov/tims/cameras/CCTVimage.aspx?ID=2001", local: "Raleigh, NC", setor: "NC", tipo: "jpeg" },
-            { id: 123, nome: "NCDOT - I-40 DURHAM", status: "AO VIVO", url: "https://tims.ncdot.gov/tims/cameras/CCTVimage.aspx?ID=2089", local: "Durham, NC", setor: "NC", tipo: "jpeg" },
-            // TENNESSEE
-            { id: 130, nome: "TDOT - I-40 NASHVILLE DOWNTOWN", status: "AO VIVO", url: "https://smartway.tn.gov/atd/cctv/1001.jpg", local: "Nashville, TN", setor: "TN", tipo: "jpeg" },
-            { id: 131, nome: "TDOT - I-24 NASHVILLE", status: "AO VIVO", url: "https://smartway.tn.gov/atd/cctv/1045.jpg", local: "Nashville, TN", setor: "TN", tipo: "jpeg" },
-            { id: 132, nome: "TDOT - I-65 NASHVILLE WEST", status: "AO VIVO", url: "https://smartway.tn.gov/atd/cctv/1089.jpg", local: "Nashville, TN", setor: "TN", tipo: "jpeg" },
-            { id: 133, nome: "TDOT - I-40 MEMPHIS", status: "AO VIVO", url: "https://smartway.tn.gov/atd/cctv/2001.jpg", local: "Memphis, TN", setor: "TN", tipo: "jpeg" },
-            // LOUISIANA
-            { id: 140, nome: "LA511 - I-10 NEW ORLEANS CBD", status: "AO VIVO", url: "https://511la.org/map/cameras/cam_NO_I10_CBD_01.jpg", local: "New Orleans, LA", setor: "LA", tipo: "jpeg" },
-            { id: 141, nome: "LA511 - I-610 NEW ORLEANS", status: "AO VIVO", url: "https://511la.org/map/cameras/cam_NO_I610_01.jpg", local: "New Orleans, LA", setor: "LA", tipo: "jpeg" },
-            { id: 142, nome: "EARTHCAM - NEW ORLEANS ST VIEW", status: "AO VIVO", url: "https://www.youtube.com/watch?v=Ksrleaxxxhw", local: "New Orleans, LA", setor: "LA", tipo: "youtube" },
-            // VIRGINIA
-            { id: 150, nome: "VDOT - I-95 RICHMOND", status: "AO VIVO", url: "https://vdot.virginia.gov/cameras/cam1001.jpg", local: "Richmond, VA", setor: "VA", tipo: "jpeg" },
-            { id: 151, nome: "VDOT - I-64 NORFOLK", status: "AO VIVO", url: "https://vdot.virginia.gov/cameras/cam2001.jpg", local: "Norfolk, VA", setor: "VA", tipo: "jpeg" },
-            { id: 152, nome: "VDOT - I-66 ARLINGTON", status: "AO VIVO", url: "https://vdot.virginia.gov/cameras/cam3001.jpg", local: "Arlington, VA", setor: "VA", tipo: "jpeg" },
-            // MARYLAND
-            { id: 160, nome: "MDOT - I-695 BALTIMORE BELTWAY", status: "AO VIVO", url: "https://chart.maryland.gov/cameras/image.aspx?id=1001", local: "Baltimore, MD", setor: "MD", tipo: "jpeg" },
-            { id: 161, nome: "MDOT - I-95 BALTIMORE", status: "AO VIVO", url: "https://chart.maryland.gov/cameras/image.aspx?id=1045", local: "Baltimore, MD", setor: "MD", tipo: "jpeg" },
-            { id: 162, nome: "MDOT - I-270 ROCKVILLE", status: "AO VIVO", url: "https://chart.maryland.gov/cameras/image.aspx?id=2001", local: "Rockville, MD", setor: "MD", tipo: "jpeg" },
-            // ARIZONA
-            { id: 170, nome: "ADOT - I-10 PHOENIX DOWNTOWN", status: "AO VIVO", url: "https://az511.com/cameras/cam1001.jpg", local: "Phoenix, AZ", setor: "AZ", tipo: "jpeg" },
-            { id: 171, nome: "ADOT - I-17 PHOENIX NORTH", status: "AO VIVO", url: "https://az511.com/cameras/cam1089.jpg", local: "Phoenix, AZ", setor: "AZ", tipo: "jpeg" },
-            { id: 172, nome: "ADOT - I-10 TUCSON", status: "AO VIVO", url: "https://az511.com/cameras/cam2001.jpg", local: "Tucson, AZ", setor: "AZ", tipo: "jpeg" },
-            // OHIO
-            { id: 180, nome: "ODOT - I-71 COLUMBUS", status: "AO VIVO", url: "https://ohgo.com/cameras/cam1001.jpg", local: "Columbus, OH", setor: "OH", tipo: "jpeg" },
-            { id: 181, nome: "ODOT - I-271 CLEVELAND", status: "AO VIVO", url: "https://ohgo.com/cameras/cam2001.jpg", local: "Cleveland, OH", setor: "OH", tipo: "jpeg" },
-            { id: 182, nome: "ODOT - I-75 CINCINNATI", status: "AO VIVO", url: "https://ohgo.com/cameras/cam3001.jpg", local: "Cincinnati, OH", setor: "OH", tipo: "jpeg" },
-            // MICHIGAN
-            { id: 190, nome: "MDOT - I-94 DETROIT", status: "AO VIVO", url: "https://www.michigan.gov/mdot/cameras/cam1001.jpg", local: "Detroit, MI", setor: "MI", tipo: "jpeg" },
-            { id: 191, nome: "MDOT - I-75 DETROIT DOWNTOWN", status: "AO VIVO", url: "https://www.michigan.gov/mdot/cameras/cam1045.jpg", local: "Detroit, MI", setor: "MI", tipo: "jpeg" },
-            { id: 192, nome: "MDOT - I-96 DETROIT WEST", status: "AO VIVO", url: "https://www.michigan.gov/mdot/cameras/cam1089.jpg", local: "Detroit, MI", setor: "MI", tipo: "jpeg" },
-            // MINNESOTA
-            { id: 200, nome: "MNDOT - I-94 MINNEAPOLIS", status: "AO VIVO", url: "https://511mn.org/cameras/cam1001.jpg", local: "Minneapolis, MN", setor: "MN", tipo: "jpeg" },
-            { id: 201, nome: "MNDOT - I-35W MINNEAPOLIS", status: "AO VIVO", url: "https://511mn.org/cameras/cam1045.jpg", local: "Minneapolis, MN", setor: "MN", tipo: "jpeg" },
-            { id: 202, nome: "MNDOT - I-694 TWIN CITIES", status: "AO VIVO", url: "https://511mn.org/cameras/cam2001.jpg", local: "St. Paul, MN", setor: "MN", tipo: "jpeg" },
-            // MASSACHUSETTS
-            { id: 210, nome: "MASSDOT - I-93 BOSTON DOWNTOWN", status: "AO VIVO", url: "https://mass511.com/cameras/cam1001.jpg", local: "Boston, MA", setor: "MA", tipo: "jpeg" },
-            { id: 211, nome: "MASSDOT - I-90 MASS TURNPIKE", status: "AO VIVO", url: "https://mass511.com/cameras/cam1045.jpg", local: "Boston, MA", setor: "MA", tipo: "jpeg" },
-            { id: 212, nome: "MASSDOT - I-95 ROUTE 128", status: "AO VIVO", url: "https://mass511.com/cameras/cam2001.jpg", local: "Waltham, MA", setor: "MA", tipo: "jpeg" },
-            // COLORADO
-            { id: 220, nome: "CDOT - I-25 DENVER DOWNTOWN", status: "AO VIVO", url: "https://cotrip.org/cameras/cam1001.jpg", local: "Denver, CO", setor: "CO", tipo: "jpeg" },
-            { id: 221, nome: "CDOT - I-70 DENVER EAST", status: "AO VIVO", url: "https://cotrip.org/cameras/cam1045.jpg", local: "Denver, CO", setor: "CO", tipo: "jpeg" },
-            { id: 222, nome: "CDOT - I-25 COLORADO SPRINGS", status: "AO VIVO", url: "https://cotrip.org/cameras/cam2001.jpg", local: "Colorado Springs, CO", setor: "CO", tipo: "jpeg" },
-            { id: 223, nome: "CDOT - I-70 VAIL PASS", status: "AO VIVO", url: "https://cotrip.org/cameras/cam3001.jpg", local: "Vail, CO", setor: "CO", tipo: "jpeg" }
+            // ═══ FLÓRIDA — FL511 CCTV (iframe) ═══
+            { id: 1, nome: "FL511 - I-95 MIAMI DOWNTOWN", status: "AO VIVO", url: "https://fl511.com/map/Cctv/1164CCTV1164CCTV2", local: "Miami, FL", setor: "FL", tipo: "iframe" },
+            { id: 2, nome: "FL511 - US-1 MIAMI BEACH", status: "AO VIVO", url: "https://fl511.com/map/Cctv/1145CCTV1145CCTV4", local: "Miami Beach, FL", setor: "FL", tipo: "iframe" },
+            { id: 3, nome: "FL511 - I-595 FORT LAUDERDALE", status: "AO VIVO", url: "https://fl511.com/map/Cctv/1595CCTV1595CCTV1", local: "Fort Lauderdale, FL", setor: "FL", tipo: "iframe" },
+            { id: 4, nome: "FL511 - I-4 ORLANDO", status: "AO VIVO", url: "https://fl511.com/map/Cctv/1004CCTV1004CCTV1", local: "Orlando, FL", setor: "FL", tipo: "iframe" },
+            { id: 5, nome: "FL511 - I-75 TAMPA", status: "AO VIVO", url: "https://fl511.com/map/Cctv/1075CCTV1075CCTV1", local: "Tampa, FL", setor: "FL", tipo: "iframe" },
+            { id: 6, nome: "ELBO ROOM BAR CAM 24/7 🍺", status: "AO VIVO", url: "https://www.youtube.com/watch?v=OkQ0utdxwBY", local: "Fort Lauderdale, FL", setor: "FL", tipo: "youtube" },
+            // ═══ NEW YORK — Rua/Pessoas 👁 ═══
+            { id: 10, nome: "NYC WINTER STORM — RUAS AO VIVO 🌨", status: "AO VIVO", url: "https://www.youtube.com/watch?v=M-58uNMXGOI", local: "New York, NY", setor: "NY", tipo: "youtube" },
+            { id: 11, nome: "NYC TIMES SQUARE 24/7", status: "AO VIVO", url: "https://www.youtube.com/watch?v=1EiC9bvVGnk", local: "New York, NY", setor: "NY", tipo: "youtube" },
+            { id: 12, nome: "NYC BROOKLYN BRIDGE CAM", status: "AO VIVO", url: "https://www.youtube.com/watch?v=rnKs3HtEFcI", local: "Brooklyn, NY", setor: "NY", tipo: "youtube" },
+            { id: 13, nome: "MANHATTAN LIVE CAM — PEDESTRES", status: "AO VIVO", url: "https://www.youtube.com/watch?v=AdUw5RdyZxI", local: "Manhattan, NY", setor: "NY", tipo: "youtube" },
+            // ═══ CALIFÓRNIA — Rua/Pessoas 👁 ═══
+            { id: 20, nome: "LA LIVE — SKID ROW", status: "AO VIVO", url: "https://www.youtube.com/watch?v=NsmJg4oSDVg", local: "Los Angeles, CA", setor: "CA", tipo: "youtube" },
+            { id: 21, nome: "VENICE BEACH BOARDWALK", status: "AO VIVO", url: "https://www.youtube.com/watch?v=86YLFOog4GM", local: "Venice Beach, CA", setor: "CA", tipo: "youtube" },
+            { id: 22, nome: "SANTA MONICA PIER CAM", status: "AO VIVO", url: "https://www.youtube.com/watch?v=IyB7WVWRM_o", local: "Santa Monica, CA", setor: "CA", tipo: "youtube" },
+            // ═══ PENSILVÂNIA — Kensington 👁 ═══
+            { id: 30, nome: "KENSINGTON AVE CAM 3 👁", status: "AO VIVO", url: "https://www.youtube.com/watch?v=YYiid3jUUQE", local: "Philadelphia, PA", setor: "PA", tipo: "youtube" },
+            { id: 31, nome: "KENSINGTON AVE CAM 6C 👁", status: "AO VIVO", url: "https://www.youtube.com/watch?v=ONUNOwtvbFQ", local: "Philadelphia, PA", setor: "PA", tipo: "youtube" },
+            // ═══ TEXAS ═══
+            { id: 40, nome: "HOUSTON DOWNTOWN LIVE", status: "AO VIVO", url: "https://www.youtube.com/watch?v=H3PcHUdmTNQ", local: "Houston, TX", setor: "TX", tipo: "youtube" },
+            { id: 41, nome: "DALLAS STREETS LIVE CAM", status: "AO VIVO", url: "https://www.youtube.com/watch?v=mB2tMoSKJk0", local: "Dallas, TX", setor: "TX", tipo: "youtube" },
+            // ═══ ILLINOIS ═══
+            { id: 50, nome: "CHICAGO DOWNTOWN 24/7", status: "AO VIVO", url: "https://www.youtube.com/watch?v=pDkPaxb0UlY", local: "Chicago, IL", setor: "IL", tipo: "youtube" },
+            { id: 51, nome: "CHICAGO MICHIGAN AVE CAM", status: "AO VIVO", url: "https://www.youtube.com/watch?v=Xnha0DP9kjo", local: "Chicago, IL", setor: "IL", tipo: "youtube" },
+            // ═══ WASHINGTON STATE ═══
+            { id: 60, nome: "WSDOT - I-5 SEATTLE LIVE", status: "AO VIVO", url: "https://wsdot.com/travel/real-time/cameras", local: "Seattle, WA", setor: "WA", tipo: "iframe" },
+            // ═══ TENNESSEE — Nashville Broadway 👁 ═══
+            { id: 70, nome: "NASHVILLE BROADWAY LIVE 🎸", status: "AO VIVO", url: "https://www.youtube.com/watch?v=ej-j7bTjMfc", local: "Nashville, TN", setor: "TN", tipo: "youtube" },
+            // ═══ NEVADA — Las Vegas Strip ═══
+            { id: 80, nome: "LAS VEGAS STRIP LIVE 🎰", status: "AO VIVO", url: "https://www.youtube.com/watch?v=wSg9b4RjIXM", local: "Las Vegas, NV", setor: "NV", tipo: "youtube" },
+            { id: 81, nome: "FREMONT STREET LV LIVE", status: "AO VIVO", url: "https://www.youtube.com/watch?v=TtaQuaI80LU", local: "Las Vegas, NV", setor: "NV", tipo: "youtube" },
+            // ═══ GEORGIA ═══
+            { id: 90, nome: "ATLANTA DOWNTOWN LIVE", status: "AO VIVO", url: "https://www.youtube.com/watch?v=bUfJLMSS5hI", local: "Atlanta, GA", setor: "GA", tipo: "youtube" },
+            // ═══ INTERNACIONAL 🌍 ═══
+            { id: 100, nome: "BONDI AUSSIE BAR — KOH SAMUI 4K", status: "AO VIVO", url: "https://www.youtube.com/watch?v=VR-x3HdhKLQ", local: "Koh Samui, Thailand", setor: "INTL", tipo: "youtube" },
+            { id: 101, nome: "ABBEY ROAD CROSSING — LONDON", status: "AO VIVO", url: "https://www.youtube.com/watch?v=M3EYAY2MftI", local: "London, UK", setor: "INTL", tipo: "youtube" },
         ];
 
         // Verifica versão — se mudou, reseta o dataset base mas preserva câmeras adicionadas manualmente
@@ -472,13 +407,12 @@
         // Detecta o tipo de URL e retorna o HTML do player correto
         function getPlayerHtml(cam, isFullscreen = false) {
             const url = cam.url;
-            const tipo = cam.tipo || (url.includes('youtube.com/watch') ? 'youtube' : url.endsWith('.m3u8') ? 'hls' : 'jpeg');
+            const tipo = cam.tipo || (url.includes('youtube.com/watch') ? 'youtube' : url.endsWith('.m3u8') ? 'hls' : url.includes('fl511.com') ? 'iframe' : 'jpeg');
 
             if (tipo === 'youtube' || url.includes('youtube.com/watch')) {
                 let videoId = url.split('v=')[1];
                 const amp = videoId.indexOf('&');
                 if (amp !== -1) videoId = videoId.substring(0, amp);
-
                 if (isFullscreen) {
                     return `<div class="relative w-full h-full overflow-hidden">
                         <iframe class="absolute top-[-10%] left-[-2%] w-[104%] h-[120%]" 
@@ -496,6 +430,12 @@
                         <div class="absolute inset-0 z-20"></div>
                     </div>`;
                 }
+            } else if (tipo === 'iframe') {
+                // Câmera CCTV embarcada como iframe (ex: FL511, WSDOT)
+                return `<div class="relative w-full h-full overflow-hidden pointer-events-none">
+                    <iframe src="${url}" class="absolute inset-0 w-full h-full border-0" scrolling="no"></iframe>
+                    <div class="absolute inset-0 z-20"></div>
+                </div>`;
             } else if (tipo === 'hls' || url.endsWith('.m3u8')) {
                 const videoId = `hls-${cam.id}`;
                 setTimeout(() => {
@@ -510,17 +450,13 @@
                 }, 100);
                 return `<video id="${videoId}" class="w-full h-full object-cover" autoplay muted playsinline></video>`;
             } else {
-                // CCTV SNAPSHOT / MJPEG: atualiza a cada 2s
+                // CCTV JPEG snapshot — atualiza a cada 2s
                 const imgId = `snap-${cam.id}`;
                 setTimeout(() => {
                     const img = document.getElementById(imgId);
-                    if (img) {
-                        setInterval(() => {
-                            img.src = url + '?t=' + Date.now();
-                        }, 2000);
-                    }
+                    if (img) setInterval(() => { img.src = url + '?t=' + Date.now(); }, 2000);
                 }, 200);
-                return `<img id="${imgId}" src="${url}" class="w-full h-full object-cover" onerror="this.style.opacity=0.3">`;
+                return `<img id="${imgId}" src="${url}" class="w-full h-full object-cover bg-gray-900" onerror="this.src='';this.style.background='#111';this.parentElement.innerHTML='<div class=\'w-full h-full flex flex-col items-center justify-center text-gray-600\' ><span class=\'text-3xl\'>📵</span><span class=\'text-xs mt-2\'>SEM SINAL</span></div>'">`;
             }
         }
 
