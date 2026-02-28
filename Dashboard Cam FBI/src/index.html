@@ -55,25 +55,59 @@
     <!-- Modal Adicionar Câmera -->
     <div id="addCameraModal" class="fixed inset-0 bg-black bg-opacity-90 z-50 hidden flex items-center justify-center p-4">
         <div class="bg-gray-800 border border-gray-700 rounded-lg p-6 w-full max-w-md shadow-2xl">
-            <h2 class="text-xl font-bold text-emerald-500 mb-6 tracking-widest uppercase">Nova Unidade de Vigilância</h2>
+            <h2 class="text-xl font-bold text-emerald-500 mb-6 tracking-widest uppercase font-mono italic">Nova Unidade de Vigilância</h2>
             
-            <div class="space-y-4">
+            <div class="space-y-4 font-mono">
                 <div>
                     <label class="block text-xs font-bold text-gray-400 uppercase mb-1">Identificação / Nome</label>
-                    <input type="text" id="newCamName" class="bg-gray-900 border border-gray-600 text-white text-sm rounded-md block w-full p-2.5 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all font-mono" placeholder="Ex: ENTRADA SUL - PORTÃO B">
+                    <input type="text" id="newCamName" class="bg-gray-900 border border-gray-600 text-white text-sm rounded-md block w-full p-2.5 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all" placeholder="Ex: ENTRADA SUL - PORTÃO B">
                 </div>
                 <div>
                     <label class="block text-xs font-bold text-gray-400 uppercase mb-1">Link do YouTube (Watch URL)</label>
-                    <input type="text" id="newCamUrl" class="bg-gray-900 border border-gray-600 text-white text-sm rounded-md block w-full p-2.5 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all font-mono" placeholder="https://www.youtube.com/watch?v=...">
+                    <input type="text" id="newCamUrl" class="bg-gray-900 border border-gray-600 text-white text-sm rounded-md block w-full p-2.5 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all" placeholder="https://www.youtube.com/watch?v=...">
                 </div>
             </div>
 
             <div class="flex space-x-3 mt-8">
-                <button onclick="closeAddModal()" class="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 rounded transition-colors text-sm uppercase tracking-wider">
+                <button onclick="closeAddModal()" class="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 rounded transition-colors text-sm uppercase tracking-wider font-mono">
                     Cancelar
                 </button>
-                <button onclick="addNewCamera()" class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 rounded transition-colors text-sm uppercase tracking-wider">
-                    Ativar Câmera
+                <button onclick="addNewCamera()" class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 rounded transition-colors text-sm uppercase tracking-wider font-mono">
+                    Ativar Unidade
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Editar Câmera -->
+    <div id="editCameraModal" class="fixed inset-0 bg-black bg-opacity-90 z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-gray-800 border border-gray-700 rounded-lg p-6 w-full max-w-md shadow-2xl relative">
+            <h2 class="text-xl font-bold text-yellow-500 mb-6 tracking-widest uppercase font-mono italic">Configuração de Unidade</h2>
+            
+            <input type="hidden" id="editCamId">
+
+            <div class="space-y-4 font-mono">
+                <div>
+                    <label class="block text-xs font-bold text-gray-400 uppercase mb-1">Identificação / Nome</label>
+                    <input type="text" id="editCamName" class="bg-gray-900 border border-gray-600 text-white text-sm rounded-md block w-full p-2.5 focus:border-yellow-500 focus:ring-1 focus:ring-yellow-500 transition-all">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-400 uppercase mb-1">Link do YouTube (Watch URL)</label>
+                    <input type="text" id="editCamUrl" class="bg-gray-900 border border-gray-600 text-white text-sm rounded-md block w-full p-2.5 focus:border-yellow-500 focus:ring-1 focus:ring-yellow-500 transition-all">
+                </div>
+            </div>
+
+            <div class="flex flex-col space-y-3 mt-8">
+                <div class="flex space-x-3">
+                    <button onclick="closeEditModal()" class="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 rounded transition-colors text-sm uppercase tracking-wider font-mono">
+                        Voltar
+                    </button>
+                    <button onclick="saveEditCamera()" class="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 rounded transition-colors text-sm uppercase tracking-wider font-mono">
+                        Salvar Alterações
+                    </button>
+                </div>
+                <button onclick="deleteCamera()" class="w-full bg-red-900 hover:bg-red-800 text-red-100 font-bold py-2 rounded transition-colors text-xs uppercase tracking-widest font-mono border border-red-700">
+                    DESATIVAR UNIDADE (REMOVER)
                 </button>
             </div>
         </div>
@@ -86,6 +120,7 @@
         const modalTitle = document.getElementById('modalTitle');
         const modalContent = document.getElementById('modalContent');
         const addCameraModal = document.getElementById('addCameraModal');
+        const editCameraModal = document.getElementById('editCameraModal');
 
         // Carregar do LocalStorage ou usar padrões
         let activeCameras = JSON.parse(localStorage.getItem('oss_cameras')) || [
@@ -132,6 +167,53 @@
             saveToStorage();
             renderizarCameras(activeCameras);
             closeAddModal();
+        }
+
+        function openEditModal(id) {
+            const cam = activeCameras.find(c => c.id === id);
+            if (!cam) return;
+
+            document.getElementById('editCamId').value = id;
+            document.getElementById('editCamName').value = cam.nome;
+            document.getElementById('editCamUrl').value = cam.url;
+            
+            editCameraModal.classList.remove('hidden');
+        }
+
+        function closeEditModal() {
+            editCameraModal.classList.add('hidden');
+        }
+
+        function saveEditCamera() {
+            const id = parseInt(document.getElementById('editCamId').value);
+            const name = document.getElementById('editCamName').value;
+            const url = document.getElementById('editCamUrl').value;
+
+            if (!name || !url) {
+                alert("ERRO: Dados insuficientes para atualização.");
+                return;
+            }
+
+            const index = activeCameras.findIndex(c => c.id === id);
+            if (index !== -1) {
+                activeCameras[index].nome = name.toUpperCase();
+                activeCameras[index].url = url;
+                saveToStorage();
+                renderizarCameras(activeCameras);
+                closeEditModal();
+            }
+        }
+
+        function deleteCamera() {
+            const id = parseInt(document.getElementById('editCamId').value);
+            const cam = activeCameras.find(c => c.id === id);
+            
+            if (confirm(`DESATIVAÇÃO CRÍTICA: Deseja remover permanentemente a unidade [${cam.nome}]?`)) {
+                activeCameras = activeCameras.filter(c => c.id !== id);
+                saveToStorage();
+                renderizarCameras(activeCameras);
+                closeEditModal();
+            }
         }
 
         function openFullscreen(id) {
@@ -233,7 +315,7 @@
                                 <span class="text-sm font-semibold truncate">${cam.nome}</span>
                                 <svg class="w-4 h-4 text-emerald-500 opacity-0 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"></path></svg>
                             </div>
-                            <svg class="w-5 h-5 text-gray-500 hover:text-white cursor-pointer" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                            <svg onclick="event.stopPropagation(); openEditModal(${cam.id})" class="w-5 h-5 text-gray-500 hover:text-yellow-500 cursor-pointer transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
                         </div>
                     </div>
                 `;
