@@ -159,15 +159,17 @@
 
         let currentSector = 'ALL';
 
-        // Carregar do LocalStorage ou usar padrões (Expansão Flórida inclusa)
+        // Carregar do LocalStorage ou usar padrões (Feeds verificados ao vivo)
         let activeCameras = JSON.parse(localStorage.getItem('oss_cameras')) || [
-            { id: 7, nome: "MIAMI BEACH - NEWS CAFE", status: "AO VIVO", url: "https://www.youtube.com/watch?v=R0AiaL-i_F0", local: "Miami Beach, FL", setor: "FL" },
-            { id: 8, nome: "TAMPA BAYSHORE - ROME AVE", status: "AO VIVO", url: "https://www.youtube.com/watch?v=3VzE4uI7p6w", local: "Tampa, FL", setor: "FL" },
-            { id: 9, nome: "ABBEY ROAD CROSSING", status: "AO VIVO", url: "https://www.youtube.com/watch?v=M3EYAY2MftI", local: "London, UK", setor: "INTL" },
-            { id: 10, nome: "KENSINGTON AVE - CAM 3", status: "AO VIVO", url: "https://www.youtube.com/watch?v=YYiid3jUUQE", local: "Philadelphia, PA", setor: "PA" },
-            { id: 11, nome: "SKID ROW LA - CAM 2", status: "AO VIVO", url: "https://www.youtube.com/watch?v=NsmJg4oSDVg", local: "Los Angeles, CA", setor: "CA" },
-            { id: 12, nome: "KEY WEST - DUVAL ST", status: "AO VIVO", url: "https://www.youtube.com/watch?v=9LwU6L6V_2E", local: "Key West, FL", setor: "FL" },
-            { id: 13, nome: "ORLANDO - I-DRIVE", status: "AO VIVO", url: "https://www.youtube.com/watch?v=Bbe00Yj1Tig", local: "Orlando, FL", setor: "FL" }
+            // --- FLÓRIDA ---
+            { id: 1, nome: "ELBO ROOM - BAR CAM (24/7)", status: "AO VIVO", url: "https://www.youtube.com/watch?v=OkQ0utdxwBY", local: "Fort Lauderdale, FL", setor: "FL" },
+            { id: 2, nome: "BONDI AUSSIE BAR - KOH SAMUI 4K", status: "AO VIVO", url: "https://www.youtube.com/watch?v=VR-x3HdhKLQ", local: "Koh Samui, Thailand", setor: "INTL" },
+            { id: 3, nome: "ABBEY ROAD CROSSING", status: "AO VIVO", url: "https://www.youtube.com/watch?v=M3EYAY2MftI", local: "London, UK", setor: "INTL" },
+            { id: 4, nome: "KENSINGTON AVE - CAM 3", status: "AO VIVO", url: "https://www.youtube.com/watch?v=YYiid3jUUQE", local: "Philadelphia, PA", setor: "PA" },
+            { id: 5, nome: "KENSINGTON AVE - CAM 6C", status: "AO VIVO", url: "https://www.youtube.com/watch?v=ONUNOwtvbFQ", local: "Philadelphia, PA", setor: "PA" },
+            { id: 6, nome: "SKID ROW LA - CAM 2", status: "AO VIVO", url: "https://www.youtube.com/watch?v=NsmJg4oSDVg", local: "Los Angeles, CA", setor: "CA" },
+            { id: 7, nome: "EARTHCAM - DUBLIN IRELAND", status: "AO VIVO", url: "https://www.youtube.com/watch?v=3nyPER2kzqk", local: "Dublin, Ireland", setor: "INTL" },
+            { id: 8, nome: "EARTHCAM - NEW ORLEANS", status: "AO VIVO", url: "https://www.youtube.com/watch?v=Ksrleaxxxhw", local: "New Orleans, LA", setor: "INTL" }
         ];
 
         function saveToStorage() {
