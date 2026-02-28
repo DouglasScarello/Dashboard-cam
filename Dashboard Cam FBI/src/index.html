@@ -31,7 +31,7 @@
             <input type="text" id="searchInput" class="bg-gray-900 border border-gray-600 text-gray-100 text-sm rounded-md block w-full pl-10 p-2.5 transition-all duration-300" placeholder="Pesquisar câmera pelo nome único...">
         </div>
 
-        <button class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 px-4 rounded transition-colors duration-200 flex items-center">
+        <button onclick="openAddModal()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 px-4 rounded transition-colors duration-200 flex items-center">
             <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
             ADICIONAR CÂMERA
         </button>
@@ -52,9 +52,43 @@
         <div id="modalContent" class="flex-1 bg-black relative"></div>
     </div>
 
+    <!-- Modal Adicionar Câmera -->
+    <div id="addCameraModal" class="fixed inset-0 bg-black bg-opacity-90 z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-gray-800 border border-gray-700 rounded-lg p-6 w-full max-w-md shadow-2xl">
+            <h2 class="text-xl font-bold text-emerald-500 mb-6 tracking-widest uppercase">Nova Unidade de Vigilância</h2>
+            
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-gray-400 uppercase mb-1">Identificação / Nome</label>
+                    <input type="text" id="newCamName" class="bg-gray-900 border border-gray-600 text-white text-sm rounded-md block w-full p-2.5 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all font-mono" placeholder="Ex: ENTRADA SUL - PORTÃO B">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-400 uppercase mb-1">Link do YouTube (Watch URL)</label>
+                    <input type="text" id="newCamUrl" class="bg-gray-900 border border-gray-600 text-white text-sm rounded-md block w-full p-2.5 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all font-mono" placeholder="https://www.youtube.com/watch?v=...">
+                </div>
+            </div>
+
+            <div class="flex space-x-3 mt-8">
+                <button onclick="closeAddModal()" class="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 rounded transition-colors text-sm uppercase tracking-wider">
+                    Cancelar
+                </button>
+                <button onclick="addNewCamera()" class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 rounded transition-colors text-sm uppercase tracking-wider">
+                    Ativar Câmera
+                </button>
+            </div>
+        </div>
+    </div>
+
     <script>
-        // Simulando dados que virão da sua API Python (FastAPI) no futuro
-        const mockCameras = [
+        const cameraGrid = document.getElementById('cameraGrid');
+        const searchInput = document.getElementById('searchInput');
+        const fullscreenModal = document.getElementById('fullscreenModal');
+        const modalTitle = document.getElementById('modalTitle');
+        const modalContent = document.getElementById('modalContent');
+        const addCameraModal = document.getElementById('addCameraModal');
+
+        // Carregar do LocalStorage ou usar padrões
+        let activeCameras = JSON.parse(localStorage.getItem('oss_cameras')) || [
             { id: 7, nome: "EarthCam Live: Dublin, Ireland", status: "AO VIVO", url: "https://www.youtube.com/watch?v=3nyPER2kzqk" },
             { id: 8, nome: "EarthCam Live: New Orleans Street View", status: "AO VIVO", url: "https://www.youtube.com/watch?v=Ksrleaxxxhw" },
             { id: 9, nome: "EarthCam Live: Abbey Road Crossing (London, England)", status: "AO VIVO", url: "https://www.youtube.com/watch?v=M3EYAY2MftI" },
@@ -63,14 +97,45 @@
             { id: 12, nome: "Cam 6 C - Kensington Ave. Philadelphia.", status: "AO VIVO", url: "https://www.youtube.com/watch?v=ONUNOwtvbFQ" }
         ];
 
-        const cameraGrid = document.getElementById('cameraGrid');
-        const searchInput = document.getElementById('searchInput');
-        const fullscreenModal = document.getElementById('fullscreenModal');
-        const modalTitle = document.getElementById('modalTitle');
-        const modalContent = document.getElementById('modalContent');
+        function saveToStorage() {
+            localStorage.setItem('oss_cameras', JSON.stringify(activeCameras));
+        }
+
+        function openAddModal() {
+            addCameraModal.classList.remove('hidden');
+            document.getElementById('newCamName').focus();
+        }
+
+        function closeAddModal() {
+            addCameraModal.classList.add('hidden');
+            document.getElementById('newCamName').value = '';
+            document.getElementById('newCamUrl').value = '';
+        }
+
+        function addNewCamera() {
+            const name = document.getElementById('newCamName').value;
+            const url = document.getElementById('newCamUrl').value;
+
+            if (!name || !url) {
+                alert("ERRO: Identificação e Link são obrigatórios para ativação.");
+                return;
+            }
+
+            const newCam = {
+                id: Date.now(),
+                nome: name.toUpperCase(),
+                status: "AO VIVO",
+                url: url
+            };
+
+            activeCameras.push(newCam);
+            saveToStorage();
+            renderizarCameras(activeCameras);
+            closeAddModal();
+        }
 
         function openFullscreen(id) {
-            const cam = mockCameras.find(c => c.id === id);
+            const cam = activeCameras.find(c => c.id === id);
             if (!cam) return;
 
             modalTitle.innerText = cam.nome;
@@ -179,14 +244,14 @@
         // Filtro em Tempo Real
         searchInput.addEventListener('input', (e) => {
             const termoPesquisa = e.target.value.toLowerCase();
-            const camerasFiltradas = mockCameras.filter(cam => 
+            const camerasFiltradas = activeCameras.filter(cam => 
                 cam.nome.toLowerCase().includes(termoPesquisa)
             );
             renderizarCameras(camerasFiltradas);
         });
 
         // Renderiza tudo ao iniciar a página
-        renderizarCameras(mockCameras);
+        renderizarCameras(activeCameras);
     </script>
 </body>
 </html>
