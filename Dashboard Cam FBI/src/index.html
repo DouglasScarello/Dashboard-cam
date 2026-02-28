@@ -37,8 +37,23 @@
         </button>
     </header>
 
-    <main class="flex-1 overflow-y-auto p-6">
-        <div id="cameraGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+    <main class="flex-1 overflow-hidden flex flex-col">
+        <!-- Barra de Setores / Filtros -->
+        <div class="bg-gray-900 border-b border-gray-800 p-2 overflow-x-auto whitespace-nowrap flex space-x-2">
+            <button id="btn-ALL" onclick="filterBySector('ALL')" class="sector-btn bg-emerald-600 text-white px-4 py-1 rounded text-xs font-bold uppercase tracking-widest border border-emerald-500 transition-all font-mono">Global</button>
+            <button id="btn-FL" onclick="filterBySector('FL')" class="sector-btn bg-gray-800 text-gray-400 px-4 py-1 rounded text-xs font-bold uppercase tracking-widest border border-gray-700 hover:border-emerald-500 transition-all font-mono">Flórida (FL)</button>
+            <button id="btn-PA" onclick="filterBySector('PA')" class="sector-btn bg-gray-800 text-gray-400 px-4 py-1 rounded text-xs font-bold uppercase tracking-widest border border-gray-700 hover:border-emerald-500 transition-all font-mono">Pensilvânia (PA)</button>
+            <button id="btn-CA" onclick="filterBySector('CA')" class="sector-btn bg-gray-800 text-gray-400 px-4 py-1 rounded text-xs font-bold uppercase tracking-widest border border-gray-700 hover:border-emerald-500 transition-all font-mono">Califórnia (CA)</button>
+            <button id="btn-INTL" onclick="filterBySector('INTL')" class="sector-btn bg-gray-800 text-gray-400 px-4 py-1 rounded text-xs font-bold uppercase tracking-widest border border-gray-700 hover:border-emerald-500 transition-all font-mono">Internacional</button>
+            
+            <div class="border-l border-gray-700 mx-2 h-6 self-center"></div>
+            
+            <button onclick="openBulkModal()" class="bg-blue-900 hover:bg-blue-800 text-blue-100 px-4 py-1 rounded text-xs font-bold uppercase tracking-widest border border-blue-700 transition-all flex items-center font-mono">
+                IMPORTAÇÃO BULK
+            </button>
+        </div>
+
+        <div id="cameraGrid" class="flex-1 overflow-y-auto p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
         </div>
     </main>
 
@@ -113,6 +128,25 @@
         </div>
     </div>
 
+    <!-- Modal Importação Bulk -->
+    <div id="bulkImportModal" class="fixed inset-0 bg-black bg-opacity-90 z-50 hidden flex items-center justify-center p-4 font-mono">
+        <div class="bg-gray-800 border border-gray-700 rounded-lg p-6 w-full max-w-2xl shadow-2xl">
+            <h2 class="text-xl font-bold text-blue-500 mb-2 tracking-widest uppercase italic">Importação em Massa (Bulk)</h2>
+            <p class="text-xs text-gray-400 mb-4 uppercase tracking-tighter">Formato: NOME | URL | LOCAL | SETOR (Cuidado ao processar grandes volumes)</p>
+            
+            <textarea id="bulkData" class="bg-gray-900 border border-gray-600 text-white text-sm rounded-md block w-full p-4 h-64 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all font-mono mb-6" placeholder="MIAMI BEACH | https://youtube.com/watch?v=R0AiaL-i_F0 | Miami Beach, FL | FL&#10;TAMPA BAY | https://youtube.com/watch?v=3VzE4uI7p6w | Tampa, FL | FL"></textarea>
+
+            <div class="flex space-x-3">
+                <button onclick="closeBulkModal()" class="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 rounded transition-colors text-sm uppercase tracking-wider">
+                    Cancelar
+                </button>
+                <button onclick="processBulkImport()" class="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 rounded transition-colors text-sm uppercase tracking-wider">
+                    Ativar Unidades
+                </button>
+            </div>
+        </div>
+    </div>
+
     <script>
         const cameraGrid = document.getElementById('cameraGrid');
         const searchInput = document.getElementById('searchInput');
@@ -121,15 +155,19 @@
         const modalContent = document.getElementById('modalContent');
         const addCameraModal = document.getElementById('addCameraModal');
         const editCameraModal = document.getElementById('editCameraModal');
+        const bulkImportModal = document.getElementById('bulkImportModal');
 
-        // Carregar do LocalStorage ou usar padrões
+        let currentSector = 'ALL';
+
+        // Carregar do LocalStorage ou usar padrões (Expansão Flórida inclusa)
         let activeCameras = JSON.parse(localStorage.getItem('oss_cameras')) || [
-            { id: 7, nome: "EarthCam Live: Dublin, Ireland", status: "AO VIVO", url: "https://www.youtube.com/watch?v=3nyPER2kzqk" },
-            { id: 8, nome: "EarthCam Live: New Orleans Street View", status: "AO VIVO", url: "https://www.youtube.com/watch?v=Ksrleaxxxhw" },
-            { id: 9, nome: "EarthCam Live: Abbey Road Crossing (London, England)", status: "AO VIVO", url: "https://www.youtube.com/watch?v=M3EYAY2MftI" },
-            { id: 10, nome: "Kensington. Philadelphia, PA. Cam 3", status: "AO VIVO", url: "https://www.youtube.com/watch?v=YYiid3jUUQE" },
-            { id: 11, nome: "Skid Row Los Angeles CA. Cam 2", status: "AO VIVO", url: "https://www.youtube.com/watch?v=NsmJg4oSDVg" },
-            { id: 12, nome: "Cam 6 C - Kensington Ave. Philadelphia.", status: "AO VIVO", url: "https://www.youtube.com/watch?v=ONUNOwtvbFQ" }
+            { id: 7, nome: "MIAMI BEACH - NEWS CAFE", status: "AO VIVO", url: "https://www.youtube.com/watch?v=R0AiaL-i_F0", local: "Miami Beach, FL", setor: "FL" },
+            { id: 8, nome: "TAMPA BAYSHORE - ROME AVE", status: "AO VIVO", url: "https://www.youtube.com/watch?v=3VzE4uI7p6w", local: "Tampa, FL", setor: "FL" },
+            { id: 9, nome: "ABBEY ROAD CROSSING", status: "AO VIVO", url: "https://www.youtube.com/watch?v=M3EYAY2MftI", local: "London, UK", setor: "INTL" },
+            { id: 10, nome: "KENSINGTON AVE - CAM 3", status: "AO VIVO", url: "https://www.youtube.com/watch?v=YYiid3jUUQE", local: "Philadelphia, PA", setor: "PA" },
+            { id: 11, nome: "SKID ROW LA - CAM 2", status: "AO VIVO", url: "https://www.youtube.com/watch?v=NsmJg4oSDVg", local: "Los Angeles, CA", setor: "CA" },
+            { id: 12, nome: "KEY WEST - DUVAL ST", status: "AO VIVO", url: "https://www.youtube.com/watch?v=9LwU6L6V_2E", local: "Key West, FL", setor: "FL" },
+            { id: 13, nome: "ORLANDO - I-DRIVE", status: "AO VIVO", url: "https://www.youtube.com/watch?v=Bbe00Yj1Tig", local: "Orlando, FL", setor: "FL" }
         ];
 
         function saveToStorage() {
@@ -152,7 +190,7 @@
             const url = document.getElementById('newCamUrl').value;
 
             if (!name || !url) {
-                alert("ERRO: Identificação e Link são obrigatórios para ativação.");
+                alert("ERRO: Identificação e Link são obrigatórios.");
                 return;
             }
 
@@ -160,13 +198,73 @@
                 id: Date.now(),
                 nome: name.toUpperCase(),
                 status: "AO VIVO",
-                url: url
+                url: url,
+                local: "MANUAL ADD",
+                setor: "ALL"
             };
 
             activeCameras.push(newCam);
             saveToStorage();
-            renderizarCameras(activeCameras);
+            renderizarCameras(filterCurrentSet(activeCameras));
             closeAddModal();
+        }
+
+        function openBulkModal() {
+            bulkImportModal.classList.remove('hidden');
+        }
+
+        function closeBulkModal() {
+            bulkImportModal.classList.add('hidden');
+            document.getElementById('bulkData').value = '';
+        }
+
+        function processBulkImport() {
+            const data = document.getElementById('bulkData').value;
+            const lines = data.split('\n');
+            let count = 0;
+
+            lines.forEach(line => {
+                const parts = line.split('|').map(p => p.trim());
+                if (parts.length >= 2) {
+                    activeCameras.push({
+                        id: Date.now() + count,
+                        nome: parts[0].toUpperCase(),
+                        url: parts[1],
+                        local: parts[2] || "UNKNOWN",
+                        setor: parts[3] || "ALL",
+                        status: "AO VIVO"
+                    });
+                    count++;
+                }
+            });
+
+            if (count > 0) {
+                saveToStorage();
+                renderizarCameras(filterCurrentSet(activeCameras));
+                closeBulkModal();
+                alert(`${count} unidades de vigilância ativadas com sucesso.`);
+            }
+        }
+
+        function filterBySector(sector) {
+            currentSector = sector;
+            
+            // Atualizar UI dos botões
+            document.querySelectorAll('.sector-btn').forEach(btn => {
+                btn.classList.remove('bg-emerald-600', 'text-white', 'border-emerald-500');
+                btn.classList.add('bg-gray-800', 'text-gray-400', 'border-gray-700');
+            });
+            
+            const activeBtn = document.getElementById(`btn-${sector}`);
+            activeBtn.classList.remove('bg-gray-800', 'text-gray-400', 'border-gray-700');
+            activeBtn.classList.add('bg-emerald-600', 'text-white', 'border-emerald-500');
+
+            renderizarCameras(filterCurrentSet(activeCameras));
+        }
+
+        function filterCurrentSet(cameras) {
+            if (currentSector === 'ALL') return cameras;
+            return cameras.filter(c => c.setor === currentSector);
         }
 
         function openEditModal(id) {
@@ -310,12 +408,17 @@
                             ${videoPlayerHtml}
                         </div>
 
-                        <div class="p-3 bg-gray-800 border-t border-gray-700 flex justify-between items-center">
-                            <div class="flex items-center space-x-2 w-4/5">
-                                <span class="text-sm font-semibold truncate">${cam.nome}</span>
-                                <svg class="w-4 h-4 text-emerald-500 opacity-0 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"></path></svg>
+                        <div class="p-3 bg-gray-800 border-t border-gray-700">
+                            <div class="flex justify-between items-center mb-1">
+                                <div class="flex items-center space-x-2 w-4/5">
+                                    <span class="text-sm font-semibold truncate">${cam.nome}</span>
+                                </div>
+                                <svg onclick="event.stopPropagation(); openEditModal(${cam.id})" class="w-5 h-5 text-gray-500 hover:text-yellow-500 cursor-pointer transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
                             </div>
-                            <svg onclick="event.stopPropagation(); openEditModal(${cam.id})" class="w-5 h-5 text-gray-500 hover:text-yellow-500 cursor-pointer transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                            <div class="flex justify-between items-center text-[10px] text-gray-500 font-mono italic">
+                                <span>${cam.local || 'LOCAL DESCONHECIDO'}</span>
+                                <span class="bg-gray-700 px-1 rounded text-emerald-400">${cam.setor || 'N/A'}</span>
+                            </div>
                         </div>
                     </div>
                 `;
