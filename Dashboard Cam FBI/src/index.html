@@ -179,46 +179,51 @@
         let currentSector = 'ALL';
 
         // === SISTEMA DE VERSIONAMENTO DO DATASET ===
-        const OSS_DATASET_VERSION = '4.0'; // 2026: streams reais com foco em ruas/pessoas
+        const OSS_DATASET_VERSION = '5.0'; // 2026: EarthCam + YouTube streams verificados com foco em ruas/pessoas
 
         const DEFAULT_CAMERAS = [
-            // ═══ FLÓRIDA — FL511 CCTV (iframe) ═══
-            { id: 1, nome: "FL511 - I-95 MIAMI DOWNTOWN", status: "AO VIVO", url: "https://fl511.com/map/Cctv/1164CCTV1164CCTV2", local: "Miami, FL", setor: "FL", tipo: "iframe" },
-            { id: 2, nome: "FL511 - US-1 MIAMI BEACH", status: "AO VIVO", url: "https://fl511.com/map/Cctv/1145CCTV1145CCTV4", local: "Miami Beach, FL", setor: "FL", tipo: "iframe" },
-            { id: 3, nome: "FL511 - I-595 FORT LAUDERDALE", status: "AO VIVO", url: "https://fl511.com/map/Cctv/1595CCTV1595CCTV1", local: "Fort Lauderdale, FL", setor: "FL", tipo: "iframe" },
-            { id: 4, nome: "FL511 - I-4 ORLANDO", status: "AO VIVO", url: "https://fl511.com/map/Cctv/1004CCTV1004CCTV1", local: "Orlando, FL", setor: "FL", tipo: "iframe" },
-            { id: 5, nome: "FL511 - I-75 TAMPA", status: "AO VIVO", url: "https://fl511.com/map/Cctv/1075CCTV1075CCTV1", local: "Tampa, FL", setor: "FL", tipo: "iframe" },
-            { id: 6, nome: "ELBO ROOM BAR CAM 24/7 🍺", status: "AO VIVO", url: "https://www.youtube.com/watch?v=OkQ0utdxwBY", local: "Fort Lauderdale, FL", setor: "FL", tipo: "youtube" },
-            // ═══ NEW YORK — Rua/Pessoas 👁 ═══
-            { id: 10, nome: "NYC WINTER STORM — RUAS AO VIVO 🌨", status: "AO VIVO", url: "https://www.youtube.com/watch?v=M-58uNMXGOI", local: "New York, NY", setor: "NY", tipo: "youtube" },
-            { id: 11, nome: "NYC TIMES SQUARE 24/7", status: "AO VIVO", url: "https://www.youtube.com/watch?v=1EiC9bvVGnk", local: "New York, NY", setor: "NY", tipo: "youtube" },
-            { id: 12, nome: "NYC BROOKLYN BRIDGE CAM", status: "AO VIVO", url: "https://www.youtube.com/watch?v=rnKs3HtEFcI", local: "Brooklyn, NY", setor: "NY", tipo: "youtube" },
-            { id: 13, nome: "MANHATTAN LIVE CAM — PEDESTRES", status: "AO VIVO", url: "https://www.youtube.com/watch?v=AdUw5RdyZxI", local: "Manhattan, NY", setor: "NY", tipo: "youtube" },
-            // ═══ CALIFÓRNIA — Rua/Pessoas 👁 ═══
-            { id: 20, nome: "LA LIVE — SKID ROW", status: "AO VIVO", url: "https://www.youtube.com/watch?v=NsmJg4oSDVg", local: "Los Angeles, CA", setor: "CA", tipo: "youtube" },
-            { id: 21, nome: "VENICE BEACH BOARDWALK", status: "AO VIVO", url: "https://www.youtube.com/watch?v=86YLFOog4GM", local: "Venice Beach, CA", setor: "CA", tipo: "youtube" },
-            { id: 22, nome: "SANTA MONICA PIER CAM", status: "AO VIVO", url: "https://www.youtube.com/watch?v=IyB7WVWRM_o", local: "Santa Monica, CA", setor: "CA", tipo: "youtube" },
+            // ═══ NEW YORK — EarthCam 🎥 ═══
+            { id: 10, nome: "EARTHCAM — TIMES SQUARE NYC 🗽", status: "AO VIVO", url: "https://www.earthcam.com/usa/newyork/timessquare/?cam=tsrobo1", local: "Times Square, NY", setor: "NY", tipo: "earthcam" },
+            { id: 11, nome: "EARTHCAM — NEW YORK CITY MIDTOWN", status: "AO VIVO", url: "https://www.earthcam.com/usa/newyork/42ndstreet/?cam=42nd_st", local: "Midtown Manhattan, NY", setor: "NY", tipo: "earthcam" },
+            { id: 12, nome: "NYC WINTER STORM — RUAS AO VIVO 🌨", status: "AO VIVO", url: "https://www.youtube.com/watch?v=M-58uNMXGOI", local: "New York, NY", setor: "NY", tipo: "youtube" },
+            { id: 13, nome: "NYC TIMES SQUARE 24/7 — PEDESTRES", status: "AO VIVO", url: "https://www.youtube.com/watch?v=1EiC9bvVGnk", local: "Times Square, NY", setor: "NY", tipo: "youtube" },
+            // ═══ TENNESSEE — EarthCam Nashville 👁 ═══
+            { id: 70, nome: "EARTHCAM — NASHVILLE BROADWAY 🎸", status: "AO VIVO", url: "https://www.earthcam.com/usa/tennessee/nashville/?cam=nashville", local: "Nashville, TN", setor: "TN", tipo: "earthcam" },
+            { id: 71, nome: "NASHVILLE BROADWAY LIVE 24/7", status: "AO VIVO", url: "https://www.youtube.com/watch?v=ej-j7bTjMfc", local: "Nashville, TN", setor: "TN", tipo: "youtube" },
+            // ═══ NEVADA — EarthCam Las Vegas 🎰 ═══
+            { id: 80, nome: "EARTHCAM — LAS VEGAS STRIP 🎰", status: "AO VIVO", url: "https://www.earthcam.com/usa/nevada/lasvegas/?cam=lasvegas", local: "Las Vegas, NV", setor: "NV", tipo: "earthcam" },
+            { id: 81, nome: "LAS VEGAS STRIP LIVE 24/7", status: "AO VIVO", url: "https://www.youtube.com/watch?v=wSg9b4RjIXM", local: "Las Vegas, NV", setor: "NV", tipo: "youtube" },
+            { id: 82, nome: "FREMONT STREET LV LIVE", status: "AO VIVO", url: "https://www.youtube.com/watch?v=TtaQuaI80LU", local: "Las Vegas, NV", setor: "NV", tipo: "youtube" },
+            // ═══ ILLINOIS — EarthCam Chicago ═══
+            { id: 50, nome: "EARTHCAM — CHICAGO MILLENNIUM PARK 🌆", status: "AO VIVO", url: "https://www.earthcam.com/usa/illinois/chicago/?cam=chicago", local: "Chicago, IL", setor: "IL", tipo: "earthcam" },
+            { id: 51, nome: "CHICAGO DOWNTOWN 24/7", status: "AO VIVO", url: "https://www.youtube.com/watch?v=pDkPaxb0UlY", local: "Chicago, IL", setor: "IL", tipo: "youtube" },
+            // ═══ FLÓRIDA — EarthCam + FL511 ═══
+            { id: 1, nome: "EARTHCAM — MIAMI BEACH OCEAN DRIVE 🏖️", status: "AO VIVO", url: "https://www.earthcam.com/usa/florida/miamibeach/?cam=miamibeach", local: "Miami Beach, FL", setor: "FL", tipo: "earthcam" },
+            { id: 2, nome: "FL511 - I-95 MIAMI DOWNTOWN", status: "AO VIVO", url: "https://fl511.com/map/Cctv/1164CCTV1164CCTV2", local: "Miami, FL", setor: "FL", tipo: "iframe" },
+            { id: 3, nome: "FL511 - I-4 ORLANDO", status: "AO VIVO", url: "https://fl511.com/map/Cctv/1004CCTV1004CCTV1", local: "Orlando, FL", setor: "FL", tipo: "iframe" },
+            { id: 4, nome: "ELBO ROOM BAR CAM 24/7 🍺", status: "AO VIVO", url: "https://www.youtube.com/watch?v=OkQ0utdxwBY", local: "Fort Lauderdale, FL", setor: "FL", tipo: "youtube" },
+            // ═══ CALIFÓRNIA — EarthCam + Ruas 👁 ═══
+            { id: 20, nome: "EARTHCAM — SANTA MONICA PIER 🌊", status: "AO VIVO", url: "https://www.earthcam.com/usa/california/santamonica/?cam=santamonica", local: "Santa Monica, CA", setor: "CA", tipo: "earthcam" },
+            { id: 21, nome: "VENICE BEACH BOARDWALK 24/7", status: "AO VIVO", url: "https://www.youtube.com/watch?v=86YLFOog4GM", local: "Venice Beach, CA", setor: "CA", tipo: "youtube" },
+            { id: 22, nome: "LA LIVE — SKID ROW", status: "AO VIVO", url: "https://www.youtube.com/watch?v=NsmJg4oSDVg", local: "Los Angeles, CA", setor: "CA", tipo: "youtube" },
             // ═══ PENSILVÂNIA — Kensington 👁 ═══
             { id: 30, nome: "KENSINGTON AVE CAM 3 👁", status: "AO VIVO", url: "https://www.youtube.com/watch?v=YYiid3jUUQE", local: "Philadelphia, PA", setor: "PA", tipo: "youtube" },
             { id: 31, nome: "KENSINGTON AVE CAM 6C 👁", status: "AO VIVO", url: "https://www.youtube.com/watch?v=ONUNOwtvbFQ", local: "Philadelphia, PA", setor: "PA", tipo: "youtube" },
             // ═══ TEXAS ═══
             { id: 40, nome: "HOUSTON DOWNTOWN LIVE", status: "AO VIVO", url: "https://www.youtube.com/watch?v=H3PcHUdmTNQ", local: "Houston, TX", setor: "TX", tipo: "youtube" },
             { id: 41, nome: "DALLAS STREETS LIVE CAM", status: "AO VIVO", url: "https://www.youtube.com/watch?v=mB2tMoSKJk0", local: "Dallas, TX", setor: "TX", tipo: "youtube" },
-            // ═══ ILLINOIS ═══
-            { id: 50, nome: "CHICAGO DOWNTOWN 24/7", status: "AO VIVO", url: "https://www.youtube.com/watch?v=pDkPaxb0UlY", local: "Chicago, IL", setor: "IL", tipo: "youtube" },
-            { id: 51, nome: "CHICAGO MICHIGAN AVE CAM", status: "AO VIVO", url: "https://www.youtube.com/watch?v=Xnha0DP9kjo", local: "Chicago, IL", setor: "IL", tipo: "youtube" },
+            // ═══ GEORGIA ═══
+            { id: 90, nome: "EARTHCAM — SAVANNAH RIVER STREET 🌿", status: "AO VIVO", url: "https://www.earthcam.com/usa/georgia/savannah/?cam=savannah", local: "Savannah, GA", setor: "GA", tipo: "earthcam" },
+            { id: 91, nome: "ATLANTA DOWNTOWN LIVE", status: "AO VIVO", url: "https://www.youtube.com/watch?v=bUfJLMSS5hI", local: "Atlanta, GA", setor: "GA", tipo: "youtube" },
+            // ═══ MASSACHUSETTS ═══
+            { id: 110, nome: "EARTHCAM — BOSTON FANEUIL HALL 🦞", status: "AO VIVO", url: "https://www.earthcam.com/usa/massachusetts/boston/?cam=boston", local: "Boston, MA", setor: "MA", tipo: "earthcam" },
             // ═══ WASHINGTON STATE ═══
             { id: 60, nome: "WSDOT - I-5 SEATTLE LIVE", status: "AO VIVO", url: "https://wsdot.com/travel/real-time/cameras", local: "Seattle, WA", setor: "WA", tipo: "iframe" },
-            // ═══ TENNESSEE — Nashville Broadway 👁 ═══
-            { id: 70, nome: "NASHVILLE BROADWAY LIVE 🎸", status: "AO VIVO", url: "https://www.youtube.com/watch?v=ej-j7bTjMfc", local: "Nashville, TN", setor: "TN", tipo: "youtube" },
-            // ═══ NEVADA — Las Vegas Strip ═══
-            { id: 80, nome: "LAS VEGAS STRIP LIVE 🎰", status: "AO VIVO", url: "https://www.youtube.com/watch?v=wSg9b4RjIXM", local: "Las Vegas, NV", setor: "NV", tipo: "youtube" },
-            { id: 81, nome: "FREMONT STREET LV LIVE", status: "AO VIVO", url: "https://www.youtube.com/watch?v=TtaQuaI80LU", local: "Las Vegas, NV", setor: "NV", tipo: "youtube" },
-            // ═══ GEORGIA ═══
-            { id: 90, nome: "ATLANTA DOWNTOWN LIVE", status: "AO VIVO", url: "https://www.youtube.com/watch?v=bUfJLMSS5hI", local: "Atlanta, GA", setor: "GA", tipo: "youtube" },
             // ═══ INTERNACIONAL 🌍 ═══
-            { id: 100, nome: "BONDI AUSSIE BAR — KOH SAMUI 4K", status: "AO VIVO", url: "https://www.youtube.com/watch?v=VR-x3HdhKLQ", local: "Koh Samui, Thailand", setor: "INTL", tipo: "youtube" },
-            { id: 101, nome: "ABBEY ROAD CROSSING — LONDON", status: "AO VIVO", url: "https://www.youtube.com/watch?v=M3EYAY2MftI", local: "London, UK", setor: "INTL", tipo: "youtube" },
+            { id: 100, nome: "EARTHCAM — ABBEY ROAD CROSSING 🎸", status: "AO VIVO", url: "https://www.earthcam.com/world/england/london/?cam=abbeyroad", local: "London, UK", setor: "INTL", tipo: "earthcam" },
+            { id: 101, nome: "ABBEY ROAD CROSSING — LONDON 4K", status: "AO VIVO", url: "https://www.youtube.com/watch?v=M3EYAY2MftI", local: "London, UK", setor: "INTL", tipo: "youtube" },
+            { id: 102, nome: "BONDI BEACH AUSTRALIA 🏄", status: "AO VIVO", url: "https://www.youtube.com/watch?v=VR-x3HdhKLQ", local: "Sydney, Australia", setor: "INTL", tipo: "youtube" },
+            { id: 103, nome: "EARTHCAM — DUBLIN TEMPLE BAR 🍀", status: "AO VIVO", url: "https://www.earthcam.com/world/ireland/dublin/?cam=templebar", local: "Dublin, Ireland", setor: "INTL", tipo: "earthcam" },
         ];
 
         // Verifica versão — se mudou, reseta o dataset base mas preserva câmeras adicionadas manualmente
@@ -409,7 +414,13 @@
             const url = cam.url;
             const tipo = cam.tipo || (url.includes('youtube.com/watch') ? 'youtube' : url.endsWith('.m3u8') ? 'hls' : url.includes('fl511.com') ? 'iframe' : 'jpeg');
 
-            if (tipo === 'youtube' || url.includes('youtube.com/watch')) {
+            if (tipo === 'earthcam') {
+                // EarthCam — exibe a página oficial como iframe (câmera ao vivo embutida)
+                return `<div class="relative w-full h-full overflow-hidden pointer-events-none">
+                    <iframe src="${url}" class="absolute top-[-20%] left-[-5%] w-[110%] h-[150%] border-0" scrolling="no" sandbox="allow-scripts allow-same-origin"></iframe>
+                    <div class="absolute inset-0 z-20"></div>
+                </div>`;
+            } else if (tipo === 'youtube' || url.includes('youtube.com/watch')) {
                 let videoId = url.split('v=')[1];
                 const amp = videoId.indexOf('&');
                 if (amp !== -1) videoId = videoId.substring(0, amp);
