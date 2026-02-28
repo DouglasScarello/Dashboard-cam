@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Módulo de Vigilância - Olho de Deus</title>
+    <title>OSS - Omniscient Surveillance System</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         /* Ajustes finos para a barra de rolagem (Estética FBI/Dark) */
@@ -21,7 +21,7 @@
     <header class="bg-gray-800 border-b border-gray-700 p-4 shadow-lg flex justify-between items-center z-10">
         <div class="flex items-center space-x-3">
             <svg class="w-6 h-6 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
-            <h1 class="text-xl font-bold tracking-widest text-emerald-500">OLHO DE DEUS <span class="text-xs text-gray-400 ml-2">v0.1</span></h1>
+            <h1 class="text-xl font-bold tracking-widest text-emerald-500">OSS <span class="text-xs text-gray-400 ml-2">Omniscient Surveillance System v0.1</span></h1>
         </div>
         
         <div class="relative w-1/3">
@@ -39,23 +39,78 @@
 
     <main class="flex-1 overflow-y-auto p-6">
         <div id="cameraGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            </div>
+        </div>
     </main>
+
+    <div id="fullscreenModal" class="fixed inset-0 bg-black z-50 hidden flex flex-col pt-4">
+        <div class="flex justify-between items-center px-6 mb-4">
+            <h2 id="modalTitle" class="text-xl font-bold text-emerald-500 tracking-widest"></h2>
+            <button onclick="closeFullscreen()" class="bg-red-600 hover:bg-red-500 text-white font-bold py-1 px-4 rounded text-sm transition-colors">
+                FECHAR (ESC)
+            </button>
+        </div>
+        <div id="modalContent" class="flex-1 bg-black relative"></div>
+    </div>
 
     <script>
         // Simulando dados que virão da sua API Python (FastAPI) no futuro
         const mockCameras = [
-            { id: 1, nome: "ENTRADA PRINCIPAL - RUA 4", status: "AO VIVO", url: "#" },
-            { id: 2, nome: "GARAGEM SUBTERRÂNEA - NÍVEL 2", status: "AO VIVO", url: "#" },
-            { id: 3, nome: "CORREDOR LESTE", status: "AO VIVO", url: "#" },
-            { id: 4, nome: "SALA DE SERVIDORES", status: "CONECTANDO", url: "#" },
-            { id: 5, nome: "PERÍMETRO NORTE", status: "OFFLINE", url: "#" },
-            { id: 6, nome: "ALMOXARIFADO", status: "AO VIVO", url: "#" },
-            { id: 7, nome: "Dublin, Ireland-01", status: "AO VIVO", url: "https://www.youtube.com/watch?v=u4UZ4UvZXrg" }
+            { id: 7, nome: "EarthCam Live: Dublin, Ireland", status: "AO VIVO", url: "https://www.youtube.com/watch?v=3nyPER2kzqk" },
+            { id: 8, nome: "EarthCam Live: New Orleans Street View", status: "AO VIVO", url: "https://www.youtube.com/watch?v=Ksrleaxxxhw" },
+            { id: 9, nome: "EarthCam Live: Abbey Road Crossing (London, England)", status: "AO VIVO", url: "https://www.youtube.com/watch?v=M3EYAY2MftI" },
+            { id: 10, nome: "Kensington. Philadelphia, PA. Cam 3", status: "AO VIVO", url: "https://www.youtube.com/watch?v=YYiid3jUUQE" },
+            { id: 11, nome: "Skid Row Los Angeles CA. Cam 2", status: "AO VIVO", url: "https://www.youtube.com/watch?v=NsmJg4oSDVg" },
+            { id: 12, nome: "Cam 6 C - Kensington Ave. Philadelphia.", status: "AO VIVO", url: "https://www.youtube.com/watch?v=ONUNOwtvbFQ" }
         ];
 
         const cameraGrid = document.getElementById('cameraGrid');
         const searchInput = document.getElementById('searchInput');
+        const fullscreenModal = document.getElementById('fullscreenModal');
+        const modalTitle = document.getElementById('modalTitle');
+        const modalContent = document.getElementById('modalContent');
+
+        function openFullscreen(id) {
+            const cam = mockCameras.find(c => c.id === id);
+            if (!cam) return;
+
+            modalTitle.innerText = cam.nome;
+            
+            let videoHtml = '';
+            if (cam.url.includes('youtube.com/watch')) {
+                let videoId = cam.url.split('v=')[1];
+                const ampersandPosition = videoId.indexOf('&');
+                if (ampersandPosition != -1) videoId = videoId.substring(0, ampersandPosition);
+                
+                // Overlay de proteção e IFrame com crop para tela cheia
+                videoHtml = `
+                    <div class="relative w-full h-full overflow-hidden">
+                        <iframe 
+                            class="absolute top-[-10%] left-[-2%] w-[104%] h-[120%]" 
+                            src="https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&controls=0&modestbranding=1&vq=hd2160&rel=0" 
+                            frameborder="0" 
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                            allowfullscreen>
+                        </iframe>
+                        <div class="absolute inset-0 z-20"></div>
+                    </div>`;
+            } else {
+                videoHtml = `<div class="w-full h-full flex items-center justify-center text-gray-500">SEM SINAL DE VÍDEO</div>`;
+            }
+
+            modalContent.innerHTML = videoHtml;
+            fullscreenModal.classList.remove('hidden');
+            document.body.classList.add('overflow-hidden');
+        }
+
+        function closeFullscreen() {
+            fullscreenModal.classList.add('hidden');
+            modalContent.innerHTML = '';
+            document.body.classList.remove('overflow-hidden');
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') closeFullscreen();
+        });
 
         // Função para renderizar os blocos na tela
         function renderizarCameras(cameras) {
@@ -81,24 +136,38 @@
                     if (ampersandPosition != -1) {
                         videoId = videoId.substring(0, ampersandPosition);
                     }
-                    videoPlayerHtml = `<iframe class="w-full h-full" src="https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&controls=0&modestbranding=1" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>`;
+                    // Técnica de CROP para esconder o nome do vídeo e o logo do YouTube
+                    videoPlayerHtml = `
+                        <div class="relative w-full h-full overflow-hidden pointer-events-none">
+                            <iframe 
+                                class="absolute top-[-60px] left-[-2px] w-[101%] h-[calc(100%+120px)]" 
+                                src="https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&controls=0&modestbranding=1&vq=hd2160&rel=0&showinfo=0" 
+                                frameborder="0" 
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                                allowfullscreen>
+                            </iframe>
+                            <div class="absolute inset-0 z-20"></div>
+                        </div>`;
                 }
 
                 // Cria o bloco HTML
                 const camBlock = `
-                    <div class="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden shadow-md hover:border-emerald-500 transition-colors duration-300 relative group">
+                    <div onclick="openFullscreen(${cam.id})" class="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden shadow-md hover:border-emerald-500 transition-colors duration-300 relative group cursor-pointer">
                         
                         <div class="absolute top-3 left-3 bg-gray-900 bg-opacity-75 px-2 py-1 rounded text-xs font-bold flex items-center z-10">
                             <span class="w-2 h-2 rounded-full ${dotColor} mr-2 animate-pulse"></span>
                             <span class="${statusColor}">${cam.status}</span>
                         </div>
 
-                        <div class="h-96 bg-black flex items-center justify-center relative">
+                        <div class="h-[600px] bg-black flex items-center justify-center relative">
                             ${videoPlayerHtml}
                         </div>
 
                         <div class="p-3 bg-gray-800 border-t border-gray-700 flex justify-between items-center">
-                            <span class="text-sm font-semibold truncate w-4/5">${cam.nome}</span>
+                            <div class="flex items-center space-x-2 w-4/5">
+                                <span class="text-sm font-semibold truncate">${cam.nome}</span>
+                                <svg class="w-4 h-4 text-emerald-500 opacity-0 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"></path></svg>
+                            </div>
                             <svg class="w-5 h-5 text-gray-500 hover:text-white cursor-pointer" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
                         </div>
                     </div>

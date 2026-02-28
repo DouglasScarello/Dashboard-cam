@@ -1,157 +1,231 @@
 #!/usr/bin/env python3
 """
-Olho de Deus - Módulo de captura de frames de lives do YouTube
+Olho de Deus - Módulo de captura de frames com suporte a arquivos locais
 
 Objetivo:
-- Conectar em uma live do YouTube usando apenas a URL
-- Forçar captura em resolução reduzida (<= 480p) para economizar CPU/RAM
-- Entregar 1 frame por segundo para futura análise de IA
+- Ler frames de arquivos de vídeo local (MP4, AVI, MKV, etc.)
+- Suportar navegação por frame (próximo/anterior)
+- Preparar frames para futura análise de IA de reconhecimento facial
 
-Requisitos (já instalados no seu ambiente conda):
-- vidgear[core]
-- yt-dlp
+Requisitos (já instalados):
 - opencv-python
 
-Como usar (exemplo):
-$ python3 main.py --url "https://www.youtube.com/watch?v=u4UZ4UvZXrg" --interval 1
+Como usar (arquivo local):
+$ python3 main.py --source /caminho/para/video.mp4 --mode file
+
+Controles:
+- Espaço: Pause/Resume
+- Seta Direita (→): Próximo frame
+- Seta Esquerda (←): Frame anterior
+- 'r': Resetar para o início
+- 'q': Sair
+- '+'/'-': Ajustar intervalo de processamento (em modo auto)
 
 """
 
 import time
 import argparse
 import sys
-from typing import Optional
+import os
+from typing import Optional, Tuple
 
 import cv2
-from vidgear.gears import CamGear
-from yt_dlp import YoutubeDL
 
 
-def get_stream_url(youtube_url: str, max_height: int = 480) -> Optional[str]:
-    """Extrai a melhor URL de stream adaptada ao `max_height` usando yt-dlp.
+class VideoPlayer:
+    """Leitor de vídeo com suporte a navegação por frame."""
 
-    Retorna a URL direta do formato escolhido (geralmente m3u8 ou https) que
-    pode ser consumida pelo ffmpeg/CamGear.
-    """
-    ydl_opts = {
-        "format": f"bestvideo[height<={max_height}]+bestaudio/best[height<={max_height}]",
-        "quiet": True,
-        "no_warnings": True,
-        # minimiza logs; não baixa o vídeo (download=False quando extrair info)
-    }
+    def __init__(self, video_path: str):
+        """Inicializa o leitor de vídeo."""
+        if not os.path.exists(video_path):
+            raise FileNotFoundError(f"Arquivo não encontrado: {video_path}")
 
-    with YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(youtube_url, download=False)
+        self.video_path = video_path
+        self.cap = cv2.VideoCapture(video_path)
 
-    # Se for vida (live), 'formats' normalmente existe
-    formats = info.get("formats") or []
+        if not self.cap.isOpened():
+            raise RuntimeError(f"Não foi possível abrir o vídeo: {video_path}")
 
-    # Ordena por height desc e pega a primeira que tenha 'url'
-    viable = [f for f in formats if f.get("url") and f.get("height")]
-    viable = sorted(viable, key=lambda x: (x.get("height") or 0), reverse=True)
+        # Propriedades do vídeo
+        self.frame_count = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        self.fps = self.cap.get(cv2.CAP_PROP_FPS) or 30.0
+        self.frame_width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        self.frame_height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        self.current_frame_idx = 0
+        self.paused = False
 
-    for f in viable:
-        if f.get("height") and f["height"] <= max_height:
-            return f["url"]
+        print(f"[info] Vídeo carregado: {video_path}")
+        print(f"[info]   Frames: {self.frame_count} | FPS: {self.fps:.1f} | Resolução: {self.frame_width}x{self.frame_height}")
 
-    # Fallback: se não encontrou formatos com height, tenta usar webpage_url ou url principal
-    return info.get("url") or info.get("webpage_url")
+    def read_frame(self) -> Optional[Tuple[bool, any]]:
+        """Lê o frame atual. Retorna (sucesso, frame)."""
+        ret, frame = self.cap.read()
+        if ret:
+            self.current_frame_idx = int(self.cap.get(cv2.CAP_PROP_POS_FRAMES))
+        return ret, frame
 
+    def set_frame(self, frame_idx: int) -> bool:
+        """Posiciona o vídeo em um frame específico."""
+        frame_idx = max(0, min(frame_idx, self.frame_count - 1))
+        ret = self.cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
+        if ret:
+            self.current_frame_idx = frame_idx
+        return ret
 
-def init_camera(stream_url: str, logging: bool = False) -> CamGear:
-    """Inicializa CamGear apontando para a URL do stream.
+    def next_frame(self) -> bool:
+        """Avança para o próximo frame."""
+        return self.set_frame(self.current_frame_idx + 1)
 
-    Observação: passamos a stream_url direta para o CamGear/ffmpeg para maior controle.
-    """
-    cam = CamGear(source=stream_url, y_tube=False, logging=logging).start()
-    return cam
+    def prev_frame(self) -> bool:
+        """Volta para o frame anterior."""
+        return self.set_frame(self.current_frame_idx - 1)
+
+    def reset(self) -> bool:
+        """Volta para o início do vídeo."""
+        return self.set_frame(0)
+
+    def get_position_str(self) -> str:
+        """Retorna string com frame atual / total."""
+        return f"Frame {self.current_frame_idx + 1}/{self.frame_count}"
+
+    def close(self):
+        """Fecha o leitor de vídeo."""
+        if self.cap:
+            self.cap.release()
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Olho de Deus - captura reduzida de lives YouTube")
-    parser.add_argument("--url", required=False, default="https://www.youtube.com/watch?v=u4UZ4UvZXrg",
-                        help="URL da live do YouTube")
-    parser.add_argument("--interval", required=False, type=float, default=1.0,
-                        help="Intervalo em segundos entre frames que serão separados para processamento (padrão=1s)")
-    parser.add_argument("--max-height", required=False, type=int, default=480,
-                        help="Altura máxima do vídeo a ser solicitada via yt-dlp (ex: 360, 480)")
+    parser = argparse.ArgumentParser(
+        description="Olho de Deus - Leitor de vídeo com navegação por frame"
+    )
+    parser.add_argument(
+        "--source", 
+        required=False,
+        default=None,
+        help="Caminho do arquivo de vídeo local (MP4, AVI, MKV, etc.)"
+    )
+    parser.add_argument(
+        "--mode",
+        required=False,
+        default="file",
+        choices=["file", "auto"],
+        help="Modo de operação: 'file' (manual) ou 'auto' (processamento automático)"
+    )
+    parser.add_argument(
+        "--interval",
+        required=False,
+        type=float,
+        default=1.0,
+        help="Intervalo em segundos entre frames a processar (modo auto)"
+    )
     args = parser.parse_args()
 
-    youtube_url = args.url
-    process_interval = max(0.001, args.interval)
-    max_height = args.max_height
+    # Se não forneceu arquivo, pedir interativamente
+    if not args.source:
+        args.source = input("[input] Caminho do arquivo de vídeo: ").strip()
 
-    print(f"[info] Extrair stream reduzido de: {youtube_url} (<= {max_height}p)")
+    if not args.source:
+        print("[error] Nenhum arquivo fornecido.")
+        sys.exit(1)
+
+    # Inicializar leitor de vídeo
     try:
-        stream_url = get_stream_url(youtube_url, max_height=max_height)
+        player = VideoPlayer(args.source)
     except Exception as e:
-        print(f"[error] Falha ao obter stream: {e}")
+        print(f"[error] Falha ao carregar vídeo: {e}")
         sys.exit(1)
 
-    if not stream_url:
-        print("[error] Não foi possível extrair uma URL de stream válida.")
-        sys.exit(1)
-
-    print(f"[info] Stream direta obtida: {stream_url[:120]}{'...' if len(stream_url) > 120 else ''}")
-    print("[info] Iniciando captura via CamGear (ffmpeg)...")
-
-    cam = None
-    try:
-        cam = init_camera(stream_url, logging=False)
-    except Exception as e:
-        print(f"[error] Falha ao iniciar CamGear: {e}")
-        sys.exit(1)
-
-    last_processed = 0.0
-    window_name = "Olho de Deus - Frame para IA (pressione q para sair)"
+    window_name = "Olho de Deus - Frame (Espaço: Pause | Setas: Next/Prev | R: Reset | Q: Sair)"
     cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
     cv2.resizeWindow(window_name, 960, 540)
 
-    print("[info] Loop de captura iniciado. Pressione 'q' para encerrar.")
+    print("[info] Controles:")
+    print("  - Espaço: Pause/Resume")
+    print("  - Seta Direita (→): Próximo frame")
+    print("  - Seta Esquerda (←): Frame anterior")
+    print("  - 'r': Resetar para o início")
+    print("  - '+'/'-': Ajustar intervalo (modo auto)")
+    print("  - 'q': Sair")
+
+    last_processed = 0.0
+    process_interval = max(0.001, args.interval)
+    auto_play = args.mode == "auto"
 
     try:
         while True:
-            frame = cam.read()
-            # CamGear retorna None quando stream momentaneamente não fornece frame
-            if frame is None:
-                # evita tight-loop muito pesado
-                time.sleep(0.01)
-                continue
-
-            now = time.time()
-            # Se passou o intervalo configurado, marca este frame para processamento
-            if now - last_processed >= process_interval:
-                last_processed = now
-
-                # Aqui é o frame que será enviado para o pipeline de IA no futuro
-                frame_for_processing = frame.copy()
-
-                # Exibe o frame para debug
-                cv2.imshow(window_name, frame_for_processing)
-
-                # TODO: Inserir IA de reconhecimento facial aqui
-                # - Ex: results = face_model.detect(frame_for_processing)
-                # - Enviar resultados via IPC/REST/Queue para o painel (Tauri) se necessário
-
-            # Mesmo quando não processamos, ainda permitimos fechar a janela
-            key = cv2.waitKey(1) & 0xFF
-            if key == ord("q"):
-                print("[info] Tecla 'q' detectada — encerrando...")
+            # Ler frame
+            ret, frame = player.read_frame()
+            if not ret:
+                print("[info] Fim do vídeo alcançado.")
                 break
 
-            # pequena pausa para reduzir uso de CPU quando não processando
-            time.sleep(0.001)
+            now = time.time()
+
+            # Modo auto: processar frames em intervalo
+            if auto_play and now - last_processed >= process_interval:
+                last_processed = now
+                frame_for_processing = frame.copy()
+                # TODO: Inserir IA de reconhecimento facial aqui
+                # - Ex: results = face_model.detect(frame_for_processing)
+            else:
+                frame_for_processing = frame.copy()
+
+            # Adicionar info de posição ao frame (overlay)
+            info_text = player.get_position_str()
+            status_text = "[AUTO]" if auto_play else "[MANUAL]"
+            if player.paused:
+                status_text += " [PAUSADO]"
+            
+            cv2.putText(
+                frame_for_processing,
+                f"{info_text} {status_text}",
+                (10, 30),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.7,
+                (0, 255, 0),
+                2
+            )
+
+            # Exibir frame
+            cv2.imshow(window_name, frame_for_processing)
+
+            # Capturar input de teclado
+            key = cv2.waitKey(30) & 0xFF
+
+            if key == ord("q"):
+                print("[info] Encerrando...")
+                break
+            elif key == ord(" "):  # Espaço: Pause/Resume
+                player.paused = not player.paused
+                status = "PAUSADO" if player.paused else "RETOMADO"
+                print(f"[info] {status}")
+            elif key == 83 or key == 2555904:  # Seta Direita
+                if player.paused or not auto_play:
+                    player.next_frame()
+                    print(f"[info] Próximo frame: {player.get_position_str()}")
+            elif key == 81 or key == 2424832:  # Seta Esquerda
+                if player.paused or not auto_play:
+                    player.prev_frame()
+                    print(f"[info] Frame anterior: {player.get_position_str()}")
+            elif key == ord("r"):
+                player.reset()
+                print("[info] Vídeo resetado para o início.")
+            elif key == ord("+") or key == ord("="):
+                process_interval = max(0.1, process_interval - 0.1)
+                print(f"[info] Intervalo: {process_interval:.1f}s")
+            elif key == ord("-"):
+                process_interval = min(5.0, process_interval + 0.1)
+                print(f"[info] Intervalo: {process_interval:.1f}s")
+
+            # Em modo manual ou pausado, ficar esperando input
+            if (not auto_play or player.paused) and key == 255:
+                time.sleep(0.05)
 
     except KeyboardInterrupt:
         print("[info] Interrompido pelo usuário (KeyboardInterrupt)")
 
     finally:
-        # Limpeza
-        try:
-            if cam is not None:
-                cam.stop()
-        except Exception:
-            pass
+        player.close()
         cv2.destroyAllWindows()
         print("[info] Encerrado com sucesso.")
 

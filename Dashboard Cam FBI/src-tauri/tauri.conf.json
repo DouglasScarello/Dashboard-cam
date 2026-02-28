@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "dashboard-cam-fbi",
+  "productName": "omniscient-surveillance-system",
   "version": "0.1.0",
   "identifier": "com.douglasdsr.dashboard-cam-fbi",
   "build": {
@@ -10,7 +10,7 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "title": "Olho de Deus",
+        "title": "Omniscient Surveillance System (OSS)",
         "width": 1280,
         "height": 720,
         "maximized": true,
