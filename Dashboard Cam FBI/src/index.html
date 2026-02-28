@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>OSS - Omniscient Surveillance System</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- hls.js para streams HLS/m3u8 nativos -->
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest/dist/hls.min.js"></script>
     <style>
         /* Ajustes finos para a barra de rolagem (Estética FBI/Dark) */
         ::-webkit-scrollbar { width: 8px; }
@@ -161,15 +163,19 @@
 
         // Carregar do LocalStorage ou usar padrões (Feeds verificados ao vivo)
         let activeCameras = JSON.parse(localStorage.getItem('oss_cameras')) || [
-            // --- FLÓRIDA ---
-            { id: 1, nome: "ELBO ROOM - BAR CAM (24/7)", status: "AO VIVO", url: "https://www.youtube.com/watch?v=OkQ0utdxwBY", local: "Fort Lauderdale, FL", setor: "FL" },
-            { id: 2, nome: "BONDI AUSSIE BAR - KOH SAMUI 4K", status: "AO VIVO", url: "https://www.youtube.com/watch?v=VR-x3HdhKLQ", local: "Koh Samui, Thailand", setor: "INTL" },
-            { id: 3, nome: "ABBEY ROAD CROSSING", status: "AO VIVO", url: "https://www.youtube.com/watch?v=M3EYAY2MftI", local: "London, UK", setor: "INTL" },
-            { id: 4, nome: "KENSINGTON AVE - CAM 3", status: "AO VIVO", url: "https://www.youtube.com/watch?v=YYiid3jUUQE", local: "Philadelphia, PA", setor: "PA" },
-            { id: 5, nome: "KENSINGTON AVE - CAM 6C", status: "AO VIVO", url: "https://www.youtube.com/watch?v=ONUNOwtvbFQ", local: "Philadelphia, PA", setor: "PA" },
-            { id: 6, nome: "SKID ROW LA - CAM 2", status: "AO VIVO", url: "https://www.youtube.com/watch?v=NsmJg4oSDVg", local: "Los Angeles, CA", setor: "CA" },
-            { id: 7, nome: "EARTHCAM - DUBLIN IRELAND", status: "AO VIVO", url: "https://www.youtube.com/watch?v=3nyPER2kzqk", local: "Dublin, Ireland", setor: "INTL" },
-            { id: 8, nome: "EARTHCAM - NEW ORLEANS", status: "AO VIVO", url: "https://www.youtube.com/watch?v=Ksrleaxxxhw", local: "New Orleans, LA", setor: "INTL" }
+            // --- FLÓRIDA (FL511 - CCTV Público) ---
+            { id: 1, nome: "FL511 - I-95 BRICKELL AVE (MIAMI)", status: "AO VIVO", url: "https://fl511.com/map/Cctv/1164CCTV1164CCTV2", local: "Miami, FL", setor: "FL", tipo: "jpeg" },
+            { id: 2, nome: "FL511 - US-1 MIAMI BEACH", status: "AO VIVO", url: "https://fl511.com/map/Cctv/1145CCTV1145CCTV4", local: "Miami Beach, FL", setor: "FL", tipo: "jpeg" },
+            { id: 3, nome: "ELBO ROOM - BAR CAM 24/7 (YT)", status: "AO VIVO", url: "https://www.youtube.com/watch?v=OkQ0utdxwBY", local: "Fort Lauderdale, FL", setor: "FL", tipo: "youtube" },
+            // --- INTERNACIONAL ---
+            { id: 4, nome: "BONDI AUSSIE BAR - KOH SAMUI 4K (YT)", status: "AO VIVO", url: "https://www.youtube.com/watch?v=VR-x3HdhKLQ", local: "Koh Samui, Thailand", setor: "INTL", tipo: "youtube" },
+            { id: 5, nome: "ABBEY ROAD CROSSING (YT)", status: "AO VIVO", url: "https://www.youtube.com/watch?v=M3EYAY2MftI", local: "London, UK", setor: "INTL", tipo: "youtube" },
+            { id: 6, nome: "EARTHCAM - DUBLIN IRELAND (YT)", status: "AO VIVO", url: "https://www.youtube.com/watch?v=3nyPER2kzqk", local: "Dublin, Ireland", setor: "INTL", tipo: "youtube" },
+            // --- PENSILVÂNIA ---
+            { id: 7, nome: "KENSINGTON AVE - CAM 3 (YT)", status: "AO VIVO", url: "https://www.youtube.com/watch?v=YYiid3jUUQE", local: "Philadelphia, PA", setor: "PA", tipo: "youtube" },
+            { id: 8, nome: "KENSINGTON AVE - CAM 6C (YT)", status: "AO VIVO", url: "https://www.youtube.com/watch?v=ONUNOwtvbFQ", local: "Philadelphia, PA", setor: "PA", tipo: "youtube" },
+            // --- CALIFÓRNIA ---
+            { id: 9, nome: "SKID ROW LA - CAM 2 (YT)", status: "AO VIVO", url: "https://www.youtube.com/watch?v=NsmJg4oSDVg", local: "Los Angeles, CA", setor: "CA", tipo: "youtube" }
         ];
 
         function saveToStorage() {
@@ -321,30 +327,7 @@
             if (!cam) return;
 
             modalTitle.innerText = cam.nome;
-            
-            let videoHtml = '';
-            if (cam.url.includes('youtube.com/watch')) {
-                let videoId = cam.url.split('v=')[1];
-                const ampersandPosition = videoId.indexOf('&');
-                if (ampersandPosition != -1) videoId = videoId.substring(0, ampersandPosition);
-                
-                // Overlay de proteção e IFrame com crop para tela cheia
-                videoHtml = `
-                    <div class="relative w-full h-full overflow-hidden">
-                        <iframe 
-                            class="absolute top-[-10%] left-[-2%] w-[104%] h-[120%]" 
-                            src="https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&controls=0&modestbranding=1&vq=hd2160&rel=0" 
-                            frameborder="0" 
-                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
-                            allowfullscreen>
-                        </iframe>
-                        <div class="absolute inset-0 z-20"></div>
-                    </div>`;
-            } else {
-                videoHtml = `<div class="w-full h-full flex items-center justify-center text-gray-500">SEM SINAL DE VÍDEO</div>`;
-            }
-
-            modalContent.innerHTML = videoHtml;
+            modalContent.innerHTML = getPlayerHtml(cam, true);
             fullscreenModal.classList.remove('hidden');
             document.body.classList.add('overflow-hidden');
         }
@@ -359,63 +342,94 @@
             if (e.key === 'Escape') closeFullscreen();
         });
 
+        // Detecta o tipo de URL e retorna o HTML do player correto
+        function getPlayerHtml(cam, isFullscreen = false) {
+            const url = cam.url;
+            const tipo = cam.tipo || (url.includes('youtube.com/watch') ? 'youtube' : url.endsWith('.m3u8') ? 'hls' : 'jpeg');
+
+            if (tipo === 'youtube' || url.includes('youtube.com/watch')) {
+                let videoId = url.split('v=')[1];
+                const amp = videoId.indexOf('&');
+                if (amp !== -1) videoId = videoId.substring(0, amp);
+
+                if (isFullscreen) {
+                    return `<div class="relative w-full h-full overflow-hidden">
+                        <iframe class="absolute top-[-10%] left-[-2%] w-[104%] h-[120%]" 
+                            src="https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&controls=0&modestbranding=1&vq=hd2160&rel=0" 
+                            frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen>
+                        </iframe>
+                        <div class="absolute inset-0 z-20"></div>
+                    </div>`;
+                } else {
+                    return `<div class="relative w-full h-full overflow-hidden pointer-events-none">
+                        <iframe class="absolute top-[-60px] left-[-2px] w-[101%] h-[calc(100%+120px)]" 
+                            src="https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&controls=0&modestbranding=1&vq=hd2160&rel=0&showinfo=0" 
+                            frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen>
+                        </iframe>
+                        <div class="absolute inset-0 z-20"></div>
+                    </div>`;
+                }
+            } else if (tipo === 'hls' || url.endsWith('.m3u8')) {
+                const videoId = `hls-${cam.id}`;
+                setTimeout(() => {
+                    const video = document.getElementById(videoId);
+                    if (video && Hls.isSupported()) {
+                        const hls = new Hls();
+                        hls.loadSource(url);
+                        hls.attachMedia(video);
+                    } else if (video && video.canPlayType('application/vnd.apple.mpegurl')) {
+                        video.src = url;
+                    }
+                }, 100);
+                return `<video id="${videoId}" class="w-full h-full object-cover" autoplay muted playsinline></video>`;
+            } else {
+                // CCTV SNAPSHOT / MJPEG: atualiza a cada 2s
+                const imgId = `snap-${cam.id}`;
+                setTimeout(() => {
+                    const img = document.getElementById(imgId);
+                    if (img) {
+                        setInterval(() => {
+                            img.src = url + '?t=' + Date.now();
+                        }, 2000);
+                    }
+                }, 200);
+                return `<img id="${imgId}" src="${url}" class="w-full h-full object-cover" onerror="this.style.opacity=0.3">`;
+            }
+        }
+
         // Função para renderizar os blocos na tela
         function renderizarCameras(cameras) {
-            cameraGrid.innerHTML = ''; // Limpa o grid atual
+            cameraGrid.innerHTML = '';
             
             if(cameras.length === 0) {
-                cameraGrid.innerHTML = '<p class="text-gray-500 col-span-full text-center mt-10">Nenhuma câmera encontrada com este nome.</p>';
+                cameraGrid.innerHTML = '<p class="text-gray-500 col-span-full text-center mt-10">Nenhuma câmera encontrada.</p>';
                 return;
             }
 
             cameras.forEach(cam => {
-                // Define a cor do status
-                let statusColor = 'text-emerald-500';
-                let dotColor = 'bg-emerald-500';
-                if(cam.status === 'OFFLINE') { statusColor = 'text-red-500'; dotColor = 'bg-red-500'; }
-                if(cam.status === 'CONECTANDO') { statusColor = 'text-yellow-500'; dotColor = 'bg-yellow-500'; }
+                const statusColor = cam.status === 'OFFLINE' ? 'text-red-500' : cam.status === 'CONECTANDO' ? 'text-yellow-500' : 'text-emerald-500';
+                const dotColor = cam.status === 'OFFLINE' ? 'bg-red-500' : cam.status === 'CONECTANDO' ? 'bg-yellow-500' : 'bg-emerald-500';
+                const tipo = cam.tipo || (cam.url.includes('youtube.com') ? 'YT' : cam.url.endsWith('.m3u8') ? 'HLS' : 'CCTV');
+                const tipoBadge = `<span class="bg-blue-900 text-blue-300 px-1 rounded text-[9px] font-bold ml-1">${tipo.toUpperCase()}</span>`;
 
-                let videoPlayerHtml = `<svg class="w-12 h-12 text-gray-700 opacity-50 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>`;
+                const videoPlayerHtml = getPlayerHtml(cam);
 
-                if (cam.url.includes('youtube.com/watch')) {
-                    let videoId = cam.url.split('v=')[1];
-                    const ampersandPosition = videoId.indexOf('&');
-                    if (ampersandPosition != -1) {
-                        videoId = videoId.substring(0, ampersandPosition);
-                    }
-                    // Técnica de CROP para esconder o nome do vídeo e o logo do YouTube
-                    videoPlayerHtml = `
-                        <div class="relative w-full h-full overflow-hidden pointer-events-none">
-                            <iframe 
-                                class="absolute top-[-60px] left-[-2px] w-[101%] h-[calc(100%+120px)]" 
-                                src="https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&controls=0&modestbranding=1&vq=hd2160&rel=0&showinfo=0" 
-                                frameborder="0" 
-                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
-                                allowfullscreen>
-                            </iframe>
-                            <div class="absolute inset-0 z-20"></div>
-                        </div>`;
-                }
-
-                // Cria o bloco HTML
                 const camBlock = `
                     <div onclick="openFullscreen(${cam.id})" class="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden shadow-md hover:border-emerald-500 transition-colors duration-300 relative group cursor-pointer">
-                        
                         <div class="absolute top-3 left-3 bg-gray-900 bg-opacity-75 px-2 py-1 rounded text-xs font-bold flex items-center z-10">
                             <span class="w-2 h-2 rounded-full ${dotColor} mr-2 animate-pulse"></span>
                             <span class="${statusColor}">${cam.status}</span>
                         </div>
-
                         <div class="h-[400px] bg-black flex items-center justify-center relative">
                             ${videoPlayerHtml}
                         </div>
-
                         <div class="p-3 bg-gray-800 border-t border-gray-700">
                             <div class="flex justify-between items-center mb-1">
-                                <div class="flex items-center space-x-2 w-4/5">
+                                <div class="flex items-center space-x-1 w-4/5">
                                     <span class="text-sm font-semibold truncate">${cam.nome}</span>
+                                    ${tipoBadge}
                                 </div>
-                                <svg onclick="event.stopPropagation(); openEditModal(${cam.id})" class="w-5 h-5 text-gray-500 hover:text-yellow-500 cursor-pointer transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                                <svg onclick="event.stopPropagation(); openEditModal(${cam.id})" class="w-5 h-5 text-gray-500 hover:text-yellow-500 cursor-pointer transition-colors flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
                             </div>
                             <div class="flex justify-between items-center text-[10px] text-gray-500 font-mono italic">
                                 <span>${cam.local || 'LOCAL DESCONHECIDO'}</span>
