@@ -8,12 +8,14 @@ O **Omniscient Surveillance System (OSS)** é uma dashboard de vigilância avan�
 
 ## 🚀 Funcionalidades Principais
 
-- **Vigilância Global 24/7**: Acesso instantâneo a feeds ao vivo de cidades como Londres, Los Angeles, Filadélfia, Dublin e New Orleans.
+- **Vigilância Global 24/7**: Acesso instantâneo a feeds ao vivo de pontos críticos globais.
+- **Gestão Tática de Unidades**: Adicione, edite ou remova câmeras em tempo real diretamente pela interface.
+- **Persistência de Dados**: Todas as configurações e novas unidades são salvas localmente e mantidas entre sessões.
 - **Ultra High Definition (4K)**: Otimização automática para forçar a qualidade máxima de vídeo disponível (`2160p`).
-- **Clean View Protocol**: Interface de vídeo limpa, removendo logos, títulos e controles do YouTube para foco total na observação.
-- **Modo Tela Cheia**: Ampliação imediata de qualquer feed com suporte a fechamento rápido via tecla `ESC`.
-- **Motor de Busca Inteligente**: Localização instantânea de câmeras na grade de monitoramento.
-- **Estética Dark/FBI**: Design inspirado em centros de operações táticas, com micro-animações e paleta de cores de alto contraste.
+- **Clean View Protocol**: Interface de vídeo limpa, removendo poluição visual do YouTube para foco total na observação.
+- **Grid de Alta Densidade**: Visualização panorâmica com até 5 colunas simultâneas.
+- **Modo Tela Cheia**: Ampliação imersiva de qualquer unidade com sensor de fechamento rápido.
+- **Estética Dark/FBI**: Design inspirado em centros de inteligência, com micro-animações e alto contraste.
 
 ## 🛠️ Stack Tecnológica
 
