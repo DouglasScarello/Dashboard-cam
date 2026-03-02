@@ -32,14 +32,11 @@ fn get_live_id(search_term: String) -> Result<String, String> {
 
 #[tauri::command]
 fn get_cameras() -> Result<String, String> {
-    // Caminho para o banco de dados centralizado
-    // Como estamos rodando em dev, podemos usar o caminho relativo ao projeto raiz
-    // Em produção, isso precisaria ser ajustado ou vir de uma config
-    let mut path = PathBuf::from("..");
-    path.push("database");
-    path.push("omni_cams.json");
+    // Usando caminho absoluto para garantir acesso em ambiente de desenvolvimento
+    let path = PathBuf::from("/home/douglasdsr/Documentos/Projects/FBI/Dashboard/database/omni_cams.json");
 
     if !path.exists() {
+        println!("[OSS ERROR] Arquivo não encontrado em: {:?}", path);
         return Ok("[]".to_string());
     }
 

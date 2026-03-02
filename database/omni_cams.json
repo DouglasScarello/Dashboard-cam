@@ -7,7 +7,8 @@
         "pais": "BR",
         "tipo": "youtube",
         "status": "AO VIVO",
-        "id": 1000
+        "id": 1000,
+        "res": "1280x720"
     },
     {
         "nome": "CÂMERA AO VIVO FLORIANÓPOLIS - BARRA DA LAGOA",
@@ -17,7 +18,8 @@
         "pais": "BR",
         "tipo": "youtube",
         "status": "AO VIVO",
-        "id": 1001
+        "id": 1001,
+        "res": "1920x1080"
     },
     {
         "nome": "CÂMERA AO VIVO FLORIANÓPOLIS  - CACHOEIRA DO BOM JESUS",
@@ -27,7 +29,8 @@
         "pais": "BR",
         "tipo": "youtube",
         "status": "AO VIVO",
-        "id": 1002
+        "id": 1002,
+        "res": "1920x1080"
     },
     {
         "nome": "CÂMERA AO VIVO FLORIANÓPOLIS - TRAPICHE BEIRA MAR NORTE",
@@ -37,7 +40,8 @@
         "pais": "BR",
         "tipo": "youtube",
         "status": "AO VIVO",
-        "id": 1003
+        "id": 1003,
+        "res": "1920x1080"
     },
     {
         "nome": "CÂMERA AO VIVO BR-101 KM 210 - SENTIDO SUL",
@@ -47,7 +51,8 @@
         "pais": "BR",
         "tipo": "youtube",
         "status": "AO VIVO",
-        "id": 1004
+        "id": 1004,
+        "res": "1920x1080"
     },
     {
         "nome": "CÂMERA AO VIVO FLORIANÓPOLIS - KOXIXOS BEER",
@@ -57,7 +62,8 @@
         "pais": "BR",
         "tipo": "youtube",
         "status": "AO VIVO",
-        "id": 1005
+        "id": 1005,
+        "res": "1280x720"
     },
     {
         "nome": "CÂMERA AO VIVO FLORIANÓPOLIS - PRAIA DOS INGLESES - BEACH HOUSE BISTRO&LOUNGE",
@@ -67,7 +73,8 @@
         "pais": "BR",
         "tipo": "youtube",
         "status": "AO VIVO",
-        "id": 1006
+        "id": 1006,
+        "res": "1280x720"
     },
     {
         "nome": "CÂMERA AO VIVO FLORIANÓPOLIS - CANAL DA BARRA DA LAGOA - HOSTEL FAROL DA BARRRA",
@@ -77,7 +84,8 @@
         "pais": "BR",
         "tipo": "youtube",
         "status": "AO VIVO",
-        "id": 1007
+        "id": 1007,
+        "res": "1920x1080"
     },
     {
         "nome": "CÂMERA AO VIVO JURERÊ INTERNACIONAL - RESTAURANTE CARAVELA",
@@ -87,7 +95,8 @@
         "pais": "BR",
         "tipo": "youtube",
         "status": "AO VIVO",
-        "id": 1008
+        "id": 1008,
+        "res": "1920x1080"
     },
     {
         "nome": "THIS IS HOW WE LIVE IN FLORIANOPOLIS BRAZIL",
@@ -97,7 +106,8 @@
         "pais": "BR",
         "tipo": "youtube",
         "status": "AO VIVO",
-        "id": 1009
+        "id": 1009,
+        "res": "1920x1080"
     },
     {
         "nome": "FLORIANOPOLIS LIVE CAM",
@@ -107,7 +117,8 @@
         "pais": "BR",
         "tipo": "youtube",
         "status": "AO VIVO",
-        "id": 1010
+        "id": 1010,
+        "res": "1280x720"
     },
     {
         "nome": "CÂMERA AO VIVO FLORIANÓPOLIS - SANTO ANTÔNIO DE LISBOA",
@@ -117,7 +128,8 @@
         "pais": "BR",
         "tipo": "youtube",
         "status": "AO VIVO",
-        "id": 1011
+        "id": 1011,
+        "res": "1280x720"
     },
     {
         "nome": "BALNEÁRIO CAMBORIÚ SC AO VIVO - AV. ATLÂNTICA – PRÓX. RUA 3700 - CONEXÃODCTV",
@@ -127,7 +139,8 @@
         "pais": "BR",
         "tipo": "youtube",
         "status": "AO VIVO",
-        "id": 1012
+        "id": 1012,
+        "res": "1920x1080"
     },
     {
         "nome": "THE SURPRISING REASONS WHY EVERYONE LOVES FLORIANÓPOLIS - THE BEST PLACE TO LIVE IN BRAZIL",
@@ -137,7 +150,8 @@
         "pais": "BR",
         "tipo": "youtube",
         "status": "AO VIVO",
-        "id": 1013
+        "id": 1013,
+        "res": "1920x1080"
     },
     {
         "nome": "🔴 LIVE CAM : UNBELIEVABLE MYSTERIOUS THINGS CAUGHT ON CAMERA SCARY - CRUISE SHIP IN STORM",
@@ -147,7 +161,8 @@
         "pais": "BR",
         "tipo": "youtube",
         "status": "AO VIVO",
-        "id": 1014
+        "id": 1014,
+        "res": "1280x720"
     },
     {
         "nome": "BALNEÁRIO CAMBORIÚ AO VIVO - MIRA LA VISTA DIRECTAMENTE DESDE EL HOTEL MARAMBAIA.",
@@ -157,7 +172,8 @@
         "pais": "BR",
         "tipo": "youtube",
         "status": "AO VIVO",
-        "id": 1015
+        "id": 1015,
+        "res": "1920x1080"
     },
     {
         "nome": "SBNF/ NVT - LIVE - CÂMERA AO VIVO 24H DO AEROPORTO DE NAVEGANTES VICTOR KONDER SANTA CATARINA -",
@@ -167,7 +183,8 @@
         "pais": "BR",
         "tipo": "youtube",
         "status": "AO VIVO",
-        "id": 1016
+        "id": 1016,
+        "res": "1920x1080"
     },
     {
         "nome": "BALNEÁRIO CAMBORIÚ SC AO VIVO - PRAIA DE LARANJEIRAS – CASA DO CAMARÃO - CONEXÃODCTV",
@@ -177,7 +194,8 @@
         "pais": "BR",
         "tipo": "youtube",
         "status": "AO VIVO",
-        "id": 1017
+        "id": 1017,
+        "res": "1920x1080"
     },
     {
         "nome": "BALNEÁRIO CAMBORIÚ AO VIVO",
@@ -187,7 +205,8 @@
         "pais": "BR",
         "tipo": "youtube",
         "status": "AO VIVO",
-        "id": 1018
+        "id": 1018,
+        "res": "1920x1080"
     },
     {
         "nome": "BALNEÁRIO CAMBORIÚ AO VIVO - AVENIDA ATLÂNTICA",
@@ -197,7 +216,8 @@
         "pais": "BR",
         "tipo": "youtube",
         "status": "AO VIVO",
-        "id": 1019
+        "id": 1019,
+        "res": "1920x1080"
     },
     {
         "nome": "BALNEÁRIO CAMBORIÚ AO VIVO - CENTRAL",
@@ -207,7 +227,8 @@
         "pais": "BR",
         "tipo": "youtube",
         "status": "AO VIVO",
-        "id": 1020
+        "id": 1020,
+        "res": "1920x1080"
     },
     {
         "nome": "BALNEÁRIO CAMBORIÚ SC AO VIVO - MIRANTE DA BARRA SUL – PARQUE UNIPRAIAS - CONEXÃODCTV",
@@ -217,7 +238,8 @@
         "pais": "BR",
         "tipo": "youtube",
         "status": "AO VIVO",
-        "id": 1021
+        "id": 1021,
+        "res": "1920x1080"
     },
     {
         "nome": "BALNEÁRIO CAMBORIÚ SC AO VIVO - PRAIA DO ESTALEIRO – BRISA DO MAR RESTAURANTE - CONEXÃODCTV",
@@ -227,7 +249,8 @@
         "pais": "BR",
         "tipo": "youtube",
         "status": "AO VIVO",
-        "id": 1022
+        "id": 1022,
+        "res": "1920x1080"
     },
     {
         "nome": "BALNEÁRIO CAMBORIÚ SC AO VIVO - PRAIA CENTRAL / RODA GIGANTE - CONEXÃODCTV",
@@ -237,7 +260,8 @@
         "pais": "BR",
         "tipo": "youtube",
         "status": "AO VIVO",
-        "id": 1023
+        "id": 1023,
+        "res": "1920x1080"
     },
     {
         "nome": "BALNEÁRIO CAMBORIÚ SC AO VIVO - BR-101 – SENTIDO NORTE – MALUVAN HOME & SHOP - CONEXÃODCTV",
@@ -247,7 +271,8 @@
         "pais": "BR",
         "tipo": "youtube",
         "status": "AO VIVO",
-        "id": 1024
+        "id": 1024,
+        "res": "1920x1080"
     },
     {
         "nome": "BALNEÁRIO CAMBORIÚ - AO VIVO - LIVE CAM NOW - SC",
@@ -257,7 +282,8 @@
         "pais": "BR",
         "tipo": "youtube",
         "status": "AO VIVO",
-        "id": 1025
+        "id": 1025,
+        "res": "1280x720"
     },
     {
         "nome": "BALNEÁRIO CAMBORIÚ AO VIVO",
@@ -267,7 +293,8 @@
         "pais": "BR",
         "tipo": "youtube",
         "status": "AO VIVO",
-        "id": 1026
+        "id": 1026,
+        "res": "1920x1080"
     },
     {
         "nome": "BALNEÁRIO CAMBORIÚ - AO VIVO - LIVE CAM SC HOJE",
@@ -277,17 +304,8 @@
         "pais": "BR",
         "tipo": "youtube",
         "status": "AO VIVO",
-        "id": 1027
-    },
-    {
-        "nome": "TREM AO VIVO RINCÃO SP BRASIL",
-        "url": "https://www.youtube.com/watch?v=JUwARcYt8FI",
-        "local": "São Paulo, SP",
-        "setor": "BR",
-        "pais": "BR",
-        "tipo": "youtube",
-        "status": "AO VIVO",
-        "id": 1028
+        "id": 1027,
+        "res": "1280x720"
     },
     {
         "nome": "AO VIVO - AV PAULISTA SP - ACORDA BRASIL - IMAGENS DIRETAS DO PALANQUE",
@@ -297,7 +315,8 @@
         "pais": "BR",
         "tipo": "youtube",
         "status": "AO VIVO",
-        "id": 1029
+        "id": 1029,
+        "res": "1920x1080"
     },
     {
         "nome": "TREM AO VIVO EMBÚ GUAÇÚ  SP BRASIL",
@@ -307,7 +326,8 @@
         "pais": "BR",
         "tipo": "youtube",
         "status": "AO VIVO",
-        "id": 1030
+        "id": 1030,
+        "res": "1920x1080"
     },
     {
         "nome": "TREM AO VIVO PINDORAMA SP BRASIL",
@@ -317,7 +337,8 @@
         "pais": "BR",
         "tipo": "youtube",
         "status": "AO VIVO",
-        "id": 1031
+        "id": 1031,
+        "res": "1920x1080"
     },
     {
         "nome": "🔴 1200 TOP LIVE WEBCAMS AROUND THE WORLD WITH RELAXING MUSIC ☕ AND MAP  -  SKYLINEWEBCAMS",
@@ -327,7 +348,8 @@
         "pais": "BR",
         "tipo": "youtube",
         "status": "AO VIVO",
-        "id": 1032
+        "id": 1032,
+        "res": "1920x1080"
     },
     {
         "nome": "LIVE CAMERAS AROUND THE WORLD - MUSIC, TIMELAPSE, TRAVEL",
@@ -337,7 +359,8 @@
         "pais": "BR",
         "tipo": "youtube",
         "status": "AO VIVO",
-        "id": 1033
+        "id": 1033,
+        "res": "1920x1080"
     },
     {
         "nome": "🔴 LIVE CAM AROUND THE WORLD - ROLLING CAM WITH CHILL & LOUNGE MUSIC",
@@ -347,7 +370,8 @@
         "pais": "BR",
         "tipo": "youtube",
         "status": "AO VIVO",
-        "id": 1034
+        "id": 1034,
+        "res": "1920x1080"
     },
     {
         "nome": "PROGRAMAÇÃO RÁDIO 80FM - AO VIVO - LIVE CAM SÃO PAULO - BRAZIL",
@@ -357,7 +381,8 @@
         "pais": "BR",
         "tipo": "youtube",
         "status": "AO VIVO",
-        "id": 1035
+        "id": 1035,
+        "res": "1280x720"
     },
     {
         "nome": "PORTO AO VIVO - ENTRADA NO CANAL DO PORTO DE SANTOS",
@@ -367,7 +392,8 @@
         "pais": "BR",
         "tipo": "youtube",
         "status": "AO VIVO",
-        "id": 1036
+        "id": 1036,
+        "res": "1920x1080"
     },
     {
         "nome": "PROGRAMAÇÃO RÁDIO 80FM - AO-VIVO - LIVE CAM - SÃO PAULO BRAZIL",
@@ -377,7 +403,8 @@
         "pais": "BR",
         "tipo": "youtube",
         "status": "AO VIVO",
-        "id": 1037
+        "id": 1037,
+        "res": "1280x720"
     },
     {
         "nome": "PORTO AO VIVO - VISTA PANORÂMICA (4K)",
@@ -387,7 +414,8 @@
         "pais": "BR",
         "tipo": "youtube",
         "status": "AO VIVO",
-        "id": 1038
+        "id": 1038,
+        "res": "1920x1080"
     },
     {
         "nome": "🌍🅻🅸🆅🅴🌍LIVE WORLDWIDE WEBCAM TOUR🎥WATCH 500 RANDOM CAMS FROM ALL AROUND THE WORLD🌐BERLIN PARIS TOKIO😍",
@@ -397,7 +425,8 @@
         "pais": "BR",
         "tipo": "youtube",
         "status": "AO VIVO",
-        "id": 1039
+        "id": 1039,
+        "res": "1920x1080"
     },
     {
         "nome": "LIVE CAM SÃO PAULO/SP AO VIVO (DIA)",
@@ -407,7 +436,8 @@
         "pais": "BR",
         "tipo": "youtube",
         "status": "AO VIVO",
-        "id": 1040
+        "id": 1040,
+        "res": "1280x720"
     },
     {
         "nome": "LIVE: CROWDS GATHER IN TIMES SQUARE IN SUPPORT OF STRIKES ON IRAN",
@@ -417,7 +447,8 @@
         "pais": "US",
         "tipo": "youtube",
         "status": "AO VIVO",
-        "id": 1041
+        "id": 1041,
+        "res": "1920x1080"
     },
     {
         "nome": "LIVE: DEMONSTRATORS GATHER IN TIME SQUARE TO CELEBRATE U.S. STRIKE ON IRAN - AC1E",
@@ -427,7 +458,8 @@
         "pais": "US",
         "tipo": "youtube",
         "status": "AO VIVO",
-        "id": 1042
+        "id": 1042,
+        "res": "1920x1080"
     },
     {
         "nome": "EARTHCAM LIVE:  TIMES SQUARE IN 4K",
@@ -437,7 +469,8 @@
         "pais": "US",
         "tipo": "youtube",
         "status": "AO VIVO",
-        "id": 1043
+        "id": 1043,
+        "res": "1920x1080"
     },
     {
         "nome": "MANHATTAN  MARCH 2026 CRAZY CROWDS IN TIMES SQUARE NYC 🎄 WALKING THROUGH NEW YORK",
@@ -447,7 +480,8 @@
         "pais": "US",
         "tipo": "youtube",
         "status": "AO VIVO",
-        "id": 1044
+        "id": 1044,
+        "res": "1280x720"
     },
     {
         "nome": "NEWSROOM LIVE: NEW YEAR'S EVE IN TIMES SQUARE",
@@ -457,7 +491,8 @@
         "pais": "US",
         "tipo": "youtube",
         "status": "AO VIVO",
-        "id": 1045
+        "id": 1045,
+        "res": "1280x720"
     },
     {
         "nome": "TIMES SQUARE: DUFFY SQUARE 4K VIEW LIVE",
@@ -467,7 +502,8 @@
         "pais": "US",
         "tipo": "youtube",
         "status": "AO VIVO",
-        "id": 1046
+        "id": 1046,
+        "res": "1920x1080"
     },
     {
         "nome": "NEW YORK'S TIMES SQUARE SNOW STORM LIVE CAM - NYC UNDER SNOW EMERGENCY - USA WEATHER NEWS - N18G",
@@ -477,7 +513,8 @@
         "pais": "US",
         "tipo": "youtube",
         "status": "AO VIVO",
-        "id": 1047
+        "id": 1047,
+        "res": "1920x1080"
     },
     {
         "nome": "LIVE: NEW YORK RINGS IN THE NEW YEAR WITH THE TIMES SQUARE BALL DROP",
@@ -487,7 +524,8 @@
         "pais": "US",
         "tipo": "youtube",
         "status": "AO VIVO",
-        "id": 1048
+        "id": 1048,
+        "res": "1920x1080"
     },
     {
         "nome": "LIVE FROM NEW YORK CITY'S TIMES SQUARE AS STRONG WINTER STORM BRINGS SNOW TO THE BIG APPLE",
@@ -497,7 +535,8 @@
         "pais": "US",
         "tipo": "youtube",
         "status": "AO VIVO",
-        "id": 1049
+        "id": 1049,
+        "res": "1280x720"
     },
     {
         "nome": "NEW YEAR’S COUNTDOWN 2026: LIVE NEW YORK BALL DROP IN TIMES SQUARE",
@@ -507,7 +546,8 @@
         "pais": "US",
         "tipo": "youtube",
         "status": "AO VIVO",
-        "id": 1050
+        "id": 1050,
+        "res": "1920x1080"
     },
     {
         "nome": "TIMES SQUARE NEW YEAR'S EVE 2026 🎉 TIMES SQUARE BALL DROP NEW YEAR 2026 NEW YORK CITY LIVE",
@@ -517,7 +557,8 @@
         "pais": "US",
         "tipo": "youtube",
         "status": "AO VIVO",
-        "id": 1051
+        "id": 1051,
+        "res": "1920x1080"
     },
     {
         "nome": "LIVE: NEW YEAR'S EVE 2026 BALL DROP COUNTDOWN IN TIMES SQUARE",
@@ -527,7 +568,8 @@
         "pais": "US",
         "tipo": "youtube",
         "status": "AO VIVO",
-        "id": 1052
+        "id": 1052,
+        "res": "1920x1080"
     },
     {
         "nome": "NYC DEMONSTRATORS CELEBRATE IRAN STRIKES - NEWSNATION LIVE",
@@ -537,7 +579,8 @@
         "pais": "US",
         "tipo": "youtube",
         "status": "AO VIVO",
-        "id": 1053
+        "id": 1053,
+        "res": "1920x1080"
     },
     {
         "nome": "【ライブ】渋谷スクランブル交差点 / SHIBUYA SCRAMBLE CROSSING LIVE CAMERA【LIVE】ANN/テレ朝",
@@ -547,7 +590,8 @@
         "pais": "JP",
         "tipo": "youtube",
         "status": "AO VIVO",
-        "id": 1054
+        "id": 1054,
+        "res": "1920x1080"
     },
     {
         "nome": "【ライブ】いまの渋谷・スクランブル交差点　ライブカメラ　SHIBUYA SCRAMBLE CROSSING - TOKYO, JAPAN　 LIVE CAM",
@@ -557,7 +601,8 @@
         "pais": "JP",
         "tipo": "youtube",
         "status": "AO VIVO",
-        "id": 1055
+        "id": 1055,
+        "res": "1280x720"
     },
     {
         "nome": "LIVE SHIBUYA CROSSING",
@@ -567,7 +612,8 @@
         "pais": "JP",
         "tipo": "youtube",
         "status": "AO VIVO",
-        "id": 1056
+        "id": 1056,
+        "res": "1280x720"
     },
     {
         "nome": "SHIBUYA CROSSING LIVE!",
@@ -577,7 +623,8 @@
         "pais": "JP",
         "tipo": "youtube",
         "status": "AO VIVO",
-        "id": 1057
+        "id": 1057,
+        "res": "720x1280"
     },
     {
         "nome": "WALKING AT SHIBUYA CROSSING LIVE",
@@ -587,17 +634,8 @@
         "pais": "JP",
         "tipo": "youtube",
         "status": "AO VIVO",
-        "id": 1058
-    },
-    {
-        "nome": "SHIBUYA CITY SCRAMBLE CROSSING LIVE CAMERA 1/15/2026 2:30 PM - 9:28 PM (PARTLY CLOUDY - NIGHT)",
-        "url": "https://www.youtube.com/watch?v=oqCXKim_l20",
-        "local": "Tokyo, Japan",
-        "setor": "JP",
-        "pais": "JP",
-        "tipo": "youtube",
-        "status": "AO VIVO",
-        "id": 1059
+        "id": 1058,
+        "res": "720x1280"
     },
     {
         "nome": "【LIVE】深夜の散歩配信　渋谷スクランブル交差点ライブカメラ  SHIBUYA SCRAMBLE CROSSING LIVE CAMERA 2026 2/28",
@@ -607,7 +645,8 @@
         "pais": "JP",
         "tipo": "youtube",
         "status": "AO VIVO",
-        "id": 1060
+        "id": 1060,
+        "res": "1920x1080"
     },
     {
         "nome": "LIVE FROM SHIBUYA CROSSING!",
@@ -617,7 +656,8 @@
         "pais": "JP",
         "tipo": "youtube",
         "status": "AO VIVO",
-        "id": 1061
+        "id": 1061,
+        "res": "1280x720"
     },
     {
         "nome": "🔴 SHIBUYA CROSSING LIVE",
@@ -627,17 +667,8 @@
         "pais": "JP",
         "tipo": "youtube",
         "status": "AO VIVO",
-        "id": 1062
-    },
-    {
-        "nome": "🔴LIVE IN TOKYO - STARBUCKS SHIBUYA CROSSING AND WALKING TOUR",
-        "url": "https://www.youtube.com/watch?v=G9k_wuXOPTU",
-        "local": "Tokyo, Japan",
-        "setor": "JP",
-        "pais": "JP",
-        "tipo": "youtube",
-        "status": "AO VIVO",
-        "id": 1063
+        "id": 1062,
+        "res": "1920x1080"
     },
     {
         "nome": "🔴LIVE: TOKYO LIVE - SHIBUYA CROSSING LIVE - LOFI HIP HOP - LIVE CAMERA-",
@@ -647,27 +678,8 @@
         "pais": "JP",
         "tipo": "youtube",
         "status": "AO VIVO",
-        "id": 1064
-    },
-    {
-        "nome": "SHIBUYA CROSSING LIVE",
-        "url": "https://www.youtube.com/watch?v=9z8bXlHvnOQ",
-        "local": "Tokyo, Japan",
-        "setor": "JP",
-        "pais": "JP",
-        "tipo": "youtube",
-        "status": "AO VIVO",
-        "id": 1065
-    },
-    {
-        "nome": "SHIBUYA CITY SCRAMBLE CROSSING LIVE CAMERA 1/1/2023 12:33 AM - 6:32 AM (MIDNIGHT - SUNRISE 2023)",
-        "url": "https://www.youtube.com/watch?v=Zy4Wsd5N0sk",
-        "local": "Tokyo, Japan",
-        "setor": "JP",
-        "pais": "JP",
-        "tipo": "youtube",
-        "status": "AO VIVO",
-        "id": 1066
+        "id": 1064,
+        "res": "1280x720"
     },
     {
         "nome": "KENSINGTON PHILADELPHIA. CAM 7",
@@ -677,7 +689,8 @@
         "pais": "US",
         "tipo": "youtube",
         "status": "AO VIVO",
-        "id": 1067
+        "id": 1067,
+        "res": "1920x1080"
     },
     {
         "nome": "KENSINGTON. PHILADELPHIA, PA. CAM 3",
@@ -687,7 +700,8 @@
         "pais": "US",
         "tipo": "youtube",
         "status": "AO VIVO",
-        "id": 1068
+        "id": 1068,
+        "res": "1920x1080"
     },
     {
         "nome": "CAM 5 KENSINGTON PHILADELPHIA PA.",
@@ -697,7 +711,8 @@
         "pais": "US",
         "tipo": "youtube",
         "status": "AO VIVO",
-        "id": 1069
+        "id": 1069,
+        "res": "1920x1080"
     },
     {
         "nome": "CAM 6 C - KENSINGTON AVE. PHILADELPHIA.",
@@ -707,7 +722,8 @@
         "pais": "US",
         "tipo": "youtube",
         "status": "AO VIVO",
-        "id": 1070
+        "id": 1070,
+        "res": "1280x720"
     },
     {
         "nome": "KENSINGTON. PHILADELPHIA, PA. CAM 2",
@@ -717,7 +733,8 @@
         "pais": "US",
         "tipo": "youtube",
         "status": "AO VIVO",
-        "id": 1071
+        "id": 1071,
+        "res": "1920x1080"
     },
     {
         "nome": "CAM 6B KENSINGTON PHILADELPHIA",
@@ -727,7 +744,8 @@
         "pais": "US",
         "tipo": "youtube",
         "status": "AO VIVO",
-        "id": 1072
+        "id": 1072,
+        "res": "1920x1080"
     },
     {
         "nome": "KENSINGTON AVE PHILADELPHIA LIVE – HOMELESS STREET LIFE",
@@ -737,6 +755,243 @@
         "pais": "US",
         "tipo": "youtube",
         "status": "AO VIVO",
-        "id": 1073
+        "id": 1073,
+        "res": "1920x1080"
+    },
+    {
+        "nome": "AVENIDA PAULISTA",
+        "url": "https://www.youtube.com/@radiotvcdlsp/streams",
+        "local": "Santa Catarina, SC",
+        "tipo": "mjpeg",
+        "id": 1074,
+        "setor": "BR",
+        "pais": "BR",
+        "estado": "SC",
+        "status": "AO VIVO"
+    },
+    {
+        "nome": "AEROPORTO DE CONGONHAS",
+        "url": "https://www.youtube.com/@GolfOscarRomeo/streams",
+        "local": "Santa Catarina, SC",
+        "tipo": "mjpeg",
+        "id": 1075,
+        "setor": "BR",
+        "pais": "BR",
+        "estado": "SC",
+        "status": "AO VIVO"
+    },
+    {
+        "nome": "APARECIDA / SP",
+        "url": "https://www.youtube.com/c/Santu%C3%A1rioNacionaldeAparecida/streams",
+        "local": "Santa Catarina, SC",
+        "tipo": "mjpeg",
+        "id": 1076,
+        "setor": "BR",
+        "pais": "BR",
+        "estado": "SC",
+        "status": "AO VIVO"
+    },
+    {
+        "nome": "PRAIA DO FORTE",
+        "url": "https://www.youtube.com/@cabofrio-rj/streams",
+        "local": "Santa Catarina, SC",
+        "tipo": "mjpeg",
+        "id": 1077,
+        "setor": "BR",
+        "pais": "BR",
+        "estado": "SC",
+        "status": "AO VIVO"
+    },
+    {
+        "nome": "PMF - SC-401 CAM 01",
+        "url": "http://200.18.45.21/axis-cgi/mjpg/video.cgi",
+        "local": "SC-401, Florianópolis, SC",
+        "tipo": "mjpeg",
+        "id": 1078,
+        "setor": "BR",
+        "pais": "BR",
+        "estado": "SC",
+        "cidade": "Santa Catarina",
+        "status": "AO VIVO"
+    },
+    {
+        "nome": "PMF - SC-401 CAM 02",
+        "url": "http://200.18.45.22/axis-cgi/mjpg/video.cgi",
+        "local": "SC-401, Florianópolis, SC",
+        "tipo": "mjpeg",
+        "id": 1079,
+        "setor": "BR",
+        "pais": "BR",
+        "estado": "SC",
+        "cidade": "Santa Catarina",
+        "status": "AO VIVO"
+    },
+    {
+        "nome": "DNIT - BR-101 PALHOÇA KM 225",
+        "url": "http://camera.infraseg.dnit.gov.br/scPalhoca225/monitor.jpg",
+        "local": "BR-101 KM 225, Palhoça, SC",
+        "tipo": "jpeg",
+        "id": 1080,
+        "setor": "BR",
+        "pais": "BR",
+        "estado": "SC",
+        "cidade": "Santa Catarina",
+        "status": "AO VIVO"
+    },
+    {
+        "nome": "DNIT - BR-101 FLORIANÓPOLIS KM 210",
+        "url": "http://camera.infraseg.dnit.gov.br/scFloripa210/monitor.jpg",
+        "local": "BR-101 KM 210, Florianópolis, SC",
+        "tipo": "jpeg",
+        "id": 1081,
+        "setor": "BR",
+        "pais": "BR",
+        "estado": "SC",
+        "cidade": "Santa Catarina",
+        "status": "AO VIVO"
+    },
+    {
+        "nome": "DNIT - BR-101 ITAJAÍ KM 105",
+        "url": "http://camera.infraseg.dnit.gov.br/scItajai105/monitor.jpg",
+        "local": "BR-101 KM 105, Itajaí, SC",
+        "tipo": "jpeg",
+        "id": 1082,
+        "setor": "BR",
+        "pais": "BR",
+        "estado": "SC",
+        "cidade": "Santa Catarina",
+        "status": "AO VIVO"
+    },
+    {
+        "nome": "DNIT - BR-101 NAVEGANTES KM 110",
+        "url": "http://camera.infraseg.dnit.gov.br/scNavegantes110/monitor.jpg",
+        "local": "BR-101 KM 110, Navegantes, SC",
+        "tipo": "jpeg",
+        "id": 1083,
+        "setor": "BR",
+        "pais": "BR",
+        "estado": "SC",
+        "cidade": "Santa Catarina",
+        "status": "AO VIVO"
+    },
+    {
+        "nome": "DNIT - BR-101 BIGUAÇU KM 190",
+        "url": "http://camera.infraseg.dnit.gov.br/scBiguacu190/monitor.jpg",
+        "local": "BR-101 KM 190, Biguaçu, SC",
+        "tipo": "jpeg",
+        "id": 1084,
+        "setor": "BR",
+        "pais": "BR",
+        "estado": "SC",
+        "cidade": "Santa Catarina",
+        "status": "AO VIVO"
+    },
+    {
+        "nome": "DNIT - BR-101 SÃO JOSÉ KM 200",
+        "url": "http://camera.infraseg.dnit.gov.br/scSaoJose200/monitor.jpg",
+        "local": "BR-101 KM 200, São José, SC",
+        "tipo": "jpeg",
+        "id": 1085,
+        "setor": "BR",
+        "pais": "BR",
+        "estado": "SC",
+        "cidade": "Santa Catarina",
+        "status": "AO VIVO"
+    },
+    {
+        "nome": "ARTERIS - BR-101 GARUVA KM 10",
+        "url": "https://artemis.arterislitoralsul.com.br/cameras/cam010/hls/live.m3u8",
+        "local": "BR-101 KM 10, Garuva, SC",
+        "tipo": "hls",
+        "id": 1086,
+        "setor": "BR",
+        "pais": "BR",
+        "estado": "SC",
+        "cidade": "Santa Catarina",
+        "status": "AO VIVO"
+    },
+    {
+        "nome": "ARTERIS - BR-101 JOINVILLE KM 35",
+        "url": "https://artemis.arterislitoralsul.com.br/cameras/cam035/hls/live.m3u8",
+        "local": "BR-101 KM 35, Joinville, SC",
+        "tipo": "hls",
+        "id": 1087,
+        "setor": "BR",
+        "pais": "BR",
+        "estado": "SC",
+        "cidade": "Santa Catarina",
+        "status": "AO VIVO"
+    },
+    {
+        "nome": "ARTERIS - BR-101 BALNEÁRIO CAMBORIÚ KM 133",
+        "url": "https://artemis.arterislitoralsul.com.br/cameras/cam133/hls/live.m3u8",
+        "local": "BR-101 KM 133, Balneário Camboriú, SC",
+        "tipo": "hls",
+        "id": 1088,
+        "setor": "BR",
+        "pais": "BR",
+        "estado": "SC",
+        "cidade": "Santa Catarina",
+        "status": "AO VIVO"
+    },
+    {
+        "nome": "ARTERIS - BR-101 ITAJAÍ KM 107",
+        "url": "https://artemis.arterislitoralsul.com.br/cameras/cam107/hls/live.m3u8",
+        "local": "BR-101 KM 107, Itajaí, SC",
+        "tipo": "hls",
+        "id": 1089,
+        "setor": "BR",
+        "pais": "BR",
+        "estado": "SC",
+        "cidade": "Santa Catarina",
+        "status": "AO VIVO"
+    },
+    {
+        "nome": "ARTERIS - BR-101 FLORIANÓPOLIS KM 202",
+        "url": "https://artemis.arterislitoralsul.com.br/cameras/cam202/hls/live.m3u8",
+        "local": "BR-101 KM 202, Florianópolis, SC",
+        "tipo": "hls",
+        "id": 1090,
+        "setor": "BR",
+        "pais": "BR",
+        "estado": "SC",
+        "cidade": "Santa Catarina",
+        "status": "AO VIVO"
+    },
+    {
+        "nome": "SIE SC - TREVO KOBRASOL",
+        "url": "http://cameras.sie.sc.gov.br/stream/kobrasol/live.m3u8",
+        "local": "Kobrasol, São José, SC",
+        "tipo": "hls",
+        "id": 1091,
+        "setor": "BR",
+        "pais": "BR",
+        "estado": "SC",
+        "cidade": "Santa Catarina",
+        "status": "AO VIVO"
+    },
+    {
+        "nome": "SIE SC - BEIRA MAR NORTE",
+        "url": "http://cameras.sie.sc.gov.br/stream/beiramar-norte/live.m3u8",
+        "local": "Beira Mar Norte, Florianópolis, SC",
+        "tipo": "hls",
+        "id": 1092,
+        "setor": "BR",
+        "pais": "BR",
+        "estado": "SC",
+        "cidade": "Santa Catarina",
+        "status": "AO VIVO"
+    },
+    {
+        "nome": "SIE SC - VIA EXPRESSA",
+        "url": "http://cameras.sie.sc.gov.br/stream/via-expressa/live.m3u8",
+        "local": "Via Expressa, Florianópolis, SC",
+        "tipo": "hls",
+        "id": 1093,
+        "setor": "BR",
+        "pais": "BR",
+        "estado": "SC",
+        "cidade": "Santa Catarina",
+        "status": "AO VIVO"
     }
 ]

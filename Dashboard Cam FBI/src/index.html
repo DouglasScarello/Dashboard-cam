@@ -16,6 +16,95 @@
         
         /* Efeito de brilho neon no input ativo */
         input:focus { outline: none; box-shadow: 0 0 10px rgba(16, 185, 129, 0.5); border-color: #10B981; }
+
+        .glass-card {
+            background: #000;
+            border: 1px solid #1f2937;
+            transition: all 0.2s ease-in-out;
+            position: relative;
+        }
+
+        .glass-card:hover {
+            border-color: #10B981;
+            box-shadow: inset 0 0 15px rgba(16, 185, 129, 0.3), 0 0 15px rgba(16, 185, 129, 0.2);
+            z-index: 50;
+        }
+
+        .glass-card:hover .target-corner {
+            opacity: 1;
+        }
+
+        .target-corner {
+            position: absolute;
+            width: 8px;
+            height: 8px;
+            border-color: #10B981;
+            opacity: 0;
+            transition: opacity 0.2s;
+            pointer-events: none;
+            z-index: 40;
+        }
+
+        .tc-tl { top: 0; left: 0; border-top: 2px solid; border-left: 2px solid; }
+        .tc-tr { top: 0; right: 0; border-top: 2px solid; border-right: 2px solid; }
+        .tc-bl { bottom: 0; left: 0; border-bottom: 2px solid; border-left: 2px solid; }
+        .tc-br { bottom: 0; right: 0; border-bottom: 2px solid; border-right: 2px solid; }
+
+        .fullscreen-info {
+            background: linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0) 40%);
+        }
+
+        /* --- MOTION TRAIL (Pesquisa v25.0) --- */
+        .trail-canvas {
+            position: absolute;
+            inset: 0;
+            z-index: 25;
+            pointer-events: none;
+            mix-blend-mode: screen;
+            opacity: 0.85;
+        }
+
+        /* FBI Alert overlay */
+        .fbi-alert {
+            animation: fbi-pulse 1s ease-in-out infinite;
+            border: 2px solid #ef4444;
+        }
+
+        @keyframes fbi-pulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.7); }
+            50% { box-shadow: 0 0 0 8px rgba(239,68,68,0); }
+        }
+
+        .animate-scan {
+            width: 100%;
+            height: 2px;
+            background: linear-gradient(to right, transparent, #10B981, transparent);
+            position: absolute;
+            top: 0;
+            opacity: 0.1;
+            animation: scan 3s linear infinite;
+            pointer-events: none;
+            z-index: 30;
+        }
+
+        @keyframes scan {
+            0% { top: 0; }
+            100% { top: 100%; }
+        }
+
+        .aspect-video {
+            aspect-ratio: 16 / 9;
+        }
+
+        /* Animação personalizada para o grid */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .animate-fade-in {
+            animation: fadeIn 0.5s ease-out forwards;
+        }
     </style>
 </head>
 <body class="bg-gray-900 text-gray-200 h-screen flex flex-col font-mono overflow-hidden cursor-default select-none">
@@ -45,18 +134,47 @@
             <!-- Gerado via JavaScript -->
         </div>
 
-        <div id="cameraGrid" class="flex-1 overflow-y-auto p-3" style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px;">
+        <div id="cameraGrid" class="flex-1 overflow-y-auto p-1 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-1 bg-black">
         </div>
     </main>
 
-    <div id="fullscreenModal" class="fixed inset-0 bg-black z-50 hidden flex flex-col pt-4">
-        <div class="flex justify-between items-center px-6 mb-4">
-            <h2 id="modalTitle" class="text-xl font-bold text-emerald-500 tracking-widest"></h2>
-            <button onclick="closeFullscreen()" class="bg-red-600 hover:bg-red-500 text-white font-bold py-1 px-4 rounded text-sm transition-colors">
-                FECHAR (ESC)
-            </button>
+    <div id="fullscreenModal" class="fixed inset-0 bg-black z-50 hidden flex-col">
+        <!-- Header OSS -->
+        <div class="flex justify-between items-center px-4 py-2 bg-gray-900/90 border-b border-emerald-900/30">
+            <div class="flex items-center space-x-3">
+                <span class="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></span>
+                <h2 id="modalTitle" class="text-sm font-bold text-emerald-400 tracking-widest font-mono uppercase"></h2>
+                <span class="text-[10px] text-gray-500 font-mono" id="modalMeta">--</span>
+            </div>
+            <div class="flex items-center space-x-3">
+                <!-- Toggle Motion Trail -->
+                <button id="toggleTrail" onclick="toggleMotionTrail()" class="text-[10px] font-mono text-gray-500 hover:text-emerald-400 border border-gray-700 hover:border-emerald-500 px-2 py-1 rounded transition-all">
+                    TRAIL: ON
+                </button>
+                <!-- FBI Check -->
+                <button onclick="checkFBIWanted()" class="text-[10px] font-mono text-gray-500 hover:text-red-400 border border-gray-700 hover:border-red-500 px-2 py-1 rounded transition-all">
+                    ⚠ FBI CHECK
+                </button>
+                <button onclick="closeFullscreen()" class="bg-red-900/80 hover:bg-red-700 text-white font-bold py-1 px-4 rounded text-xs transition-colors font-mono tracking-widest">
+                    ESC / FECHAR
+                </button>
+            </div>
         </div>
-        <div id="modalContent" class="flex-1 bg-black relative"></div>
+
+        <!-- Video + Canvas -->
+        <div id="modalContent" class="flex-1 bg-black relative overflow-hidden">
+            <!-- Canvas layer para Motion Trail -->
+            <canvas id="trailCanvas" class="trail-canvas"></canvas>
+        </div>
+
+        <!-- FBI Wanted Panel (colapsável) -->
+        <div id="fbiPanel" class="hidden bg-gray-950 border-t border-red-900/40 p-3">
+            <div class="flex justify-between items-center mb-2">
+                <span class="text-[10px] font-mono text-red-400 font-bold tracking-widest">⚠ FBI MOST WANTED — CROSS-REFERENCE ACTIVE</span>
+                <button onclick="document.getElementById('fbiPanel').classList.add('hidden')" class="text-gray-600 hover:text-gray-400 text-xs">FECHAR</button>
+            </div>
+            <div id="fbiGrid" class="flex space-x-3 overflow-x-auto pb-2"></div>
+        </div>
     </div>
 
     <!-- Modal Adicionar Câmera -->
@@ -441,25 +559,212 @@
             }
         }
 
+        // ========================================================
+        //  MOTION TRAIL ENGINE (Pesquisa v25.0)
+        //  Background Subtraction via Canvas API - 100% no browser
+        // ========================================================
+        let trailEnabled = true;
+        let trailRAF = null;
+        let prevPixels = null;
+        let currentHlsInstance = null;
+
+        function toggleMotionTrail() {
+            trailEnabled = !trailEnabled;
+            document.getElementById('toggleTrail').innerText = `TRAIL: ${trailEnabled ? 'ON' : 'OFF'}`;
+            const canvas = document.getElementById('trailCanvas');
+            if (canvas) canvas.style.opacity = trailEnabled ? '0.85' : '0';
+        }
+
+        function startMotionTrail(videoEl) {
+            if (trailRAF) cancelAnimationFrame(trailRAF);
+            prevPixels = null;
+
+            const canvas = document.getElementById('trailCanvas');
+            if (!canvas || !videoEl) return;
+
+            const ctx = canvas.getContext('2d');
+            const THRESHOLD = 20; // Sensibilidade: pixels com delta > 20 = movimento
+
+            function loop() {
+                if (videoEl.readyState < 2) {
+                    trailRAF = requestAnimationFrame(loop);
+                    return;
+                }
+
+                // Sincroniza tamanho do canvas com o vídeo
+                if (canvas.width !== videoEl.videoWidth || canvas.height !== videoEl.videoHeight) {
+                    canvas.width = videoEl.videoWidth || canvas.offsetWidth;
+                    canvas.height = videoEl.videoHeight || canvas.offsetHeight;
+                }
+
+                if (!trailEnabled) {
+                    trailRAF = requestAnimationFrame(loop);
+                    return;
+                }
+
+                // Desenha frame atual num canvas oculto para extração de pixels
+                const offscreen = new OffscreenCanvas(canvas.width, canvas.height);
+                const offCtx = offscreen.getContext('2d');
+                offCtx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
+                const frame = offCtx.getImageData(0, 0, canvas.width, canvas.height);
+                const currentPixels = frame.data;
+
+                if (prevPixels && prevPixels.length === currentPixels.length) {
+                    // Efeito de "ghosting": escurece o canvas anterior levemente
+                    // (Em vez de clearRect, usamos fillRect com baixa opacidade)
+                    ctx.fillStyle = 'rgba(0, 0, 0, 0.15)';
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                    // Cria imageData para pintar apenas os pixels com movimento
+                    const output = ctx.createImageData(canvas.width, canvas.height);
+                    const out = output.data;
+
+                    for (let i = 0; i < currentPixels.length; i += 4) {
+                        const dr = Math.abs(currentPixels[i]     - prevPixels[i]);
+                        const dg = Math.abs(currentPixels[i + 1] - prevPixels[i + 1]);
+                        const db = Math.abs(currentPixels[i + 2] - prevPixels[i + 2]);
+                        const delta = (dr + dg + db) / 3;
+
+                        if (delta > THRESHOLD) {
+                            // Pinta o pixel em movimento com a cor original (efeito neon)
+                            out[i]     = Math.min(255, currentPixels[i] + 80);   // R
+                            out[i + 1] = Math.min(255, currentPixels[i + 1] + 150); // G (verde neon)
+                            out[i + 2] = currentPixels[i + 2];                  // B
+                            out[i + 3] = Math.min(255, delta * 3);               // Alpha baseado no delta
+                        }
+                    }
+                    ctx.putImageData(output, 0, 0);
+                }
+
+                prevPixels = new Uint8ClampedArray(currentPixels);
+                trailRAF = requestAnimationFrame(loop);
+            }
+
+            trailRAF = requestAnimationFrame(loop);
+        }
+
+        function stopMotionTrail() {
+            if (trailRAF) {
+                cancelAnimationFrame(trailRAF);
+                trailRAF = null;
+            }
+            prevPixels = null;
+            const canvas = document.getElementById('trailCanvas');
+            if (canvas) {
+                const ctx = canvas.getContext('2d');
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+            }
+        }
+
+        // ========================================================
+        //  FBI WANTED API (Pesquisa v25.0)
+        //  https://api.fbi.gov/wanted/v1/list
+        // ========================================================
+        async function checkFBIWanted() {
+            const panel = document.getElementById('fbiPanel');
+            const grid = document.getElementById('fbiGrid');
+
+            if (!panel.classList.contains('hidden')) {
+                panel.classList.add('hidden');
+                return;
+            }
+
+            grid.innerHTML = '<span class="text-[10px] text-gray-500 font-mono animate-pulse">QUERYING FBI DATABASE...</span>';
+            panel.classList.remove('hidden');
+
+            try {
+                const res = await fetch('https://api.fbi.gov/wanted/v1/list?page=1&sort_on=modified&sort_order=desc&limit=10');
+                const data = await res.json();
+                const suspects = data.items || [];
+
+                if (suspects.length === 0) {
+                    grid.innerHTML = '<span class="text-[10px] text-yellow-500 font-mono">NO ACTIVE RECORDS</span>';
+                    return;
+                }
+
+                grid.innerHTML = suspects.map(s => {
+                    const img = s.images?.[0]?.thumb || s.images?.[0]?.large || '';
+                    const name = (s.title || s.subjects?.[0] || 'UNKNOWN').substring(0, 25);
+                    const crime = (s.description || s.caution || '').substring(0, 60);
+                    return `
+                        <div class="flex-shrink-0 w-28 bg-black border border-red-900/40 rounded overflow-hidden">
+                            ${img ? `<img src="${img}" class="w-full h-20 object-cover grayscale" onerror="this.style.display='none'">` : '<div class="w-full h-20 bg-gray-900 flex items-center justify-center text-gray-700 text-[8px]">NO IMG</div>'}
+                            <div class="p-1">
+                                <div class="text-[8px] font-bold text-red-400 font-mono uppercase truncate">${name}</div>
+                                <div class="text-[7px] text-gray-500 font-mono truncate mt-0.5">${crime || 'CLASSIFIED'}</div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+
+            } catch (err) {
+                grid.innerHTML = `<span class="text-[10px] text-red-500 font-mono">CONNECTION FAILED: ${err.message}</span>`;
+            }
+        }
+
         function openFullscreen(id) {
             const cam = activeCameras.find(c => c.id === id);
             if (!cam) return;
 
             modalTitle.innerText = cam.nome;
-            modalContent.innerHTML = getPlayerHtml(cam, true);
+            document.getElementById('modalMeta').innerText = `${cam.local || ''} | ${cam.pais || ''}-${cam.estado || ''}`;
+
+            const content = document.getElementById('modalContent');
+            // Limpa o conteúdo anterior (mantém o canvas)
+            const oldVideo = content.querySelector('video, iframe');
+            if (oldVideo) oldVideo.remove();
+            const oldDiv = content.querySelector(':not(canvas)');
+            if (oldDiv && oldDiv.id !== 'trailCanvas') oldDiv.remove();
+
+            // Destroy HLS anterior para liberar RAM (pesquisa: evitar memory leak)
+            if (currentHlsInstance) {
+                currentHlsInstance.destroy();
+                currentHlsInstance = null;
+            }
+            stopMotionTrail();
+
+            // Insere o player correto
+            const playerDiv = document.createElement('div');
+            playerDiv.className = 'w-full h-full';
+            playerDiv.innerHTML = getPlayerHtml(cam, true);
+            content.appendChild(playerDiv);
+
+            // Inicia Motion Trail se for vídeo HLS
+            if (cam.tipo === 'hls' || cam.url?.endsWith('.m3u8')) {
+                setTimeout(() => {
+                    const videoEl = content.querySelector('video');
+                    if (videoEl) startMotionTrail(videoEl);
+                }, 500);
+            }
+
+            // Esconde painel FBI ao abrir nova câmera
+            document.getElementById('fbiPanel').classList.add('hidden');
+
             fullscreenModal.classList.remove('hidden');
+            fullscreenModal.classList.add('flex');
             document.body.classList.add('overflow-hidden');
         }
 
         function closeFullscreen() {
+            // Destroy HLS (pesquisa: prevent memory leak)
+            if (currentHlsInstance) {
+                currentHlsInstance.destroy();
+                currentHlsInstance = null;
+            }
+            stopMotionTrail();
+
             fullscreenModal.classList.add('hidden');
-            modalContent.innerHTML = '';
+            fullscreenModal.classList.remove('flex');
+            const content = document.getElementById('modalContent');
+            // Remove apenas iframes e vídeos, mantém o canvas
+            content.querySelectorAll('video, iframe, div:not(#trailCanvas)').forEach(el => el.remove());
             document.body.classList.remove('overflow-hidden');
         }
 
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') closeFullscreen();
         });
+
 
         // Detecta o tipo de URL e retorna o HTML do player correto
         function getPlayerHtml(cam, isFullscreen = false) {
@@ -481,25 +786,29 @@
                     </div>`;
                 } else {
                     // THUMBNAIL FIRST: Apenas imagem se não estiver em tela cheia
-                    const thumbUrl = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
-                    return `<div class="relative w-full h-full">
-                        <img src="${thumbUrl}" class="w-full h-full object-cover">
-                        <div class="absolute inset-0 flex items-center justify-center bg-black bg-opacity-20 group-hover:bg-opacity-0 transition-all duration-300">
-                            <svg class="w-12 h-12 text-white opacity-60 group-hover:opacity-100 transition-opacity" fill="currentColor" viewBox="0 0 20 20">
-                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd" />
-                            </svg>
+                    const thumbUrl = `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
+                    return `<div class="relative w-full h-full overflow-hidden">
+                        <img src="${thumbUrl}" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" onerror="this.src='https://img.youtube.com/vi/${videoId}/hqdefault.jpg'">
+                        <div class="absolute inset-0 flex items-center justify-center bg-black/30 group-hover:bg-black/10 transition-all duration-300">
+                            <div class="w-12 h-12 rounded-full bg-emerald-500/80 flex items-center justify-center text-white scale-0 group-hover:scale-100 transition-transform duration-300 shadow-lg shadow-emerald-500/50">
+                                <svg class="w-6 h-6 ml-1" fill="currentColor" viewBox="0 0 20 20">
+                                    <path d="M4.5 3.5v13L16 10 4.5 3.5z"/>
+                                </svg>
+                            </div>
                         </div>
                     </div>`;
                 }
             } else if (tipo === 'hls' || url.endsWith('.m3u8')) {
                 if (isFullscreen) {
-                    const videoId = `hls-${cam.id}`;
+                    const videoId = `hls-${cam.id}-${Date.now()}`;
                     setTimeout(() => {
                         const video = document.getElementById(videoId);
                         if (video && Hls.isSupported()) {
-                            const hls = new Hls();
+                            const hls = new Hls({ autoStartLoad: true, enableWorker: true });
                             hls.loadSource(url);
                             hls.attachMedia(video);
+                            // Guarda instância globalmente para destroy() correto (Pesquisa v25.0)
+                            currentHlsInstance = hls;
                         }
                     }, 100);
                     return `<video id="${videoId}" class="w-full h-full object-cover" autoplay muted playsinline></video>`;
@@ -524,37 +833,63 @@
                 return;
             }
 
-            cameras.forEach(cam => {
-                const statusColor = cam.status === 'OFFLINE' ? 'text-red-500' : cam.status === 'CONECTANDO' ? 'text-yellow-500' : 'text-emerald-500';
-                const dotColor = cam.status === 'OFFLINE' ? 'bg-red-500' : cam.status === 'CONECTANDO' ? 'bg-yellow-500' : 'bg-emerald-500';
-                const tipo = cam.tipo || (cam.url.includes('youtube.com') ? 'YT' : cam.url.endsWith('.m3u8') ? 'HLS' : 'CCTV');
-                const tipoBadge = `<span class="bg-blue-900 text-blue-300 px-1 rounded text-[9px] font-bold ml-1">${tipo.toUpperCase()}</span>`;
-
+            cameras.forEach((cam, index) => {
+                const statusColor = cam.status === 'OFFLINE' ? 'text-rose-500' : 'text-emerald-400';
+                const dotColor = cam.status === 'OFFLINE' ? 'bg-rose-500' : 'bg-emerald-500';
+                
                 const videoPlayerHtml = getPlayerHtml(cam);
+                const timestamp = new Date().toLocaleTimeString('pt-BR', { hour12: false });
 
                 const camBlock = `
-                    <div onclick="openFullscreen(${cam.id})" class="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden shadow-md hover:border-emerald-500 transition-colors duration-300 relative group cursor-pointer">
-                        <div class="absolute top-3 left-3 bg-gray-900 bg-opacity-75 px-2 py-1 rounded text-xs font-bold flex items-center z-10">
-                            <span class="w-2 h-2 rounded-full ${dotColor} mr-2 animate-pulse"></span>
-                            <span class="${statusColor}">${cam.status}</span>
-                        </div>
-                        <div style="height: 220px;" class="bg-black flex items-center justify-center relative">
+                    <div onclick="openFullscreen(${cam.id})" 
+                         class="glass-card group cursor-pointer animate-fade-in aspect-video overflow-hidden"
+                         style="animation-delay: ${index * 0.02}s">
+                        
+                        <!-- Target Corners (Target Lock Effect) -->
+                        <div class="target-corner tc-tl"></div>
+                        <div class="target-corner tc-tr"></div>
+                        <div class="target-corner tc-bl"></div>
+                        <div class="target-corner tc-br"></div>
+                        
+                        <!-- Video Feed -->
+                        <div class="w-full h-full bg-black relative">
                             ${videoPlayerHtml}
+                            <div class="animate-scan"></div>
                         </div>
-                        <div class="p-3 bg-gray-800 border-t border-gray-700">
-                            <div class="flex justify-between items-center mb-1">
-                                <div class="flex items-center space-x-1 w-3/5">
-                                    <span class="text-sm font-semibold truncate">${cam.nome}</span>
-                                    ${tipoBadge}
+
+                        <!-- OSD Layer (On-Screen Display) -->
+                        <div class="absolute inset-0 osd-overlay p-2 flex flex-col justify-between z-20 pointer-events-none">
+                            <!-- Top OSD -->
+                            <div class="flex justify-between items-start">
+                                <div class="flex items-center space-x-2 bg-black/40 px-1.5 py-0.5 rounded backdrop-blur-sm">
+                                    <span class="w-1.5 h-1.5 rounded-full ${dotColor} ${cam.status !== 'OFFLINE' ? 'animate-pulse' : ''}"></span>
+                                    <span class="text-[9px] font-bold text-white tracking-widest uppercase truncate max-w-[120px]">
+                                        ${cam.status === 'OFFLINE' ? 'LOST' : 'REC'} | ${cam.nome}
+                                    </span>
                                 </div>
-                                <div class="flex items-center space-x-2">
-                                    <svg onclick="event.stopPropagation(); refreshCamera(${cam.id})" class="w-4 h-4 text-gray-500 hover:text-blue-400 cursor-pointer transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
-                                    <svg onclick="event.stopPropagation(); openEditModal(${cam.id})" class="w-4 h-4 text-gray-500 hover:text-yellow-500 cursor-pointer transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                                <div class="text-[8px] font-mono text-gray-400 bg-black/40 px-1 rounded">
+                                    CAM-ID: ${cam.id} | ${timestamp}
                                 </div>
                             </div>
-                            <div class="flex justify-between items-center text-[10px] text-gray-500 font-mono italic">
-                                <span>${cam.local || 'LOCAL DESCONHECIDO'}</span>
-                                <span class="bg-gray-700 px-1 rounded text-emerald-400">${cam.pais || 'N/A'}-${cam.estado || 'N/A'}</span>
+
+                            <!-- Bottom OSD -->
+                            <div class="flex justify-between items-end">
+                                <div class="flex flex-col">
+                                    <span class="text-[8px] text-emerald-500 font-bold tracking-tighter opacity-70">
+                                        LNG: ${cam.pais || 'XX'} / LAT: ${cam.estado || 'XX'}
+                                    </span>
+                                    <span class="text-[9px] text-white/60 font-mono uppercase tracking-widest">
+                                        ${cam.local || 'LOC_UNKNOWN'}
+                                    </span>
+                                </div>
+                                <div class="flex space-x-1 pointer-events-auto">
+                                    <button onclick="event.stopPropagation(); refreshCamera(${cam.id})" class="p-1 hover:bg-emerald-500/20 rounded border border-white/5 text-white/40 hover:text-emerald-400 transition-all">
+                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                                    </button>
+                                    <button onclick="event.stopPropagation(); openEditModal(${cam.id})" class="p-1 hover:bg-yellow-500/20 rounded border border-white/5 text-white/40 hover:text-yellow-500 transition-all">
+                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path></svg>
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
