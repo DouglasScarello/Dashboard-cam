@@ -59,6 +59,9 @@ async function loadStats() {
         const s = await invoke("get_stats");
         document.getElementById("statWanted").textContent = s.wanted.toLocaleString();
         document.getElementById("statMissing").textContent = s.missing.toLocaleString();
+        if (document.getElementById("statBio")) {
+            document.getElementById("statBio").textContent = (s.with_biometrics || 0).toLocaleString();
+        }
     } catch (e) { console.error("stats_err", e); }
 }
 
@@ -253,6 +256,15 @@ async function switchDossierImage(path) {
 }
 
 // ── Filtros ───────────────────────────────────────────────────────────────────
+document.querySelectorAll(".cat-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+        document.querySelectorAll(".cat-btn").forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        state.category = btn.dataset.category;
+        loadPage(true);
+    });
+});
+
 sourceFilter.addEventListener("change", () => { state.source = sourceFilter.value; loadPage(true); });
 countryFilter.addEventListener("change", () => { state.country = countryFilter.value; loadPage(true); });
 bioCheck.addEventListener("change", () => { state.bioOnly = bioCheck.checked; loadPage(true); });
@@ -266,9 +278,18 @@ searchInput.addEventListener("input", () => {
     }, 400);
 });
 
+// Keyboard Shortcut ⌘K / Ctrl+K
+window.addEventListener("keydown", e => {
+    if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault();
+        searchInput.focus();
+    }
+});
+
 loadMoreBtn.addEventListener("click", () => loadPage(false));
 modalClose.addEventListener("click", () => window.location.hash = "");
 modalOverlay.addEventListener("click", e => { if (e.target === modalOverlay) window.location.hash = ""; });
+document.getElementById("exportBtn")?.addEventListener("click", () => showToast("Exportando CSV..."));
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function parseNats(json) {

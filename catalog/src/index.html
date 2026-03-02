@@ -14,17 +14,20 @@
 <header class="header">
   <div class="header-left">
     <div class="logo">
-      <span class="logo-text">OLHO DE DEUS <span class="logo-sub">INTELLIGENCE</span></span>
+      <span class="logo-icon">👁</span>
+      <span class="logo-text">INTELLIGENCE <span class="accent">CATALOG</span></span>
+    </div>
+    <div class="header-stats">
+      <div class="stat"><span class="dot red"></span> <span id="statWanted">0</span> Procurados</div>
+      <div class="stat"><span class="dot amber"></span> <span id="statMissing">0</span> Desaparecidos</div>
+      <div class="stat"><span class="dot cyan"></span> <span id="statBio">0</span> Biometria</div>
     </div>
   </div>
-  <div class="search-wrap">
-    <span class="search-icon">🔍</span>
-    <input type="text" id="searchInput" class="search-input" placeholder="Pesquisar indivíduos..." autocomplete="off">
-  </div>
-  <div class="header-right">
-    <div class="stats-bar" id="statsBar">
-      <div class="stat"><span class="dot red"></span> <span id="statWanted">0</span> WANTED</div>
-      <div class="stat"><span class="dot amber"></span> <span id="statMissing">0</span> MISSING</div>
+  <div class="search-section">
+    <div class="search-wrap">
+      <span class="search-icon">⌕</span>
+      <input type="text" id="searchInput" class="search-input" placeholder="Buscar por nome, crime..." autocomplete="off">
+      <kbd class="search-kbd">⌘K</kbd>
     </div>
   </div>
 </header>
@@ -32,24 +35,30 @@
 <!-- FILTERS -->
 <div class="filters-bar">
   <div class="filters-inner">
-    <div class="filter-group">
-      <div class="select-wrapper">
-        <select id="sourceFilter" class="filter-select">
-          <option value="">Todas as fontes</option>
-          <option value="FBI">FBI</option>
-          <option value="Interpol">Interpol</option>
-          <option value="Europol">Europol</option>
-        </select>
-      </div>
-      <div class="select-wrapper">
-        <select id="countryFilter" class="filter-select">
-          <option value="">Todos os países</option>
-          <option value="us">Estados Unidos</option>
-          <option value="br">Brasil</option>
-          <option value="ru">Rússia</option>
-        </select>
+    <div class="filter-main">
+      <div class="cat-group">
+        <button class="cat-btn active" data-category="">Todos</button>
+        <button class="cat-btn" data-category="wanted"><span class="dot red"></span> Procurados</button>
+        <button class="cat-btn" data-category="missing"><span class="dot amber"></span> Desaparecidos</button>
       </div>
       
+      <div class="select-group">
+        <div class="select-wrapper">
+          <select id="sourceFilter" class="filter-select">
+            <option value="">Todas as fontes</option>
+            <option value="FBI">FBI</option>
+            <option value="Interpol">Interpol</option>
+          </select>
+        </div>
+        <div class="select-wrapper">
+          <select id="countryFilter" class="filter-select">
+            <option value="">Todos os países</option>
+            <option value="us">Estados Unidos</option>
+            <option value="br">Brasil</option>
+          </select>
+        </div>
+      </div>
+
       <label class="bio-toggle">
         <input type="checkbox" id="bioOnly">
         <span class="bio-toggle-custom">
@@ -60,11 +69,8 @@
     </div>
 
     <div class="filter-right">
-      <span id="resultCount" class="result-count">0 registros</span>
-      <div class="view-ops">
-        <button class="icon-btn active" title="Grid View">⊞</button>
-        <button class="icon-btn" title="List View">≡</button>
-      </div>
+      <span id="resultCount" class="result-count">0 resultados</span>
+      <button class="icon-btn-text" id="exportBtn">↓ CSV</button>
     </div>
   </div>
 </div>
