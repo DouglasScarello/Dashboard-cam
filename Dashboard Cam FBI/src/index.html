@@ -152,7 +152,7 @@
         let currentSector = 'ALL';
 
         // === SISTEMA DE VERSIONAMENTO DO DATASET ===
-        const OSS_DATASET_VERSION = '14.0'; // Auto-Healing & Thumbnail First
+        const OSS_DATASET_VERSION = '17.0'; // Copacabana Fixed & Search Opt
 
         const DEFAULT_CAMERAS = [
             { id: 701, nome: "BEIRA MAR NORTE — KOXIXOS", status: "AO VIVO", url: "https://www.youtube.com/watch?v=c3LNbKb45go", local: "Florianópolis, SC", pais: "BR", estado: "SC", cidade: "Florianópolis", tipo: "youtube" },
@@ -169,7 +169,7 @@
             { id: 70, nome: "VENICE — CANAL VIEW", status: "AO VIVO", url: "https://www.youtube.com/watch?v=ph1vpnYIxJk", local: "Venice, Italy", pais: "IT", estado: "Venice", cidade: "Venice", tipo: "youtube" },
             { id: 80, nome: "PARIS — EIFFEL TOWER", status: "AO VIVO", url: "https://www.youtube.com/watch?v=OzYp4NRZlwQ", local: "Paris, France", pais: "FR", estado: "Paris", cidade: "Paris", tipo: "youtube" },
             { id: 90, nome: "SEATTLE — SPACE NEEDLE", status: "AO VIVO", url: "https://www.youtube.com/watch?v=4cgSE12k9Sc", local: "Seattle, WA", pais: "US", estado: "WA", cidade: "Seattle", tipo: "youtube" },
-            { id: 100, nome: "RIO — COPACABANA BEACH", status: "AO VIVO", url: "https://www.youtube.com/watch?v=jOny1lDk158", local: "Rio de Janeiro, BR", pais: "BR", estado: "RJ", cidade: "Rio de Janeiro", tipo: "youtube" },
+            { id: 100, nome: "RIO — COPACABANA BEACH", status: "AO VIVO", url: "https://www.youtube.com/watch?v=2bvFm0-luBo", local: "Rio de Janeiro, BR", pais: "BR", estado: "RJ", cidade: "Rio de Janeiro", tipo: "youtube" },
             { id: 160, nome: "WASHINGTON DC — WHITE HOUSE", status: "AO VIVO", url: "https://www.youtube.com/watch?v=Fu8vYoIkaeM", local: "Washington, DC", pais: "US", estado: "DC", cidade: "Washington", tipo: "youtube" }
         ];
 
@@ -566,10 +566,44 @@
             renderizarCameras(camerasFiltradas);
         });
 
-        // Função de Refresh Individual
-        function refreshCamera(id) {
-            updateUI();
-            console.log(`[HEALTH] Unidade ${id} re-sincronizada.`);
+        // Função de Refresh Individual (AGORA COM AUTO-HEALING REAL)
+        async function refreshCamera(id) {
+            const cam = activeCameras.find(c => c.id === id);
+            if (!cam) return;
+
+            console.log(`[HEALTH] Iniciando auto-ajuste para: ${cam.nome}...`);
+            
+            // Visual feedback: Troca ícone por loading (opcional, mas proativo)
+            const btn = event?.currentTarget;
+            if (btn) btn.classList.add('animate-spin', 'text-blue-400');
+
+            try {
+                const { invoke } = window.__TAURI__.core;
+                
+                // Busca o ID mais recente no YouTube usando o nome da câmera
+                // Limpeza agressiva para melhorar a busca: remove traços e espaços extras
+                const searchTerm = cam.nome.replace(/[—\-]/g, ' ').replace(/\s+/g, ' ').trim();
+                const newId = await invoke('get_live_id', { searchTerm: searchTerm });
+                
+                if (newId) {
+                    const newUrl = `https://www.youtube.com/watch?v={key}`.replace('{key}', newId);
+                    if (cam.url !== newUrl) {
+                        console.log(`[HEALTH] Novo ID detectado: ${newId}. Atualizando...`);
+                        cam.url = newUrl;
+                        saveCameras(); // Persiste no localStorage
+                        updateUI();
+                    } else {
+                        console.log(`[HEALTH] O ID atual já é o mais recente.`);
+                        updateUI(); // Apenas re-renderiza
+                    }
+                }
+            } catch (err) {
+                console.error(`[HEALTH] Falha no auto-ajuste: ${err}`);
+                // Se falhar o Rust (ex: yt-dlp não instalado), apenas re-renderiza
+                updateUI();
+            } finally {
+                if (btn) btn.classList.remove('animate-spin', 'text-blue-400');
+            }
         }
 
         // Renderiza tudo ao iniciar a página
