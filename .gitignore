@@ -7,6 +7,7 @@ env/
 venv/
 ENV/
 olho_de_deus/.venv/
+*.egg-info/
 
 # Node/JavaScript
 node_modules/
@@ -17,15 +18,34 @@ dist/
 src-tauri/target/
 src-tauri/binaries/
 
-# Local binaries/downloads (CORRIGIDO: sem barra para bater com arquivos)
+# Local binaries/downloads
 Miniconda3-latest-Linux-x86_64.sh
 cv2
 vidgear
 yt_dlp
+
+# Imagens (faces baixadas — não subir ao GitHub)
 *.jpg
+*.jpeg
 *.png
 !uploaded_media_*.png
+
+# Banco de dados e embeddings (pesados — ficam local)
+data/
+intelligence/data/
+olho_de_deus/data/
+*.db
+*.faiss
+*.json.bak
+
+# Modelos YOLO (pesados — baixar via script)
+*.pt
+*.onnx
+
+# Poetry lock (opcional manter, mas pesado)
+# poetry.lock
 
 # Outros
 .pdm-python
 .python-version
+forense_*.jpg

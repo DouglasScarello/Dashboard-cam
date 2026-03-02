@@ -1,74 +1,142 @@
-# OSS - Omniscient Surveillance System 🛡️🛰️
+# 🔒 Olho de Deus OSS — Sistema de Monitoramento Biométrico
 
-![OSS Banner](https://img.shields.io/badge/Status-Operational-emerald?style=for-the-badge&logo=target)
-![Aesthetics](https://img.shields.io/badge/Aesthetics-FBI%20Design-black?style=for-the-badge)
-![Tech](https://img.shields.io/badge/Tech-Tauri%20%7C%20Python%20%7C%20Poetry-blue?style=for-the-badge)
-![Version](https://img.shields.io/badge/Version-15.0-red?style=for-the-badge)
-
-O **Omniscient Surveillance System (OSS)** é uma plataforma de inteligência e vigilância centralizada. O sistema é composto por um Dashboard tático de alto desempenho e um backend de processamento de imagem autônomo.
+> Sistema de inteligência artificial para identificação de indivíduos procurados e desaparecidos em feeds de vídeo ao vivo. **Ghost Protocol** — 100% local, nenhum dado enviado externamente.
 
 ---
 
-## 🏗️ Arquitetura do Sistema
+## 📦 Arquitetura Modular
 
-O projeto é dividido em dois núcleos principais:
-
-### 1. Dashboard Tauri (Painel de Controle)
-Uma interface desktop ultra-rápida que serve como o "Command Center".
-- **Thumbnail First**: Otimização de performance que carrega apenas imagens estáticas no grid, ativando o stream real apenas sob demanda (Economia de 80% de CPU/Banda).
-- **Navegação Hierárquica**: Fluxo drill-down de geolocalização (**País > Estado > Cidade**) para gestão de milhares de feeds sem latência.
-- **Importação Bulk**: Sistema de ingestão em massa de novos feeds via texto formatado.
-
-### 2. Olho de Deus (Backend Python)
-O "músculo" do sistema, responsável pelo processamento pesado e automação.
-- **Auto-Healing**: Sistema de monitoramento de saúde do stream. Detecta quedas ou "Vídeo Indisponível" e recupera a conexão automaticamente via `yt-dlp`.
-- **Farm Cams**: Crawler automatizado para descoberta de novas transmissões ao vivo no YouTube baseadas em termos de busca e localização.
-- **Health Check**: Análise de frames via OpenCV para garantir sinal ativo e detecção de telas pretas.
-
----
-
-## 🚀 Como Rodar
-
-### Dashboard (Frontend)
-Requer Node.js e Rust instalado.
-```bash
-cd "Dashboard Cam FBI"
-npm install
-npm run tauri dev
 ```
-
-### Olho de Deus (Backend/Processing)
-Requer Python 3.10+ e Poetry.
-```bash
-cd "olho_de_deus"
-poetry install
-
-# Para rodar o monitor com Auto-Healing:
-poetry run python main.py --cam "Koxixos" --interval 2.0
-
-# Para farmar novas câmeras:
-poetry run python farm_cams.py
+Dashboard/
+├── 📊 Dashboard Cam FBI/   → Módulo 1: Interface web (Tauri + HTML/CSS/JS)
+├── 👁️ olho_de_deus/        → Módulo 2: Motor de análise facial em tempo real
+└── 🌐 intelligence/        → Módulo 3: Banco de dados global + ingestão
 ```
 
 ---
 
-## 🛠️ Stack Tecnológica
+## Módulo 1 — Dashboard (`Dashboard Cam FBI/`)
 
-- **Frontend**: Tauri, HTML5, JavaScript (ES6+), Tailwind CSS, HLS.js.
-- **Backend/IA**: Python, OpenCV, yt-dlp, Poetry.
-- **Data**: JSON Hierárquico (País/Estado/Cidade).
+Interface web para visualização de feeds de câmeras e alertas biométricos.
 
----
-
-## 🌐 Rede de Monitoramento (Destaques)
-
-| Unidade | Localização | Tipo |
-| :--- | :--- | :--- |
-| **Ponte Hercílio Luz** | Florianópolis, SC (BR) | YouTube Live |
-| **Beira Mar Norte** | Florianópolis, SC (BR) | YouTube Live |
-| **Times Square** | New York, NY (US) | 4K Stream |
-| **Shibuya Crossing** | Tokyo, JP | 4K Stream |
+- **Stack:** Tauri + HTML / CSS / JS
+- **Acesso:** `http://localhost:1420`
+- **Inicia com:** `npm run dev` dentro de `Dashboard Cam FBI/`
 
 ---
 
-*“Vigilance is our currency.”* - **OSS Command Center**
+## Módulo 2 — Olho de Deus (`olho_de_deus/`)
+
+Motor de visão computacional com player forense interativo.
+
+| Componente | Descrição |
+|---|---|
+| YOLOv8n | Detecção de faces (CPU, otimizado p/ Ryzen 4600H) |
+| ArcFace 512-d | Extração de embeddings biométricos |
+| REID / IoU | Re-identificação entre frames (sem re-processar) |
+| Player Forense | Seek bar estilo Netflix, play/pause, navegação por mouse |
+
+```bash
+cd olho_de_deus
+
+# Stream YouTube em modo forense
+TF_CPP_MIN_LOG_LEVEL=3 poetry run python main.py --id YOUTUBE_ID --forensic --step 10
+
+# Arquivo de vídeo local
+TF_CPP_MIN_LOG_LEVEL=3 poetry run python main.py --source /caminho/video.mp4 --forensic
+```
+
+**Controles do player forense:**
+
+| Tecla | Ação |
+|---|---|
+| `SPACE` | Play / Pause |
+| `→` / `D` | Próximo frame |
+| `←` / `A` | Frame anterior |
+| `S` | Salvar frame como JPEG |
+| `Q` / `ESC` | Sair |
+| Click na barra | Seek direto |
+
+---
+
+## Módulo 3 — Intelligence (`intelligence/`)
+
+Banco SQLite local com **15.000+ indivíduos** procurados e desaparecidos do mundo inteiro.
+
+### Fontes de dados
+
+| Fonte | Registros | Categoria |
+|---|---|---|
+| Interpol Red (OpenSanctions) | 6.437 | 🔴 Procurados |
+| Interpol Yellow (OpenSanctions) | 8.543 | 🟡 Desaparecidos |
+| FBI Wanted API | ~1.100 | 🔴 Procurados (com foto) |
+| Europol EU Most Wanted | ~200 | 🔴 Procurados |
+| NCA UK Most Wanted | ~20 | 🔴 Procurados |
+
+### Banco de dados (`data/intelligence.db`)
+
+Tabelas: `individuals` · `crimes` · `locations` · `face_embeddings`
+
+```bash
+cd intelligence
+
+# Popular banco completo (todas as fontes)
+TF_CPP_MIN_LOG_LEVEL=3 poetry run python populate_db.py
+
+# Ingestão global (baixa imagens + gera embeddings)
+TF_CPP_MIN_LOG_LEVEL=3 poetry run python global_ingestion.py
+
+# Busca interativa no banco
+poetry run python intelligence_db.py search
+```
+
+**Comandos do terminal de busca:**
+- `b` → Buscar por nome / crime / país / categoria
+- `d <id>` → Perfil completo de um indivíduo
+- `e` → Exportar CSV completo
+- `q` → Sair
+
+---
+
+## 🔗 Fluxo de Integração
+
+```
+intelligence/data/global_vector_db.faiss  ←── FAISS (embeddings ArcFace)
+         │
+         └──► olho_de_deus/biometric_processor.py  ←── comparação em tempo real
+                     │
+                     └──► Dashboard Cam FBI/  ←── alertas visuais (WebSocket)
+```
+
+---
+
+## ⚡ Stack Técnica
+
+| Camada | Tecnologia |
+|---|---|
+| Detecção | YOLOv8n |
+| Biometria | ArcFace via DeepFace |
+| Vetor DB | FAISS (IndexFlatL2) |
+| Banco de dados | SQLite 3 |
+| Bypass CDN | Playwright (Chromium headless) |
+| Streams | yt-dlp + OpenCV |
+| Hardware-alvo | AMD Ryzen 4600H · 8 GB RAM |
+| OS | Linux (Wayland/X11) |
+
+---
+
+## 🚀 Quickstart Completo
+
+```bash
+# 1. Popular o banco de inteligência
+cd intelligence
+TF_CPP_MIN_LOG_LEVEL=3 poetry run python populate_db.py
+
+# 2. Monitorar um feed com identificação
+cd ../olho_de_deus
+TF_CPP_MIN_LOG_LEVEL=3 poetry run python main.py --id YOUTUBE_ID --forensic --step 10
+
+# 3. Abrir o dashboard (outro terminal)
+cd ../Dashboard\ Cam\ FBI
+npm run dev
+```

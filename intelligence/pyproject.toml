@@ -1,0 +1,23 @@
+[tool.poetry]
+name = "intelligence"
+version = "1.0.0"
+description = "Módulo 3 — Ingestão e banco de dados de procurados e desaparecidos"
+authors = ["Olho de Deus OSS"]
+
+[tool.poetry.dependencies]
+python = "^3.10"
+requests  = "^2.31"
+tqdm      = "^4.66"
+faiss-cpu = "^1.7"
+deepface  = "^0.0.93"
+numpy     = "^1.26"
+playwright= "^1.41"
+
+[tool.poetry.scripts]
+populate  = "populate_db:main"
+search    = "intelligence_db:interactive_search"
+ingest    = "global_ingestion:main"
+
+[build-system]
+requires      = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

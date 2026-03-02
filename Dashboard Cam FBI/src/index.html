@@ -145,13 +145,12 @@
                 <span class="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></span>
                 <h2 id="modalTitle" class="text-sm font-bold text-emerald-400 tracking-widest font-mono uppercase"></h2>
                 <span class="text-[10px] text-gray-500 font-mono" id="modalMeta">--</span>
+                <span id="modalCounter" class="text-[9px] text-gray-600 font-mono"></span>
             </div>
             <div class="flex items-center space-x-3">
-                <!-- Toggle Motion Trail -->
                 <button id="toggleTrail" onclick="toggleMotionTrail()" class="text-[10px] font-mono text-gray-500 hover:text-emerald-400 border border-gray-700 hover:border-emerald-500 px-2 py-1 rounded transition-all">
                     TRAIL: ON
                 </button>
-                <!-- FBI Check -->
                 <button onclick="checkFBIWanted()" class="text-[10px] font-mono text-gray-500 hover:text-red-400 border border-gray-700 hover:border-red-500 px-2 py-1 rounded transition-all">
                     ⚠ FBI CHECK
                 </button>
@@ -161,10 +160,30 @@
             </div>
         </div>
 
-        <!-- Video + Canvas -->
+        <!-- Video + Canvas + Nav Arrows -->
         <div id="modalContent" class="flex-1 bg-black relative overflow-hidden">
             <!-- Canvas layer para Motion Trail -->
             <canvas id="trailCanvas" class="trail-canvas"></canvas>
+
+            <!-- Seta Anterior -->
+            <button onclick="navigateCamera(-1)" id="navPrev"
+                class="absolute left-0 top-0 h-full w-20 z-30 flex items-center justify-start pl-3
+                       bg-gradient-to-r from-black/60 to-transparent
+                       text-white/40 hover:text-white transition-all duration-200 group">
+                <svg class="w-10 h-10 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 19l-7-7 7-7"/>
+                </svg>
+            </button>
+
+            <!-- Seta Próxima -->
+            <button onclick="navigateCamera(1)" id="navNext"
+                class="absolute right-0 top-0 h-full w-20 z-30 flex items-center justify-end pr-3
+                       bg-gradient-to-l from-black/60 to-transparent
+                       text-white/40 hover:text-white transition-all duration-200 group">
+                <svg class="w-10 h-10 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5l7 7-7 7"/>
+                </svg>
+            </button>
         </div>
 
         <!-- FBI Wanted Panel (colapsável) -->
@@ -702,21 +721,39 @@
             }
         }
 
+        // ========================================================
+        //  NAVEGAÇÃO CARROSSEL FULLSCREEN (v25.1)
+        //  Prev/Next com setas, teclado ← → e swipe touch
+        // ========================================================
+        let currentCamIndex = 0;       // índice na lista filtrada atual
+        let currentCamList = [];        // cópia da lista filtrada ativa
+
         function openFullscreen(id) {
-            const cam = activeCameras.find(c => c.id === id);
+            // Calcula o índice na lista filtrada atual
+            const filtered = filterCurrentSet(activeCameras);
+            const idx = filtered.findIndex(c => c.id === id);
+            currentCamList = filtered;
+            openFullscreenAt(idx >= 0 ? idx : 0);
+        }
+
+        function openFullscreenAt(index) {
+            currentCamIndex = (index + currentCamList.length) % currentCamList.length;
+            const cam = currentCamList[currentCamIndex];
             if (!cam) return;
 
+            // Atualiza header
             modalTitle.innerText = cam.nome;
             document.getElementById('modalMeta').innerText = `${cam.local || ''} | ${cam.pais || ''}-${cam.estado || ''}`;
+            document.getElementById('modalCounter').innerText = `[ ${currentCamIndex + 1} / ${currentCamList.length} ]`;
 
             const content = document.getElementById('modalContent');
-            // Limpa o conteúdo anterior (mantém o canvas)
-            const oldVideo = content.querySelector('video, iframe');
-            if (oldVideo) oldVideo.remove();
-            const oldDiv = content.querySelector(':not(canvas)');
-            if (oldDiv && oldDiv.id !== 'trailCanvas') oldDiv.remove();
 
-            // Destroy HLS anterior para liberar RAM (pesquisa: evitar memory leak)
+            // Remove elementos de vídeo anteriores (mantém canvas + botões de nav)
+            content.querySelectorAll('video, iframe, div').forEach(el => {
+                if (!el.id && el.tagName !== 'BUTTON') el.remove();
+            });
+
+            // Destroy HLS anterior para liberar RAM
             if (currentHlsInstance) {
                 currentHlsInstance.destroy();
                 currentHlsInstance = null;
@@ -725,9 +762,11 @@
 
             // Insere o player correto
             const playerDiv = document.createElement('div');
-            playerDiv.className = 'w-full h-full';
+            playerDiv.className = 'absolute inset-0';
+            // Insere antes das setas para não sobrepor
+            const navPrev = document.getElementById('navPrev');
+            content.insertBefore(playerDiv, navPrev);
             playerDiv.innerHTML = getPlayerHtml(cam, true);
-            content.appendChild(playerDiv);
 
             // Inicia Motion Trail se for vídeo HLS
             if (cam.tipo === 'hls' || cam.url?.endsWith('.m3u8')) {
@@ -737,12 +776,18 @@
                 }, 500);
             }
 
-            // Esconde painel FBI ao abrir nova câmera
+            // Esconde painel FBI
             document.getElementById('fbiPanel').classList.add('hidden');
 
             fullscreenModal.classList.remove('hidden');
             fullscreenModal.classList.add('flex');
             document.body.classList.add('overflow-hidden');
+        }
+
+        function navigateCamera(direction) {
+            // Atualiza a lista filtrada (caso tenha mudado)
+            if (currentCamList.length === 0) return;
+            openFullscreenAt(currentCamIndex + direction);
         }
 
         function closeFullscreen() {
@@ -762,9 +807,22 @@
         }
 
         document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') closeFullscreen();
+            if (!fullscreenModal.classList.contains('hidden')) {
+                if (e.key === 'Escape') closeFullscreen();
+                if (e.key === 'ArrowRight') navigateCamera(1);
+                if (e.key === 'ArrowLeft')  navigateCamera(-1);
+            }
         });
 
+        // Swipe Touch (mobile/trackpad)
+        let touchStartX = 0;
+        document.getElementById('fullscreenModal').addEventListener('touchstart', (e) => {
+            touchStartX = e.changedTouches[0].clientX;
+        }, { passive: true });
+        document.getElementById('fullscreenModal').addEventListener('touchend', (e) => {
+            const dx = touchStartX - e.changedTouches[0].clientX;
+            if (Math.abs(dx) > 50) navigateCamera(dx > 0 ? 1 : -1);
+        }, { passive: true });
 
         // Detecta o tipo de URL e retorna o HTML do player correto
         function getPlayerHtml(cam, isFullscreen = false) {
@@ -803,24 +861,61 @@
                     const videoId = `hls-${cam.id}-${Date.now()}`;
                     setTimeout(() => {
                         const video = document.getElementById(videoId);
-                        if (video && Hls.isSupported()) {
-                            const hls = new Hls({ autoStartLoad: true, enableWorker: true });
+                        if (!video) return;
+
+                        // Tenta hls.js primeiro; fallback para src nativo (WebKit/Tauri suporta HLS)
+                        if (Hls.isSupported()) {
+                            const hls = new Hls({ autoStartLoad: true, enableWorker: true, debug: false });
                             hls.loadSource(url);
                             hls.attachMedia(video);
-                            // Guarda instância globalmente para destroy() correto (Pesquisa v25.0)
                             currentHlsInstance = hls;
+                            // Handler de erro: mostra feedback visual
+                            hls.on(Hls.Events.ERROR, (event, data) => {
+                                if (data.fatal) {
+                                    const overlay = document.getElementById('hlsErrorOverlay');
+                                    if (overlay) overlay.classList.remove('hidden');
+                                }
+                            });
+                        } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                            // Safari/WebKit nativo (Tauri no Linux com WebKitGTK)
+                            video.src = url;
+                            video.play().catch(() => {});
+                        } else {
+                            const overlay = document.getElementById('hlsErrorOverlay');
+                            if (overlay) overlay.classList.remove('hidden');
                         }
-                    }, 100);
-                    return `<video id="${videoId}" class="w-full h-full object-cover" autoplay muted playsinline></video>`;
+                    }, 150);
+                    return `
+                        <video id="${videoId}" class="w-full h-full object-cover" autoplay muted playsinline crossorigin="anonymous"></video>
+                        <div id="hlsErrorOverlay" class="hidden absolute inset-0 flex flex-col items-center justify-center bg-black/90 z-10">
+                            <svg class="w-12 h-12 text-rose-500 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 10l4.553-2.069A1 1 0 0121 8.82v6.36a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"/>
+                            </svg>
+                            <span class="text-rose-400 font-mono text-xs tracking-widest">STREAM OFFLINE</span>
+                            <span class="text-gray-600 font-mono text-[10px] mt-1 max-w-xs text-center truncate">${url}</span>
+                            <button onclick="location.reload()" class="mt-4 text-[10px] font-mono text-gray-500 border border-gray-700 px-3 py-1 rounded hover:text-emerald-400 hover:border-emerald-600 transition-all">TENTAR NOVAMENTE</button>
+                        </div>`;
                 } else {
-                    return `<div class="w-full h-full bg-gray-900 flex items-center justify-center text-emerald-500 font-mono text-[10px] uppercase">
-                        <span>HLS STREAM READY</span>
+                    // Grid: placeholder visual com ícone de câmera
+                    return `<div class="w-full h-full bg-gray-950 flex flex-col items-center justify-center space-y-1">
+                        <svg class="w-6 h-6 text-emerald-900" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 10l4.553-2.069A1 1 0 0121 8.82v6.36a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"/>
+                        </svg>
+                        <span class="text-[8px] text-emerald-900/60 font-mono tracking-widest uppercase">HLS</span>
                     </div>`;
                 }
+            } else if (tipo === 'mjpeg') {
+                // MJPEG: exibe direto como img (atualiza automaticamente)
+                return `<img src="${url}" class="w-full h-full object-cover" onerror="this.parentElement.innerHTML='<div class=\'w-full h-full bg-gray-950 flex items-center justify-center text-rose-900 text-[8px] font-mono\'>OFFLINE</div>'">`;
             } else {
-                return `<div class="w-full h-full bg-gray-900 flex items-center justify-center text-gray-600 font-mono text-[10px]">
-                    <span>FEED ATIVO</span>
-                </div>`;
+                // JPEG estático: exibe como img com refresh automático
+                if (isFullscreen) {
+                    return `<img src="${url}" id="staticImg-${cam.id}" class="w-full h-full object-cover"
+                        onerror="this.parentElement.innerHTML='<div class=\'w-full h-full bg-gray-950 flex items-center justify-center text-rose-500 text-xs font-mono\'>STREAM OFFLINE</div>'">`;
+                } else {
+                    return `<img src="${url}" class="w-full h-full object-cover"
+                        onerror="this.style.opacity='0.1'">`;
+                }
             }
         }
 
