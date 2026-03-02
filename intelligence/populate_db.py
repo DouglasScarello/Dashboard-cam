@@ -77,6 +77,9 @@ def load_fbi(limit_pages: Optional[int] = None):
             # Verificar se imagem já existe localmente
             img_path_local = f"data/fbi_faces/{uid}.jpg"
             if not os.path.exists(img_path_local):
+                img_path_local = f"data/global_faces/{uid}.jpg"
+            
+            if not os.path.exists(img_path_local):
                 img_path_local = None
 
             upsert_individual(conn, {
@@ -101,6 +104,31 @@ def load_fbi(limit_pages: Optional[int] = None):
                 "first_seen":   item.get("publication"),
                 "last_seen":    item.get("modified"),
             })
+
+            # Múltiplas Imagens (Galeria)
+            all_imgs = item.get("images", [])
+            for idx, img_obj in enumerate(all_imgs):
+                remote_url = img_obj.get("large") or img_obj.get("original") or img_obj.get("thumb")
+                caption    = img_obj.get("caption")
+                
+                if remote_url:
+                    # Tentar encontrar localmente (por UID ou por hash da URL se necessário)
+                    # Por simplicidade aqui, mantemos o padrão {uid}_ {idx}.jpg para extras
+                    suffix = f"_{idx}" if idx > 0 else ""
+                    local_name = f"{uid}{suffix}.jpg"
+                    
+                    # Verificar em fbi_faces e global_faces
+                    img_path_extra = None
+                    for folder in ["data/fbi_faces", "data/global_faces"]:
+                        test_path = f"{folder}/{local_name}"
+                        if os.path.exists(test_path):
+                            img_path_extra = test_path
+                            break
+                    
+                    # Registrar na galeria
+                    from intelligence_db import insert_image
+                    insert_image(conn, uid, img_url=remote_url, img_path=img_path_extra, 
+                                 caption=caption, is_primary=(idx == 0))
 
             # Crimes → tabela crimes
             crime_list = []
@@ -210,9 +238,13 @@ def load_opensanctions():
 # ─────────────────────────────────────────────────────────────────
 # FONTE 3: EMBEDDINGS DO FAISS EXISTENTE
 # ─────────────────────────────────────────────────────────────────
-def load_faiss_embeddings(faiss_path: str = "data/vector_db.faiss",
-                          meta_path:  str = "data/vector_metadata.json"):
+def load_faiss_embeddings(faiss_path: str = None,
+                          meta_path:  str = None):
     """Importa embeddings já calculados do banco FAISS para o SQLite."""
+    if faiss_path is None:
+        faiss_path = "data/global_vector_db.faiss" if os.path.exists("data/global_vector_db.faiss") else "data/vector_db.faiss"
+    if meta_path is None:
+        meta_path = "data/global_metadata.json" if os.path.exists("data/global_metadata.json") else "data/vector_metadata.json"
     if not os.path.exists(faiss_path) or not os.path.exists(meta_path):
         print(f"[faiss] Arquivos não encontrados: {faiss_path}")
         return
@@ -238,6 +270,71 @@ def load_faiss_embeddings(faiss_path: str = "data/vector_db.faiss",
 
 
 # ─────────────────────────────────────────────────────────────────
+# SINCRONIZAÇÃO DE FOTOS
+# ─────────────────────────────────────────────────────────────────
+def sync_photos():
+    """Varre as pastas de fotos e vincula ao banco se o nome do arquivo bater com o ID."""
+    conn = get_connection()
+    df = ["data/fbi_faces", "data/global_faces"]
+    
+    # Mapear arquivos existentes (ID -> Path)
+    # Suporta: {uid}.jpg e {uid}_{idx}.jpg
+    photo_map = {} # uid -> list of (path, is_primary)
+    
+    for folder in df:
+        if not os.path.exists(folder): continue
+        for f in os.listdir(folder):
+            if f.endswith(".jpg"):
+                full_path = f"{folder}/{f}"
+                basename = f.replace(".jpg", "")
+                
+                # Checar se tem sufixo _{idx}
+                if "_" in basename:
+                    uid_part = basename.rsplit("_", 1)[0]
+                else:
+                    uid_part = basename
+                
+                if uid_part not in photo_map:
+                    photo_map[uid_part] = []
+                
+                is_primary = "_" not in basename
+                photo_map[uid_part].append((full_path, is_primary))
+    
+    print(f"\n[sync] Mapeados {len(photo_map)} perfis com fotos locais.")
+    
+    # Limpar tabela de imagens antes de sincronizar tudo
+    conn.execute("DELETE FROM individual_images")
+    
+    # Buscar todos os IDs
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM individuals")
+    ids = [r[0] for r in cursor.fetchall()]
+    
+    updated = 0
+    img_count = 0
+    for uid in tqdm(ids, desc="[sync] Vinculando fotos"):
+        if uid in photo_map:
+            # Ordenar para que o primário venha primeiro
+            photos = sorted(photo_map[uid], key=lambda x: not x[1])
+            
+            # Atualizar foto principal na tabela individuals
+            primary_path = photos[0][0]
+            cursor.execute("UPDATE individuals SET img_path = ? WHERE id = ?", (primary_path, uid))
+            
+            # Inserir na tabela de galeria
+            for path, is_p in photos:
+                cursor.execute("""
+                    INSERT INTO individual_images (individual_id, img_path, is_primary)
+                    VALUES (?, ?, ?)
+                """, (uid, path, 1 if is_p else 0))
+                img_count += 1
+            updated += 1
+            
+    conn.commit()
+    conn.close()
+    print(f"[sync] ✓ {updated} perfis sincronizados ({img_count} fotos totais).")
+
+# ─────────────────────────────────────────────────────────────────
 # RELATÓRIO FINAL
 # ─────────────────────────────────────────────────────────────────
 def print_stats():
@@ -256,9 +353,6 @@ def print_stats():
     for src in s["by_source"]:
         print(f"    {src['source']:<44} {src['cnt']:>6}")
     print("═" * 60)
-    print("\n  Para buscar:")
-    print("  poetry run python intelligence_db.py search")
-
 
 # ─────────────────────────────────────────────────────────────────
 # CLI
@@ -270,12 +364,15 @@ if __name__ == "__main__":
     parser.add_argument("--fbi-only",   action="store_true")
     parser.add_argument("--os-only",    action="store_true")
     parser.add_argument("--load-faiss", action="store_true", help="Importar embeddings FAISS existentes")
+    parser.add_argument("--sync-photos", action="store_true", help="Vincular arquivos de imagem locais ao banco")
     parser.add_argument("--fbi-pages",  type=int, default=None)
     args = parser.parse_args()
 
     init_db()
 
-    if args.load_faiss:
+    if args.sync_photos:
+        sync_photos()
+    elif args.load_faiss:
         load_faiss_embeddings()
     elif args.fbi_only:
         load_fbi(limit_pages=args.fbi_pages)
@@ -286,5 +383,6 @@ if __name__ == "__main__":
         load_fbi(limit_pages=args.fbi_pages)
         load_opensanctions()
         load_faiss_embeddings()
+        sync_photos()
 
     print_stats()

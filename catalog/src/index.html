@@ -14,57 +14,58 @@
 <header class="header">
   <div class="header-left">
     <div class="logo">
-      <span class="logo-icon">👁</span>
-      <span class="logo-text">INTELLIGENCE<span class="logo-sub">CATALOG</span></span>
-    </div>
-    <div class="stats-bar" id="statsBar">
-      <span class="stat"><span class="dot red"></span><span id="statWanted">—</span> Procurados</span>
-      <span class="stat"><span class="dot amber"></span><span id="statMissing">—</span> Desaparecidos</span>
-      <span class="stat"><span class="dot cyan"></span><span id="statBio">—</span> Biometria</span>
+      <span class="logo-text">OLHO DE DEUS <span class="logo-sub">INTELLIGENCE</span></span>
     </div>
   </div>
   <div class="search-wrap">
-    <span class="search-icon">⌕</span>
-    <input type="text" id="searchInput" class="search-input" placeholder="Buscar por nome, crime..." autocomplete="off">
-    <kbd class="search-kbd">↵</kbd>
+    <span class="search-icon">🔍</span>
+    <input type="text" id="searchInput" class="search-input" placeholder="Pesquisar indivíduos..." autocomplete="off">
+  </div>
+  <div class="header-right">
+    <div class="stats-bar" id="statsBar">
+      <div class="stat"><span class="dot red"></span> <span id="statWanted">0</span> WANTED</div>
+      <div class="stat"><span class="dot amber"></span> <span id="statMissing">0</span> MISSING</div>
+    </div>
   </div>
 </header>
 
 <!-- FILTERS -->
 <div class="filters-bar">
-  <div class="filter-group">
-    <button class="filter-btn active" data-category="">Todos</button>
-    <button class="filter-btn red" data-category="wanted">🔴 Procurados</button>
-    <button class="filter-btn amber" data-category="missing">🟡 Desaparecidos</button>
-  </div>
-  <div class="filter-group">
-    <select id="sourceFilter" class="filter-select">
-      <option value="">Todas as fontes</option>
-      <option value="FBI">FBI</option>
-      <option value="Interpol Red">Interpol Red</option>
-      <option value="Interpol Yellow">Interpol Yellow</option>
-      <option value="NCA">NCA UK</option>
-      <option value="Europol">Europol</option>
-    </select>
-    <select id="countryFilter" class="filter-select">
-      <option value="">Todos os países</option>
-      <option value="us">🇺🇸 EUA</option>
-      <option value="br">🇧🇷 Brasil</option>
-      <option value="ru">🇷🇺 Rússia</option>
-      <option value="mx">🇲🇽 México</option>
-      <option value="cn">🇨🇳 China</option>
-      <option value="ir">🇮🇷 Irã</option>
-      <option value="de">🇩🇪 Alemanha</option>
-      <option value="gb">🇬🇧 UK</option>
-    </select>
-    <label class="filter-toggle">
-      <input type="checkbox" id="bioOnly">
-      <span class="toggle-label">🧬 Só com biometria</span>
-    </label>
-  </div>
-  <div class="filter-right">
-    <span id="resultCount" class="result-count">— resultados</span>
-    <button class="icon-btn" id="exportBtn" title="Exportar CSV">↓ CSV</button>
+  <div class="filters-inner">
+    <div class="filter-group">
+      <div class="select-wrapper">
+        <select id="sourceFilter" class="filter-select">
+          <option value="">Todas as fontes</option>
+          <option value="FBI">FBI</option>
+          <option value="Interpol">Interpol</option>
+          <option value="Europol">Europol</option>
+        </select>
+      </div>
+      <div class="select-wrapper">
+        <select id="countryFilter" class="filter-select">
+          <option value="">Todos os países</option>
+          <option value="us">Estados Unidos</option>
+          <option value="br">Brasil</option>
+          <option value="ru">Rússia</option>
+        </select>
+      </div>
+      
+      <label class="bio-toggle">
+        <input type="checkbox" id="bioOnly">
+        <span class="bio-toggle-custom">
+          <span class="bio-icon">🧬</span>
+          Só com biometria
+        </span>
+      </label>
+    </div>
+
+    <div class="filter-right">
+      <span id="resultCount" class="result-count">0 registros</span>
+      <div class="view-ops">
+        <button class="icon-btn active" title="Grid View">⊞</button>
+        <button class="icon-btn" title="List View">≡</button>
+      </div>
+    </div>
   </div>
 </div>
 

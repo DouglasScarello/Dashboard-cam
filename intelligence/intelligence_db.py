@@ -79,6 +79,16 @@ CREATE TABLE IF NOT EXISTS face_embeddings (
     FOREIGN KEY (individual_id) REFERENCES individuals(id)
 );
 
+CREATE TABLE IF NOT EXISTS individual_images (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    individual_id   TEXT NOT NULL,
+    img_url         TEXT,
+    img_path        TEXT,
+    caption         TEXT,
+    is_primary      INTEGER DEFAULT 0,
+    FOREIGN KEY (individual_id) REFERENCES individuals(id)
+);
+
 -- Índices para busca rápida
 CREATE INDEX IF NOT EXISTS idx_name       ON individuals(name);
 CREATE INDEX IF NOT EXISTS idx_category   ON individuals(category);
@@ -86,6 +96,7 @@ CREATE INDEX IF NOT EXISTS idx_source     ON individuals(source);
 CREATE INDEX IF NOT EXISTS idx_embedding  ON individuals(has_embedding);
 CREATE INDEX IF NOT EXISTS idx_crimes_id  ON crimes(individual_id);
 CREATE INDEX IF NOT EXISTS idx_locs_id    ON locations(individual_id);
+CREATE INDEX IF NOT EXISTS idx_imgs_id    ON individual_images(individual_id);
 """
 
 # ─────────────────────────────────────────────────────────────────
@@ -182,6 +193,15 @@ def insert_location(conn: sqlite3.Connection, individual_id: str,
         INSERT INTO locations (individual_id, type, country, state, city, details)
         VALUES (?, ?, ?, ?, ?, ?)
     """, (individual_id, loc_type, country, state, city, details))
+
+
+def insert_image(conn: sqlite3.Connection, individual_id: str,
+                 img_url: str = None, img_path: str = None,
+                 caption: str = None, is_primary: bool = False):
+    conn.execute("""
+        INSERT INTO individual_images (individual_id, img_url, img_path, caption, is_primary)
+        VALUES (?, ?, ?, ?, ?)
+    """, (individual_id, img_url, img_path, caption, 1 if is_primary else 0))
 
 
 def save_embedding(conn: sqlite3.Connection, individual_id: str,
@@ -319,6 +339,13 @@ def get_individual(conn: sqlite3.Connection, individual_id: str) -> Optional[Dic
         (individual_id,)
     ).fetchall()
     data["locations"] = [dict(l) for l in locs]
+
+    # Imagens extras
+    imgs = conn.execute(
+        "SELECT img_url, img_path, caption, is_primary FROM individual_images WHERE individual_id=?",
+        (individual_id,)
+    ).fetchall()
+    data["images"] = [dict(img) for img in imgs]
 
     return data
 

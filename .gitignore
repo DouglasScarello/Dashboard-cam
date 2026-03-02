@@ -11,12 +11,14 @@ olho_de_deus/.venv/
 
 # Node/JavaScript
 node_modules/
+**/node_modules/
 dist/
+**/dist/
 .DS_Store
 
 # Tauri
-src-tauri/target/
-src-tauri/binaries/
+**/src-tauri/target/
+**/src-tauri/binaries/
 
 # Local binaries/downloads
 Miniconda3-latest-Linux-x86_64.sh

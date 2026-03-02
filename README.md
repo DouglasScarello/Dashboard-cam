@@ -8,104 +8,69 @@
 
 ```
 Dashboard/
-├── 📊 Dashboard Cam FBI/   → Módulo 1: Interface web (Tauri + HTML/CSS/JS)
-├── 👁️ olho_de_deus/        → Módulo 2: Motor de análise facial em tempo real
-└── 🌐 intelligence/        → Módulo 3: Banco de dados global + ingestão
+├── 🌐 catalog/            → Módulo 1: Intelligence Catalog (Tauri + Premium Dark UI)
+├── 👁️ olho_de_deus/        → Módulo 2: Motor de análise facial em tempo real (YOLOv8 + ArcFace)
+└── 📊 intelligence/       → Módulo 3: Banco de dados global + Ingestão (16.000+ registros)
 ```
 
 ---
 
-## Módulo 1 — Dashboard (`Dashboard Cam FBI/`)
+## 🌐 Módulo 1 — Intelligence Catalog (`catalog/`)
 
-Interface web para visualização de feeds de câmeras e alertas biométricos.
+Interface de alta performance para busca e análise de perfis criminais globais. Redesenhada para um visual **Premium Dark**.
 
-- **Stack:** Tauri + HTML / CSS / JS
-- **Acesso:** `http://localhost:1420`
-- **Inicia com:** `npm run dev` dentro de `Dashboard Cam FBI/`
+- **Stack:** Tauri V2 + HTML / CSS Vanilla / JS
+- **Destaques:**
+    - **Premium Dark UI:** Estética inspirada em interfaces forenses militares.
+    - **Galeria Forense:** Suporte a múltiplos indivíduos/faces em um único registro (ex: grupos de hackers, cartéis).
+    - **Filtros Avançados:** Busca por nome, crime, país e status biométrico.
+    - **Rotas por Hash:** Navegação direta para perfis específicos (`#/id/UID`).
+- **Inicia com:** `npm run dev` dentro de `catalog/`
 
 ---
 
-## Módulo 2 — Olho de Deus (`olho_de_deus/`)
+## 👁️ Módulo 2 — Olho de Deus (`olho_de_deus/`)
 
-Motor de visão computacional com player forense interativo.
+Motor de visão computacional com player forense interativo e rastreamento biométrico.
 
 | Componente | Descrição |
 |---|---|
-| YOLOv8n | Detecção de faces (CPU, otimizado p/ Ryzen 4600H) |
-| ArcFace 512-d | Extração de embeddings biométricos |
-| REID / IoU | Re-identificação entre frames (sem re-processar) |
-| Player Forense | Seek bar estilo Netflix, play/pause, navegação por mouse |
+| YOLOv8n | Detecção de faces em tempo real (CPU-optimized) |
+| ArcFace 512-d | Extração de características biométricas únicas |
+| REID / IoU | Rastreamento persistente entre frames (economia de CPU) |
+| Player Forense | Seek bar interativo, navegação frame-a-frame, modo passo |
 
 ```bash
 cd olho_de_deus
-
 # Stream YouTube em modo forense
 TF_CPP_MIN_LOG_LEVEL=3 poetry run python main.py --id YOUTUBE_ID --forensic --step 10
-
-# Arquivo de vídeo local
-TF_CPP_MIN_LOG_LEVEL=3 poetry run python main.py --source /caminho/video.mp4 --forensic
 ```
-
-**Controles do player forense:**
-
-| Tecla | Ação |
-|---|---|
-| `SPACE` | Play / Pause |
-| `→` / `D` | Próximo frame |
-| `←` / `A` | Frame anterior |
-| `S` | Salvar frame como JPEG |
-| `Q` / `ESC` | Sair |
-| Click na barra | Seek direto |
 
 ---
 
-## Módulo 3 — Intelligence (`intelligence/`)
+## 📊 Módulo 3 — Intelligence (`intelligence/`)
 
-Banco SQLite local com **15.000+ indivíduos** procurados e desaparecidos do mundo inteiro.
+Central de dados com **16.129 registros** unificados de diversas agências internacionais.
 
-### Fontes de dados
+### Fontes Integradas
 
 | Fonte | Registros | Categoria |
 |---|---|---|
-| Interpol Red (OpenSanctions) | 6.437 | 🔴 Procurados |
-| Interpol Yellow (OpenSanctions) | 8.543 | 🟡 Desaparecidos |
-| FBI Wanted API | ~1.100 | 🔴 Procurados (com foto) |
-| Europol EU Most Wanted | ~200 | 🔴 Procurados |
-| NCA UK Most Wanted | ~20 | 🔴 Procurados |
+| Interpol Red Notices | 6.437 | 🔴 Procurados |
+| Interpol Yellow Notices | 8.543 | 🟡 Desaparecidos |
+| FBI Wanted | 1.129 | 🔴 Procurados (com fotos e galeria) |
+| UK NCA | 20 | 🔴 Procurados |
+| Europol | ~200 | 🔴 Procurados |
 
-### Banco de dados (`data/intelligence.db`)
-
-Tabelas: `individuals` · `crimes` · `locations` · `face_embeddings`
+### Como usar o Banco
 
 ```bash
 cd intelligence
+# Sincronizar banco e fotos
+poetry run python populate_db.py --sync-photos
 
-# Popular banco completo (todas as fontes)
-TF_CPP_MIN_LOG_LEVEL=3 poetry run python populate_db.py
-
-# Ingestão global (baixa imagens + gera embeddings)
-TF_CPP_MIN_LOG_LEVEL=3 poetry run python global_ingestion.py
-
-# Busca interativa no banco
+# Busca interativa via terminal
 poetry run python intelligence_db.py search
-```
-
-**Comandos do terminal de busca:**
-- `b` → Buscar por nome / crime / país / categoria
-- `d <id>` → Perfil completo de um indivíduo
-- `e` → Exportar CSV completo
-- `q` → Sair
-
----
-
-## 🔗 Fluxo de Integração
-
-```
-intelligence/data/global_vector_db.faiss  ←── FAISS (embeddings ArcFace)
-         │
-         └──► olho_de_deus/biometric_processor.py  ←── comparação em tempo real
-                     │
-                     └──► Dashboard Cam FBI/  ←── alertas visuais (WebSocket)
 ```
 
 ---
@@ -114,29 +79,29 @@ intelligence/data/global_vector_db.faiss  ←── FAISS (embeddings ArcFace)
 
 | Camada | Tecnologia |
 |---|---|
-| Detecção | YOLOv8n |
-| Biometria | ArcFace via DeepFace |
-| Vetor DB | FAISS (IndexFlatL2) |
-| Banco de dados | SQLite 3 |
-| Bypass CDN | Playwright (Chromium headless) |
-| Streams | yt-dlp + OpenCV |
-| Hardware-alvo | AMD Ryzen 4600H · 8 GB RAM |
-| OS | Linux (Wayland/X11) |
+| Frontend | Tauri V2 (Rust) + Web Tech |
+| Detecção | YOLOv8n (Ultralytics) |
+| Biometria | ArcFace (DeepFace Framework) |
+| Vetor DB | FAISS (Vetorização de 16k+ faces) |
+| Storage | SQLite 3 (WAL Mode) |
+| Scrapers | Playwright (Headless anti-bot) |
+| Hardware-alvo | AMD Ryzen 4600H (Otimizado p/ CPU) |
 
 ---
 
-## 🚀 Quickstart Completo
+## 🚀 Quickstart
 
 ```bash
-# 1. Popular o banco de inteligência
+# 1. Prepare o banco de inteligência
 cd intelligence
-TF_CPP_MIN_LOG_LEVEL=3 poetry run python populate_db.py
+poetry install
+poetry run python populate_db.py --sync-photos
 
-# 2. Monitorar um feed com identificação
-cd ../olho_de_deus
-TF_CPP_MIN_LOG_LEVEL=3 poetry run python main.py --id YOUTUBE_ID --forensic --step 10
-
-# 3. Abrir o dashboard (outro terminal)
-cd ../Dashboard\ Cam\ FBI
+# 2. Inicie o Catálogo Visual
+cd ../catalog
+npm install
 npm run dev
 ```
+
+> [!NOTE]
+> Fotos e banco de dados local não estão incluídos no GitHub por conta do tamanho. Rode os scripts de ingestão para gerar seus dados locais.

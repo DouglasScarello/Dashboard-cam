@@ -1,7 +1,12 @@
 // Intelligence Catalog — Frontend Logic
-// Comunicação com backend Rust via window.__TAURI__.invoke
+// Dossier Premium / Fichas Individuais / Gallery Support
 
-const invoke = window.__TAURI__?.invoke ?? (() => Promise.reject("Tauri não disponível — rode com cargo tauri dev"));
+async function invoke(cmd, args) {
+    const t = window.__TAURI__;
+    const fn = t?.core?.invoke || t?.invoke;
+    if (!fn) throw new Error("Tauri não disponível");
+    return fn(cmd, args);
+}
 
 // ── Estado ────────────────────────────────────────────────────────────────────
 const state = {
@@ -12,9 +17,10 @@ const state = {
     category: "",
     source: "",
     country: "",
-    crime: "",
-    bioOnly: false,
     searchTerm: "",
+    bioOnly: false,
+    activeId: null,
+    activeImages: []
 };
 
 // ── Elementos ─────────────────────────────────────────────────────────────────
@@ -29,36 +35,42 @@ const bioCheck = document.getElementById("bioOnly");
 const modalOverlay = document.getElementById("modalOverlay");
 const modalClose = document.getElementById("modalClose");
 const modalBody = document.getElementById("modalBody");
-const toast = document.getElementById("toast");
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 (async () => {
+    window.addEventListener("hashchange", handleRouting);
     await loadStats();
-    await loadPage(true);
+    await handleRouting();
 })();
 
-// ── Stats ─────────────────────────────────────────────────────────────────────
+async function handleRouting() {
+    const hash = window.location.hash;
+    if (hash.startsWith("#/id/")) {
+        const id = hash.replace("#/id/", "");
+        if (id) openModal(id);
+    } else {
+        closeModal();
+        if (grid.children.length === 0) await loadPage(true);
+    }
+}
+
 async function loadStats() {
     try {
         const s = await invoke("get_stats");
         document.getElementById("statWanted").textContent = s.wanted.toLocaleString();
         document.getElementById("statMissing").textContent = s.missing.toLocaleString();
-        document.getElementById("statBio").textContent = s.with_biometrics.toLocaleString();
-    } catch (e) { console.error("stats:", e); }
+    } catch (e) { console.error("stats_err", e); }
 }
 
-// ── Carregar página ───────────────────────────────────────────────────────────
+// ── Carregar Página ───────────────────────────────────────────────────────────
 async function loadPage(reset = false) {
     if (state.loading) return;
     state.loading = true;
-    loadMoreBtn.textContent = "Carregando...";
-    loadMoreBtn.disabled = true;
 
     if (reset) {
         state.page = 0;
         state.hasMore = true;
         grid.innerHTML = "";
-        showSkeletons(8);
     }
 
     try {
@@ -66,52 +78,32 @@ async function loadPage(reset = false) {
             name: state.searchTerm || null,
             category: state.category || null,
             country: state.country || null,
-            crime: state.crime || null,
-            hasEmbedding: state.bioOnly ? true : null,
-            sourceFilter: state.source || null,
+            has_embedding: state.bioOnly ? true : null,
+            source_filter: state.source || null,
             page: state.page,
             limit: state.limit,
         });
 
-        removeSkeletons();
-
         if (reset && results.length === 0) {
             emptyState.style.display = "flex";
             loadMoreBtn.classList.add("hidden");
-            resultCount.textContent = "0 resultados";
+            resultCount.textContent = "0 registros";
             return;
         }
 
         emptyState.style.display = "none";
-        results.forEach((p, i) => {
-            const card = createCard(p, i);
-            grid.appendChild(card);
-        });
+        results.forEach((p, i) => grid.appendChild(createCard(p, i)));
 
-        // Carregar imagens em background
-        results.forEach(p => {
-            if (p.img_path) loadCardImage(p.id, p.img_path, p.category);
-        });
+        // Load images in background
+        results.forEach(p => { if (p.img_path) loadCardImage(p.id, p.img_path); });
 
         state.hasMore = results.length === state.limit;
         state.page++;
-
-        const totalText = reset
-            ? `${results.length < state.limit ? results.length : state.limit + "+"} resultados`
-            : `${grid.children.length} registros`;
-        resultCount.textContent = totalText;
-
-        if (state.hasMore) {
-            loadMoreBtn.classList.remove("hidden");
-            loadMoreBtn.textContent = "Carregar mais";
-            loadMoreBtn.disabled = false;
-        } else {
-            loadMoreBtn.classList.add("hidden");
-        }
+        resultCount.textContent = `${grid.children.length}${state.hasMore ? "+" : ""} registros`;
+        loadMoreBtn.classList.toggle("hidden", !state.hasMore);
     } catch (e) {
         console.error(e);
-        removeSkeletons();
-        showToast("Erro ao carregar dados: " + e);
+        showToast("Erro: " + e);
     } finally {
         state.loading = false;
     }
@@ -120,201 +112,173 @@ async function loadPage(reset = false) {
 // ── Card ──────────────────────────────────────────────────────────────────────
 function createCard(p, index) {
     const card = document.createElement("div");
-    card.className = `card ${p.category}`;
-    card.dataset.id = p.id;
-    card.style.animationDelay = `${Math.min(index * 0.04, 0.4)}s`;
+    card.className = "card";
+    card.style.animationDelay = `${Math.min(index * 0.05, 0.5)}s`;
 
     const nats = parseNats(p.nationalities);
-    const natTags = nats.slice(0, 3).map(n => `<span class="nat-tag">${n}</span>`).join("");
-    const desc = (p.description || "Sem informações de crime").slice(0, 100);
+    const natTag = nats.length ? `<span class="nat-tag">${nats[0]}</span>` : "";
+    const desc = stripHtml(p.description || "Sem descrição disponível").slice(0, 70);
 
     card.innerHTML = `
     <div class="card-img-wrap">
       <span class="card-no-img" id="noimg-${p.id}">👤</span>
-      <img class="card-img" id="img-${p.id}" alt="${escHtml(p.name)}" style="display:none">
-      <span class="card-badge ${p.category}">${p.category === "wanted" ? "🔴 PROCURADO" : "🟡 DESAPAR."}</span>
-      ${p.has_embedding ? '<span class="bio-badge" title="Biometria disponível">🧬</span>' : ""}
+      <img class="card-img" id="img-${p.id}" style="display:none">
+      <span class="card-badge ${p.category}">${p.category.toUpperCase()}</span>
+      ${p.has_embedding ? '<span class="bio-badge">🧬</span>' : ""}
     </div>
     <div class="card-body">
-      <div class="card-name" title="${escHtml(p.name)}">${escHtml(p.name)}</div>
       <div class="card-source">${escHtml(p.source)}</div>
-      <div class="card-crime">${escHtml(desc)}</div>
-      <div class="card-nat">${natTags}</div>
+      <div class="card-name">${escHtml(p.name)}</div>
+      <div class="card-desc">${escHtml(desc)}...</div>
+      <div class="card-footer">${natTag}</div>
     </div>`;
 
-    card.addEventListener("click", () => openModal(p.id));
+    card.addEventListener("click", () => { window.location.hash = `#/id/${p.id}`; });
     return card;
 }
 
-async function loadCardImage(id, imgPath, category) {
-    const imgEl = document.getElementById(`img-${id}`);
-    const noImg = document.getElementById(`noimg-${id}`);
-    if (!imgEl || !imgPath) return;
+async function loadCardImage(id, imgPath) {
     try {
         const b64 = await invoke("get_image_base64", { imgPath });
-        imgEl.src = b64;
-        imgEl.style.display = "block";
-        if (noImg) noImg.style.display = "none";
-    } catch { /* sem imagem — keepplaceholder */ }
+        const imgEl = document.getElementById(`img-${id}`);
+        const noImg = document.getElementById(`noimg-${id}`);
+        if (imgEl) {
+            imgEl.src = b64;
+            imgEl.style.display = "block";
+            if (noImg) noImg.style.display = "none";
+        }
+    } catch { }
 }
 
-// ── Modal ─────────────────────────────────────────────────────────────────────
+// ── Modal / Dossiê ────────────────────────────────────────────────────────────
 async function openModal(id) {
-    modalBody.innerHTML = `<div style="text-align:center;padding:60px;color:var(--text-muted)">Carregando...</div>`;
+    state.activeId = id;
+    modalBody.innerHTML = `<div style="text-align:center;padding:100px;opacity:0.3;font-family:var(--font-mono)">[ ACESSANDO DOSSIÊ ${id} ]</div>`;
     modalOverlay.classList.add("open");
     document.body.style.overflow = "hidden";
 
     try {
         const p = await invoke("get_individual", { id });
-        renderModal(p);
-        if (p.base.img_path) {
-            const b64 = await invoke("get_image_base64", { imgPath: p.base.img_path });
-            const imgEl = document.getElementById("modal-img");
-            if (imgEl) {
-                imgEl.src = b64;
-                imgEl.style.display = "block";
-                const noImg = document.getElementById("modal-no-img");
-                if (noImg) noImg.style.display = "none";
-            }
+        renderDossier(p);
+
+        // Load Gallery Images
+        state.activeImages = p.images || [];
+        if (state.activeImages.length) {
+            loadGalleryThumbnails();
+
+            // Set primary image
+            const primary = state.activeImages.find(img => img.is_primary) || state.activeImages[0];
+            if (primary.img_path) switchDossierImage(primary.img_path);
+        } else if (p.img_path) {
+            switchDossierImage(p.img_path);
         }
     } catch (e) {
-        modalBody.innerHTML = `<p style="color:var(--text-dim);padding:40px">Erro: ${e}</p>`;
+        modalBody.innerHTML = `<div style="padding:60px;color:var(--accent-red)">ERRO: ${e}</div>`;
     }
 }
 
-function renderModal(p) {
-    const b = p.base;
-    const nats = parseNats(b.nationalities).join(", ").toUpperCase() || "N/A";
-    const isWanted = b.category === "wanted";
-    const crimeStyle = isWanted ? "" : "missing-style";
-
-    const crimes = p.crimes.length
-        ? p.crimes.map(c => `<li class="${crimeStyle}">${escHtml(c)}</li>`).join("")
-        : `<li class="${crimeStyle}">Não informado</li>`;
-
-    const aliases = p.aliases ? (() => { try { return JSON.parse(p.aliases).join(", "); } catch { return p.aliases; } })() : "";
+function renderDossier(p) {
+    const isWanted = p.category === "wanted";
+    const crimes = p.crimes.length ? p.crimes.map(c => `<li class="crime-tag">${escHtml(c)}</li>`).join("") : "<li>Sem acusações específicas.</li>";
 
     modalBody.innerHTML = `
-    <div class="modal-header">
-      <div class="modal-img-wrap">
-        <span class="modal-no-img" id="modal-no-img">👤</span>
-        <img class="modal-img" id="modal-img" alt="${escHtml(b.name)}" style="display:none">
-      </div>
-      <div class="modal-info">
-        <div class="modal-name">${escHtml(b.name)}</div>
-        <div class="modal-badges">
-          <span class="badge ${b.category}">${isWanted ? "🔴 PROCURADO" : "🟡 DESAPARECIDO"}</span>
-          ${b.has_embedding ? '<span class="badge bio">🧬 Biometria</span>' : ""}
-          <span class="badge source">${escHtml(b.source)}</span>
+    <div class="dossier">
+      <aside class="dossier-sidebar">
+        <div class="dossier-main-img-wrap">
+          <div class="scanline"></div>
+          <span class="card-no-img" id="dossier-no-img" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:120px;opacity:0.05">👤</span>
+          <img class="main-img" id="dossier-main-img" style="display:none">
         </div>
-        <div class="modal-grid">
-          <div class="field"><label>Nome Completo</label><span>${escHtml(b.name)}</span></div>
-          ${aliases ? `<div class="field"><label>Aliases</label><span>${escHtml(aliases)}</span></div>` : ""}
-          ${b.birth_date ? `<div class="field"><label>Nascimento</label><span>${b.birth_date}</span></div>` : ""}
-          ${p.sex ? `<div class="field"><label>Gênero</label><span>${p.sex}</span></div>` : ""}
-          <div class="field"><label>Nacionalidade(s)</label><span>${nats}</span></div>
-          <div class="field"><label>Categoria</label><span>${isWanted ? "Procurado" : "Desaparecido"}</span></div>
-          ${b.ingested_at ? `<div class="field"><label>Indexado em</label><span>${b.ingested_at.slice(0, 10)}</span></div>` : ""}
+
+        <div class="gallery-section" id="gallerySection">
+          <h3 class="gallery-title">Galeria Forense / Membros</h3>
+          <div class="gallery-grid" id="galleryGrid"></div>
         </div>
-        ${b.reward ? `
-        <div class="reward-box">
-          <span class="reward-icon">💰</span>
-          <div><div class="reward-label">Recompensa</div><div class="reward-value">${escHtml(b.reward)}</div></div>
-        </div>` : ""}
-        ${p.url ? `<a class="modal-link" href="${p.url}" target="_blank">🔗 Ver perfil oficial ↗</a>` : ""}
-      </div>
-    </div>
-    ${p.crimes.length ? `<div class="section-title">Crimes / Acusações</div><ul class="crime-list">${crimes}</ul>` : ""}
-    ${b.description ? `<div class="section-title">Descrição</div><div class="description-text">${escHtml(b.description.slice(0, 800))}</div>` : ""}
-  `;
+      </aside>
+
+      <main class="dossier-content">
+        <div class="dossier-status ${p.category}">${isWanted ? '🔴 INVESTIGAÇÃO ATIVA' : '🟡 ALERTA DE DESAPARECIMENTO'}</div>
+        <h1 class="dossier-name">${escHtml(p.name)}</h1>
+        <div class="dossier-meta">ID: ${p.id} | FONTE: ${p.source}</div>
+
+        <div class="info-grid">
+          <div class="info-item"><label>Gênero</label><span>${p.sex || 'N/A'}</span></div>
+          <div class="info-item"><label>Nascimento</label><span>${p.birth_date || 'Desconhecido'}</span></div>
+          <div class="info-item"><label>Países</label><span>${parseNats(p.nationalities).join(", ") || 'N/A'}</span></div>
+          <div class="info-item"><label>Recompensa</label><span>${p.reward || 'N/A'}</span></div>
+        </div>
+
+        <h3 class="section-label">Acusações e Infrações</h3>
+        <ul class="crimes-list">${crimes}</ul>
+
+        <h3 class="section-label">Descrição Adicional</h3>
+        <div class="desc-text">${escHtml(p.description) || 'Nenhum dado adicional.'}</div>
+      </main>
+    </div>`;
+}
+
+async function loadGalleryThumbnails() {
+    const gridEl = document.getElementById("galleryGrid");
+    if (!gridEl) return;
+
+    state.activeImages.forEach(async (img, idx) => {
+        const thumb = document.createElement("img");
+        thumb.className = "gallery-thumb";
+        if (img.is_primary) thumb.classList.add("active");
+
+        try {
+            const b64 = await invoke("get_image_base64", { imgPath: img.img_path });
+            thumb.src = b64;
+            thumb.addEventListener("click", () => {
+                document.querySelectorAll(".gallery-thumb").forEach(t => t.classList.remove("active"));
+                thumb.classList.add("active");
+                switchDossierImage(img.img_path);
+            });
+            gridEl.appendChild(thumb);
+        } catch { }
+    });
+}
+
+async function switchDossierImage(path) {
+    const mainImg = document.getElementById("dossier-main-img");
+    const noImg = document.getElementById("dossier-no-img");
+    try {
+        const b64 = await invoke("get_image_base64", { imgPath: path });
+        if (mainImg) {
+            mainImg.src = b64;
+            mainImg.style.display = "block";
+            if (noImg) noImg.style.display = "none";
+        }
+    } catch { }
 }
 
 // ── Filtros ───────────────────────────────────────────────────────────────────
-document.querySelectorAll(".filter-btn").forEach(btn => {
-    btn.addEventListener("click", () => {
-        document.querySelectorAll(".filter-btn").forEach(b => b.classList.remove("active"));
-        btn.classList.add("active");
-        state.category = btn.dataset.category;
-        loadPage(true);
-    });
-});
+sourceFilter.addEventListener("change", () => { state.source = sourceFilter.value; loadPage(true); });
+countryFilter.addEventListener("change", () => { state.country = countryFilter.value; loadPage(true); });
+bioCheck.addEventListener("change", () => { state.bioOnly = bioCheck.checked; loadPage(true); });
 
-sourceFilter.addEventListener("change", () => {
-    state.source = sourceFilter.value;
-    loadPage(true);
-});
-countryFilter.addEventListener("change", () => {
-    state.country = countryFilter.value;
-    loadPage(true);
-});
-bioCheck.addEventListener("change", () => {
-    state.bioOnly = bioCheck.checked;
-    loadPage(true);
-});
-
-loadMoreBtn.addEventListener("click", () => loadPage(false));
-
-// Search debounce
-let searchDebounce;
+let searchDeb;
 searchInput.addEventListener("input", () => {
-    clearTimeout(searchDebounce);
-    searchDebounce = setTimeout(() => {
+    clearTimeout(searchDeb);
+    searchDeb = setTimeout(() => {
         state.searchTerm = searchInput.value.trim();
         loadPage(true);
     }, 400);
 });
-searchInput.addEventListener("keydown", e => {
-    if (e.key === "Enter") {
-        clearTimeout(searchDebounce);
-        state.searchTerm = searchInput.value.trim();
-        loadPage(true);
-    }
-});
 
-// Modal close
-modalClose.addEventListener("click", closeModal);
-modalOverlay.addEventListener("click", e => { if (e.target === modalOverlay) closeModal(); });
-document.addEventListener("keydown", e => { if (e.key === "Escape") closeModal(); });
-function closeModal() {
-    modalOverlay.classList.remove("open");
-    document.body.style.overflow = "";
-}
+loadMoreBtn.addEventListener("click", () => loadPage(false));
+modalClose.addEventListener("click", () => window.location.hash = "");
+modalOverlay.addEventListener("click", e => { if (e.target === modalOverlay) window.location.hash = ""; });
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-function parseNats(natsJson) {
-    try {
-        const arr = JSON.parse(natsJson || "[]");
-        return Array.isArray(arr) ? arr.filter(Boolean) : [];
-    } catch { return natsJson ? natsJson.split(";").filter(Boolean) : []; }
+function parseNats(json) {
+    if (!json) return [];
+    try { return JSON.parse(json); } catch { return json.split(",").map(s => s.trim()); }
 }
-
-function escHtml(str) {
-    return (str || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+function stripHtml(s) { return (s || "").replace(/<[^>]*>?/gm, ''); }
+function escHtml(s) { return stripHtml(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+function showToast(m) {
+    const t = document.getElementById("toast");
+    t.textContent = m; t.classList.add("show");
+    setTimeout(() => t.classList.remove("show"), 3000);
 }
-
-function showSkeletons(n) {
-    for (let i = 0; i < n; i++) {
-        const sk = document.createElement("div");
-        sk.className = "card-skeleton skeleton-el";
-        sk.innerHTML = `<div class="skeleton-img"></div><div class="skeleton-body"><div class="skeleton-line"></div><div class="skeleton-line short"></div></div>`;
-        grid.appendChild(sk);
-    }
-}
-function removeSkeletons() {
-    document.querySelectorAll(".skeleton-el").forEach(el => el.remove());
-}
-
-function showToast(msg, duration = 3000) {
-    toast.textContent = msg;
-    toast.classList.add("show");
-    setTimeout(() => toast.classList.remove("show"), duration);
-}
-
-// Export CSV  
-document.getElementById("exportBtn")?.addEventListener("click", async () => {
-    try {
-        showToast("Exportando CSV...");
-        // Chamar backend para export (futuro comando); por ora mostrar instrução
-        showToast("Use: poetry run python intelligence_db.py search → opção 'e'");
-    } catch (e) { showToast("Erro: " + e); }
-});

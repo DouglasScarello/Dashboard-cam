@@ -1,87 +1,94 @@
 // Intelligence Catalog — Backend Tauri (Rust)
-// Lê a base SQLite intelligence.db e expõe comandos para o frontend.
+// Lê intelligence.db via rusqlite e expõe comandos ao frontend.
 
 use rusqlite::{Connection, Result as SqlResult, params};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use base64::{Engine as _, engine::general_purpose::STANDARD as B64};
 
-// ─── Caminho do banco (relativo ao executável ou configurável) ───────────────
 fn db_path() -> PathBuf {
-    // Procura em locais padrão
     let candidates = [
-        "../intelligence/data/intelligence.db",
+        "/home/douglasdsr/Documentos/Projects/FBI/Dashboard/intelligence/data/intelligence.db",
         "../../intelligence/data/intelligence.db",
+        "../intelligence/data/intelligence.db",
         "data/intelligence.db",
-        "../data/intelligence.db",
     ];
-    for c in candidates {
+    for c in &candidates {
         let p = PathBuf::from(c);
-        if p.exists() { return p; }
+        if p.exists() { 
+            println!("[CATALOG] Usando banco de dados em: {:?}", p);
+            return p; 
+        }
     }
-    // Fallback
-    PathBuf::from("intelligence/data/intelligence.db")
+    let fallback = PathBuf::from("/home/douglasdsr/Documentos/Projects/FBI/Dashboard/intelligence/data/intelligence.db");
+    println!("[CATALOG] Banco não encontrado nos candidatos, tentando fallback: {:?}", fallback);
+    fallback
 }
 
 fn open_db() -> SqlResult<Connection> {
     Connection::open(db_path())
 }
 
-// ─── Structs serializáveis ────────────────────────────────────────────────────
 #[derive(Serialize, Deserialize)]
-pub struct Individual {
-    pub id:            String,
-    pub name:          String,
-    pub category:      String,           // "wanted" | "missing"
-    pub source:        String,
-    pub birth_date:    Option<String>,
-    pub nationalities: Option<String>,   // JSON array string
-    pub description:   Option<String>,
-    pub reward:        Option<String>,
-    pub img_path:      Option<String>,
-    pub has_embedding: i32,
-    pub ingested_at:   Option<String>,
+struct Individual {
+    id:            String,
+    name:          String,
+    category:      String,
+    source:        String,
+    birth_date:    Option<String>,
+    nationalities: Option<String>,
+    description:   Option<String>,
+    reward:        Option<String>,
+    img_path:      Option<String>,
+    has_embedding: i32,
+    ingested_at:   Option<String>,
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct IndividualDetail {
-    #[serde(flatten)]
-    pub base:      Individual,
-    pub aliases:   Option<String>,
-    pub sex:       Option<String>,
-    pub url:       Option<String>,
-    pub crimes:    Vec<String>,
-    pub locations: Vec<LocationRow>,
+struct IndividualDetail {
+    id:            String,
+    name:          String,
+    category:      String,
+    source:        String,
+    birth_date:    Option<String>,
+    nationalities: Option<String>,
+    description:   Option<String>,
+    reward:        Option<String>,
+    img_path:      Option<String>,
+    has_embedding: i32,
+    aliases:       Option<String>,
+    sex:           Option<String>,
+    url:           Option<String>,
+    crimes:        Vec<String>,
+    locations:     Vec<Location>,
+    ingested_at:   Option<String>,
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct LocationRow {
-    pub loc_type: String,
-    pub country:  Option<String>,
-    pub state:    Option<String>,
-    pub city:     Option<String>,
-    pub details:  Option<String>,
+struct Location {
+    loc_type: String,
+    country:  Option<String>,
+    state:    Option<String>,
+    city:     Option<String>,
+    details:  Option<String>,
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct Stats {
-    pub total:            i64,
-    pub wanted:           i64,
-    pub missing:          i64,
-    pub with_biometrics:  i64,
-    pub by_source:        Vec<SourceCount>,
+struct Stats {
+    total:           i64,
+    wanted:          i64,
+    missing:         i64,
+    with_biometrics: i64,
+    by_source:       Vec<SourceCount>,
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct SourceCount {
-    pub source: String,
-    pub count:  i64,
-}
+struct SourceCount { source: String, count: i64 }
 
-// ─── Comandos Tauri ───────────────────────────────────────────────────────────
+// ─── Comandos ─────────────────────────────────────────────────────────────────
 
 #[tauri::command]
-pub fn search_individuals(
+fn search_individuals(
     name:          Option<String>,
     category:      Option<String>,
     country:       Option<String>,
@@ -91,73 +98,62 @@ pub fn search_individuals(
     page:          Option<u32>,
     limit:         Option<u32>,
 ) -> Result<Vec<Individual>, String> {
-    let conn   = open_db().map_err(|e| e.to_string())?;
-    let limit  = limit.unwrap_or(40) as i64;
-    let offset = (page.unwrap_or(0) as i64) * limit;
+    let conn  = open_db().map_err(|e| e.to_string())?;
+    let lim   = limit.unwrap_or(40) as i64;
+    let off   = (page.unwrap_or(0) as i64) * lim;
 
-    let mut conditions = vec!["1=1".to_string()];
-    let mut values: Vec<Box<dyn rusqlite::ToSql>> = vec![];
+    let mut conds = vec!["1=1".to_string()];
+    let mut vals: Vec<String> = vec![];
 
-    if let Some(n) = &name {
+    if let Some(n) = name.as_deref() {
         if !n.is_empty() {
-            conditions.push("(i.name LIKE ? OR i.aliases LIKE ? OR i.description LIKE ?)".into());
-            let pat = format!("%{}%", n);
-            values.push(Box::new(pat.clone()));
-            values.push(Box::new(pat.clone()));
-            values.push(Box::new(pat));
+            conds.push("(i.name LIKE ? OR i.description LIKE ?)".into());
+            vals.push(format!("%{n}%"));
+            vals.push(format!("%{n}%"));
         }
     }
-    if let Some(c) = &category {
-        if !c.is_empty() {
-            conditions.push("i.category = ?".into());
-            values.push(Box::new(c.clone()));
-        }
+    if let Some(c) = category.as_deref() {
+        if !c.is_empty() { conds.push("i.category = ?".into()); vals.push(c.into()); }
     }
-    if let Some(co) = &country {
-        if !co.is_empty() {
-            conditions.push("i.nationalities LIKE ?".into());
-            values.push(Box::new(format!("%{}%", co)));
-        }
+    if let Some(co) = country.as_deref() {
+        if !co.is_empty() { conds.push("i.nationalities LIKE ?".into()); vals.push(format!("%{co}%")); }
     }
-    if let Some(src) = &source_filter {
-        if !src.is_empty() {
-            conditions.push("i.source LIKE ?".into());
-            values.push(Box::new(format!("%{}%", src)));
-        }
+    if let Some(src) = source_filter.as_deref() {
+        if !src.is_empty() { conds.push("i.source LIKE ?".into()); vals.push(format!("%{src}%")); }
     }
     if let Some(has_bio) = has_embedding {
-        conditions.push("i.has_embedding = ?".into());
-        values.push(Box::new(if has_bio { 1i64 } else { 0i64 }));
+        conds.push("i.has_embedding = ?".into());
+        vals.push(if has_bio { "1".into() } else { "0".into() });
     }
 
-    // Crime join
-    let crime_join = if let Some(cr) = &crime {
+    let crime_join = if let Some(cr) = crime.as_deref() {
         if !cr.is_empty() {
-            conditions.push("c.crime LIKE ?".into());
-            values.push(Box::new(format!("%{}%", cr)));
+            conds.push("c.crime LIKE ?".into());
+            vals.push(format!("%{cr}%"));
             "LEFT JOIN crimes c ON c.individual_id = i.id"
         } else { "" }
     } else { "" };
 
     let sql = format!(
-        "SELECT DISTINCT i.id, i.name, i.category, i.source,
-                i.birth_date, i.nationalities, i.description,
-                i.reward, i.img_path, i.has_embedding, i.ingested_at
+        "SELECT DISTINCT i.id, i.name, i.category, i.source, i.birth_date, i.nationalities,
+                i.description, i.reward, i.img_path, i.has_embedding, i.ingested_at
          FROM individuals i {crime_join}
-         WHERE {where}
-         ORDER BY i.has_embedding DESC, i.name ASC
-         LIMIT ? OFFSET ?",
+         WHERE {where_clause}
+         ORDER BY i.has_embedding DESC, i.name ASC LIMIT ? OFFSET ?",
         crime_join = crime_join,
-        where = conditions.join(" AND ")
+        where_clause = conds.join(" AND ")
     );
 
-    values.push(Box::new(limit));
-    values.push(Box::new(offset));
-
-    let params: Vec<&dyn rusqlite::ToSql> = values.iter().map(|v| v.as_ref()).collect();
-
     let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
-    let rows = stmt.query_map(params.as_slice(), |row| {
+    
+    let mut query_params: Vec<&dyn rusqlite::ToSql> = Vec::new();
+    for v in &vals {
+        query_params.push(v);
+    }
+    query_params.push(&lim);
+    query_params.push(&off);
+
+    let rows = stmt.query_map(rusqlite::params_from_iter(query_params), |row| {
         Ok(Individual {
             id:            row.get(0)?,
             name:          row.get(1)?,
@@ -173,95 +169,102 @@ pub fn search_individuals(
         })
     }).map_err(|e| e.to_string())?;
 
-    rows.collect::<SqlResult<Vec<_>>>().map_err(|e| e.to_string())
+    let mut results = Vec::new();
+    for row in rows {
+        results.push(row.map_err(|e| e.to_string())?);
+    }
+    Ok(results)
 }
 
 #[tauri::command]
-pub fn get_individual(id: String) -> Result<IndividualDetail, String> {
+fn get_individual(id: String) -> Result<IndividualDetail, String> {
     let conn = open_db().map_err(|e| e.to_string())?;
-
-    let base: Individual = conn.query_row(
-        "SELECT id, name, category, source, birth_date, nationalities,
-                description, reward, img_path, has_embedding, ingested_at
-         FROM individuals WHERE id = ?",
-        params![id],
-        |row| Ok(Individual {
-            id:            row.get(0)?,
-            name:          row.get(1)?,
-            category:      row.get(2)?,
-            source:        row.get(3)?,
-            birth_date:    row.get(4)?,
-            nationalities: row.get(5)?,
-            description:   row.get(6)?,
-            reward:        row.get(7)?,
-            img_path:      row.get(8)?,
-            has_embedding: row.get(9)?,
-            ingested_at:   row.get(10)?,
-        }),
+    
+    let mut stmt = conn.prepare(
+        "SELECT id,name,category,source,birth_date,nationalities,description,
+                reward,img_path,has_embedding,aliases,sex,url,ingested_at FROM individuals WHERE id=?"
     ).map_err(|e| e.to_string())?;
-
-    let (aliases, sex, url): (Option<String>, Option<String>, Option<String>) =
-        conn.query_row(
-            "SELECT aliases, sex, url FROM individuals WHERE id = ?",
-            params![id],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
-        ).unwrap_or((None, None, None));
+    
+    let row = stmt.query_row(params![id], |r| Ok(IndividualDetail {
+            id:            r.get(0)?,
+            name:          r.get(1)?,
+            category:      r.get(2)?,
+            source:        r.get(3)?,
+            birth_date:    r.get(4)?,
+            nationalities: r.get(5)?,
+            description:   r.get(6)?,
+            reward:        r.get(7)?,
+            img_path:      r.get(8)?,
+            has_embedding: r.get(9)?,
+            aliases:       r.get(10)?,
+            sex:           r.get(11)?,
+            url:           r.get(12)?,
+            ingested_at:   r.get(13)?,
+            crimes:        vec![],
+            locations:     vec![],
+        })).map_err(|e| e.to_string())?;
 
     // Crimes
-    let mut stmt = conn.prepare("SELECT crime FROM crimes WHERE individual_id = ?")
+    let mut stmt_crimes = conn.prepare("SELECT crime FROM crimes WHERE individual_id=?")
         .map_err(|e| e.to_string())?;
-    let crimes: Vec<String> = stmt.query_map(params![id], |row| row.get(0))
+    let crimes: Vec<String> = stmt_crimes.query_map(params![id], |r| r.get(0))
         .map_err(|e| e.to_string())?
-        .filter_map(|r| r.ok())
-        .collect();
+        .filter_map(|r| r.ok()).collect();
 
-    // Locais
-    let mut stmt = conn.prepare(
-        "SELECT type, country, state, city, details FROM locations WHERE individual_id = ?"
-    ).map_err(|e| e.to_string())?;
-    let locations: Vec<LocationRow> = stmt.query_map(params![id], |row| {
-        Ok(LocationRow {
-            loc_type: row.get(0)?,
-            country:  row.get(1)?,
-            state:    row.get(2)?,
-            city:     row.get(3)?,
-            details:  row.get(4)?,
+    // Locations
+    let mut stmt_locs = conn.prepare("SELECT type, country, state, city, details FROM locations WHERE individual_id=?")
+        .map_err(|e| e.to_string())?;
+    let locations: Vec<Location> = stmt_locs.query_map(params![id], |r| {
+        Ok(Location {
+            loc_type: r.get(0)?,
+            country:  r.get(1)?,
+            state:    r.get(2)?,
+            city:     r.get(3)?,
+            details:  r.get(4)?,
         })
-    }).map_err(|e| e.to_string())?
-      .filter_map(|r| r.ok())
-      .collect();
+    }).map_err(|e| e.to_string())?.filter_map(|r| r.ok()).collect();
 
-    Ok(IndividualDetail { base, aliases, sex, url, crimes, locations })
+    Ok(IndividualDetail { crimes, locations, ..row })
 }
 
 #[tauri::command]
-pub fn get_stats() -> Result<Stats, String> {
+fn get_stats() -> Result<Stats, String> {
     let conn = open_db().map_err(|e| e.to_string())?;
-
     let total:           i64 = conn.query_row("SELECT COUNT(*) FROM individuals", [], |r| r.get(0)).unwrap_or(0);
     let wanted:          i64 = conn.query_row("SELECT COUNT(*) FROM individuals WHERE category='wanted'", [], |r| r.get(0)).unwrap_or(0);
     let missing:         i64 = conn.query_row("SELECT COUNT(*) FROM individuals WHERE category='missing'", [], |r| r.get(0)).unwrap_or(0);
     let with_biometrics: i64 = conn.query_row("SELECT COUNT(*) FROM individuals WHERE has_embedding=1", [], |r| r.get(0)).unwrap_or(0);
 
-    let mut stmt = conn.prepare(
-        "SELECT source, COUNT(*) as cnt FROM individuals GROUP BY source ORDER BY cnt DESC LIMIT 10"
-    ).map_err(|e| e.to_string())?;
-    let by_source: Vec<SourceCount> = stmt.query_map([], |row| {
-        Ok(SourceCount { source: row.get(0)?, count: row.get(1)? })
-    }).map_err(|e| e.to_string())?
-      .filter_map(|r| r.ok())
-      .collect();
+    let mut stmt = conn.prepare("SELECT source,COUNT(*) FROM individuals GROUP BY source ORDER BY COUNT(*) DESC LIMIT 10")
+        .map_err(|e| e.to_string())?;
+    let rows = stmt.query_map([], |r| Ok(SourceCount { source: r.get(0)?, count: r.get(1)? }))
+        .map_err(|e| e.to_string())?;
+    
+    let mut by_source = Vec::new();
+    for r in rows {
+        by_source.push(r.map_err(|e| e.to_string())?);
+    }
 
     Ok(Stats { total, wanted, missing, with_biometrics, by_source })
 }
 
 #[tauri::command]
-pub fn get_image_base64(img_path: String) -> Result<String, String> {
-    let bytes = std::fs::read(&img_path).map_err(|e| e.to_string())?;
+fn get_image_base64(img_path: String) -> Result<String, String> {
+    // Resolve caminho relativo para absoluto baseado na localização do banco
+    let base_dir = PathBuf::from("/home/douglasdsr/Documentos/Projects/FBI/Dashboard/intelligence/");
+    let mut abs_path = base_dir;
+    abs_path.push(img_path);
+    
+    if !abs_path.exists() {
+        println!("[CATALOG] Imagem não encontrada: {:?}", abs_path);
+        return Err(format!("Imagem inexistente: {:?}", abs_path));
+    }
+
+    let bytes = std::fs::read(&abs_path).map_err(|e| e.to_string())?;
     Ok(format!("data:image/jpeg;base64,{}", B64.encode(&bytes)))
 }
 
-// ─── Entry point ─────────────────────────────────────────────────────────────
+// ─── Entry ────────────────────────────────────────────────────────────────────
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
