@@ -1,4 +1,6 @@
 use std::process::Command;
+use std::fs;
+use std::path::PathBuf;
 
 #[tauri::command]
 fn get_live_id(search_term: String) -> Result<String, String> {
@@ -29,6 +31,22 @@ fn get_live_id(search_term: String) -> Result<String, String> {
 }
 
 #[tauri::command]
+fn get_cameras() -> Result<String, String> {
+    // Caminho para o banco de dados centralizado
+    // Como estamos rodando em dev, podemos usar o caminho relativo ao projeto raiz
+    // Em produção, isso precisaria ser ajustado ou vir de uma config
+    let mut path = PathBuf::from("..");
+    path.push("database");
+    path.push("omni_cams.json");
+
+    if !path.exists() {
+        return Ok("[]".to_string());
+    }
+
+    fs::read_to_string(path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
 }
@@ -37,7 +55,7 @@ fn greet(name: &str) -> String {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![greet, get_live_id])
+        .invoke_handler(tauri::generate_handler![greet, get_live_id, get_cameras])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

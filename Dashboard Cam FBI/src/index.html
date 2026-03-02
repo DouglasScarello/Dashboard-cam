@@ -152,27 +152,9 @@
         let currentSector = 'ALL';
 
         // === SISTEMA DE VERSIONAMENTO DO DATASET ===
-        const OSS_DATASET_VERSION = '17.0'; // Copacabana Fixed & Search Opt
+        const OSS_DATASET_VERSION = '18.0'; // Automação & Persistência Local
 
-        const DEFAULT_CAMERAS = [
-            { id: 701, nome: "BEIRA MAR NORTE — KOXIXOS", status: "AO VIVO", url: "https://www.youtube.com/watch?v=c3LNbKb45go", local: "Florianópolis, SC", pais: "BR", estado: "SC", cidade: "Florianópolis", tipo: "youtube" },
-            { id: 702, nome: "PONTE HERCÍLIO LUZ — AO VIVO", status: "AO VIVO", url: "https://www.youtube.com/watch?v=TBJzToxEvmk", local: "Florianópolis, SC", pais: "BR", estado: "SC", cidade: "Florianópolis", tipo: "youtube" },
-            { id: 703, nome: "TRAPICHE BEIRA MAR — NORTE", status: "AO VIVO", url: "https://www.youtube.com/watch?v=GZWIulHdbFM", local: "Florianópolis, SC", pais: "BR", estado: "SC", cidade: "Florianópolis", tipo: "youtube" },
-            { id: 10, nome: "NYC — TIMES SQUARE 24/7", status: "AO VIVO", url: "https://www.youtube.com/watch?v=1EiC9bvVGnk", local: "Times Square, NY", pais: "US", estado: "NY", cidade: "New York", tipo: "youtube" },
-            { id: 20, nome: "MIAMI BEACH — OCEAN DRIVE", status: "AO VIVO", url: "https://www.youtube.com/watch?v=OkQ0utdxwBY", local: "Miami Beach, FL", pais: "US", estado: "FL", cidade: "Miami", tipo: "youtube" },
-            { id: 15, nome: "TOKYO — SHIBUYA CROSSING", status: "AO VIVO", url: "https://www.youtube.com/watch?v=dfVK7ld38Ys", local: "Shibuya, Tokyo", pais: "JP", estado: "Tokyo", cidade: "Shibuya", tipo: "youtube" },
-            { id: 30, nome: "LAS VEGAS — THE STRIP LIVE", status: "AO VIVO", url: "https://www.youtube.com/watch?v=jtvmwjzZY0c", local: "Las Vegas, NV", pais: "US", estado: "NV", cidade: "Las Vegas", tipo: "youtube" },
-            { id: 40, nome: "NASHVILLE — BROADWAY LIVE", status: "AO VIVO", url: "https://www.youtube.com/watch?v=m6jK1pG-Ryg", local: "Nashville, TN", pais: "US", estado: "TN", cidade: "Nashville", tipo: "youtube" },
-            { id: 41, nome: "NEW ORLEANS — BOURBON ST", status: "AO VIVO", url: "https://www.youtube.com/watch?v=Ksrleaxxxhw", local: "New Orleans, LA", pais: "US", estado: "LA", cidade: "New Orleans", tipo: "youtube" },
-            { id: 50, nome: "KEY WEST — DUVAL STREET", status: "AO VIVO", url: "https://www.youtube.com/watch?v=rbMK4p6zUwI", local: "Key West, FL", pais: "US", estado: "FL", cidade: "Key West", tipo: "youtube" },
-            { id: 60, nome: "LONDON — ABBEY ROAD", status: "AO VIVO", url: "https://www.youtube.com/watch?v=M3EYAY2MftI", local: "London, UK", pais: "UK", estado: "London", cidade: "London", tipo: "youtube" },
-            { id: 70, nome: "VENICE — CANAL VIEW", status: "AO VIVO", url: "https://www.youtube.com/watch?v=ph1vpnYIxJk", local: "Venice, Italy", pais: "IT", estado: "Venice", cidade: "Venice", tipo: "youtube" },
-            { id: 80, nome: "PARIS — EIFFEL TOWER", status: "AO VIVO", url: "https://www.youtube.com/watch?v=OzYp4NRZlwQ", local: "Paris, France", pais: "FR", estado: "Paris", cidade: "Paris", tipo: "youtube" },
-            { id: 90, nome: "SEATTLE — SPACE NEEDLE", status: "AO VIVO", url: "https://www.youtube.com/watch?v=4cgSE12k9Sc", local: "Seattle, WA", pais: "US", estado: "WA", cidade: "Seattle", tipo: "youtube" },
-            { id: 100, nome: "RIO — COPACABANA BEACH", status: "AO VIVO", url: "https://www.youtube.com/watch?v=2bvFm0-luBo", local: "Rio de Janeiro, BR", pais: "BR", estado: "RJ", cidade: "Rio de Janeiro", tipo: "youtube" },
-            { id: 160, nome: "WASHINGTON DC — WHITE HOUSE", status: "AO VIVO", url: "https://www.youtube.com/watch?v=Fu8vYoIkaeM", local: "Washington, DC", pais: "US", estado: "DC", cidade: "Washington", tipo: "youtube" }
-        ];
-
+        let activeCameras = []; // Agora carregado via Rust
         // Árvore de Localizações para o "IA-Flow"
         const LOCATIONS_TREE = {
             "BR": {
@@ -287,21 +269,45 @@
             });
         }
 
-        // Força o reset completo do dataset ao mudar de versão para eliminar lixo acumulado
-        function loadCameras() {
-            const savedVersion = localStorage.getItem('oss_version');
-            
-            if (savedVersion !== OSS_DATASET_VERSION) {
-                localStorage.setItem('oss_cameras', JSON.stringify(DEFAULT_CAMERAS));
-                localStorage.setItem('oss_version', OSS_DATASET_VERSION);
-                return DEFAULT_CAMERAS;
+        // === INICIALIZAÇÃO E PERSISTÊNCIA ===
+        async function loadCameras() {
+            try {
+                const { invoke } = window.__TAURI__.core;
+                const camsJson = await invoke('get_cameras');
+                activeCameras = JSON.parse(camsJson);
+                
+                if (activeCameras.length === 0) {
+                    console.log("[OSS] Banco de dados vazio. Recomenda-se rodar o Omni-Farmer.");
+                }
+            } catch (err) {
+                console.error("[OSS] Erro ao carregar cameras via Rust Bridge:", err);
+                activeCameras = [];
             }
-            
-            const saved = JSON.parse(localStorage.getItem('oss_cameras') || '[]');
-            return saved.length > 0 ? saved : DEFAULT_CAMERAS;
+            updateUI();
         }
 
-        let activeCameras = loadCameras();
+        // Função de salvamento (agora redundante mas mantida para consistência se adicionar manual)
+        function saveCameras() {
+            // No Caminho 2, o salvamento ideal seria via Rust. 
+            // Por enquanto, mantemos apenas o dado em memória no frontend 
+            // e contamos com o Python para gerir o JSON.
+        }
+
+        // Força o reset completo do dataset ao mudar de versão
+        // function loadCameras() {
+        //     const savedVersion = localStorage.getItem('oss_version');
+            
+        //     if (savedVersion !== OSS_DATASET_VERSION) {
+        //         localStorage.setItem('oss_cameras', JSON.stringify(DEFAULT_CAMERAS));
+        //         localStorage.setItem('oss_version', OSS_DATASET_VERSION);
+        //         return DEFAULT_CAMERAS;
+        //     }
+            
+        //     const saved = JSON.parse(localStorage.getItem('oss_cameras') || '[]');
+        //     return saved.length > 0 ? saved : DEFAULT_CAMERAS;
+        // }
+
+        // let activeCameras = loadCameras(); // This line is now handled by the new async loadCameras()
 
         function saveToStorage() {
             localStorage.setItem('oss_cameras', JSON.stringify(activeCameras));
@@ -607,7 +613,7 @@
         }
 
         // Renderiza tudo ao iniciar a página
-        updateUI();
+        loadCameras();
     </script>
 </body>
 </html>

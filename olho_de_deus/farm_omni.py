@@ -8,10 +8,21 @@ Formato de Saída: NOME | URL | LOCAL | SETOR
 import time
 import sys
 import argparse
+import json
+import os
 import requests
 import yt_dlp
+import urllib3
 from bs4 import BeautifulSoup
 from typing import List, Dict, Optional
+from pathlib import Path
+
+# Configuração de Caminhos
+BASE_DIR = Path(__file__).resolve().parent.parent
+DB_PATH = BASE_DIR / "database" / "omni_cams.json"
+
+# Desabilitar avisos de SSL (Para crawlers em sites com cert assinados/expirados)
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # --- CONFIGURAÇÃO DE ALVOS ---
 
@@ -40,9 +51,43 @@ class OmniFarmer:
         """Higieniza o nome para o padrão Dashboard."""
         return name.replace('|', '-').upper().strip()
 
+    def load_db(self) -> List[Dict]:
+        """Carrega o banco de dados JSON."""
+        if not DB_PATH.exists():
+            return []
+        try:
+            with open(DB_PATH, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except:
+            return []
+
+    def save_db(self, data: List[Dict]):
+        """Salva o banco de dados JSON."""
+        # Garante o diretório
+        DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with open(DB_PATH, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=4, ensure_ascii=False)
+
+    def add_camera_to_db(self, camera: Dict, db: List[Dict]) -> bool:
+        """Adiciona câmera se não for duplicada (baseada na URL)."""
+        if any(c['url'] == camera['url'] for c in db):
+            return False
+        
+        # Gera ID incremental se necessário
+        if not db:
+            camera['id'] = 1000
+        else:
+            camera['id'] = max(c.get('id', 999) for c in db) + 1
+            
+        db.append(camera)
+        return True
+
     def farm_youtube(self, limit_per_term: int = 15):
         """Engine YouTube: Pesquisa apenas transmissões AO VIVO reais."""
         print(f"\n[ENGINE] YouTube Search - Limite: {limit_per_term} resultados/alvo")
+        
+        db = self.load_db()
+        new_count = 0
         
         ydl_opts = {
             'extract_flat': True,
@@ -63,21 +108,32 @@ class OmniFarmer:
                         for entry in result['entries']:
                             if not entry: continue
                             
-                            # Filtros Rigorosos de Live Real
                             duration = entry.get('duration')
                             live_status = entry.get('live_status') or entry.get('is_live')
                             title = entry.get('title', 'NO NAME')
 
-                            # Regra: Séries de lives (como rádio 24h) ou lives reais não tem duração definida
                             if duration is None or live_status == 'is_live' or 'LIVE' in title.upper():
-                                safe_name = self.clean_name(title)
-                                url = f"https://www.youtube.com/watch?v={entry['id']}"
-                                print(f"{safe_name} | {url} | {target['local']} | {target['setor']}")
+                                camera = {
+                                    "nome": self.clean_name(title),
+                                    "url": f"https://www.youtube.com/watch?v={entry['id']}",
+                                    "local": target["local"],
+                                    "setor": target["setor"],
+                                    "pais": target["setor"], # Simplificação para o dashboard
+                                    "tipo": "youtube",
+                                    "status": "AO VIVO"
+                                }
+                                
+                                if self.add_camera_to_db(camera, db):
+                                    print(f"[NEW] {camera['nome']}")
+                                    new_count += 1
 
-                time.sleep(3) # Anti-Block Delay
+                time.sleep(3)
 
             except Exception as e:
                 sys.stderr.write(f"[ERROR YT] {termo}: {e}\n")
+        
+        self.save_db(db)
+        print(f"\n[FINISH] {new_count} novas câmeras adicionadas ao banco.")
 
     def farm_hls(self):
         """Engine HLS: Scraper de diretórios públicos em busca de .m3u8 ativos."""
@@ -87,7 +143,7 @@ class OmniFarmer:
             url_dir = target["url"]
             try:
                 print(f"[SCRAPE] {url_dir}...")
-                response = requests.get(url_dir, headers=self.headers, timeout=10)
+                response = requests.get(url_dir, headers=self.headers, timeout=10, verify=False)
                 if response.status_code != 200:
                     continue
 
@@ -102,9 +158,9 @@ class OmniFarmer:
                 links_encontrados.extend(m3u8_links)
 
                 for link in set(links_encontrados):
-                    # Validação de sinal (Head 200)
+                    # Validação de sinal (Head 200) com bypass de SSL
                     try:
-                        check = requests.head(link, timeout=3, headers=self.headers)
+                        check = requests.head(link, timeout=3, headers=self.headers, verify=False)
                         if check.status_code == 200:
                             # Nome baseado em pedaço da URL ou título da página
                             name_part = link.split('/')[-1].replace('.m3u8', '').replace('_', ' ')

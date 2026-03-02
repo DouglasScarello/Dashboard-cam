@@ -1,0 +1,742 @@
+[
+    {
+        "nome": "SBFL LIVE ATC - AEROPORTO INTERNACIONAL DE FLORIANÓPOLIS AO VIVO - COM FONIA - CTMEBOX ACADEMIA",
+        "url": "https://www.youtube.com/watch?v=I2Z8CE0o4F0",
+        "local": "Florianópolis, SC",
+        "setor": "BR",
+        "pais": "BR",
+        "tipo": "youtube",
+        "status": "AO VIVO",
+        "id": 1000
+    },
+    {
+        "nome": "CÂMERA AO VIVO FLORIANÓPOLIS - BARRA DA LAGOA",
+        "url": "https://www.youtube.com/watch?v=HC0sJDUVzhA",
+        "local": "Florianópolis, SC",
+        "setor": "BR",
+        "pais": "BR",
+        "tipo": "youtube",
+        "status": "AO VIVO",
+        "id": 1001
+    },
+    {
+        "nome": "CÂMERA AO VIVO FLORIANÓPOLIS  - CACHOEIRA DO BOM JESUS",
+        "url": "https://www.youtube.com/watch?v=GFAEq2j3csQ",
+        "local": "Florianópolis, SC",
+        "setor": "BR",
+        "pais": "BR",
+        "tipo": "youtube",
+        "status": "AO VIVO",
+        "id": 1002
+    },
+    {
+        "nome": "CÂMERA AO VIVO FLORIANÓPOLIS - TRAPICHE BEIRA MAR NORTE",
+        "url": "https://www.youtube.com/watch?v=GZWIulHdbFM",
+        "local": "Florianópolis, SC",
+        "setor": "BR",
+        "pais": "BR",
+        "tipo": "youtube",
+        "status": "AO VIVO",
+        "id": 1003
+    },
+    {
+        "nome": "CÂMERA AO VIVO BR-101 KM 210 - SENTIDO SUL",
+        "url": "https://www.youtube.com/watch?v=4wurvi0QXUM",
+        "local": "Florianópolis, SC",
+        "setor": "BR",
+        "pais": "BR",
+        "tipo": "youtube",
+        "status": "AO VIVO",
+        "id": 1004
+    },
+    {
+        "nome": "CÂMERA AO VIVO FLORIANÓPOLIS - KOXIXOS BEER",
+        "url": "https://www.youtube.com/watch?v=c3LNbKb45go",
+        "local": "Florianópolis, SC",
+        "setor": "BR",
+        "pais": "BR",
+        "tipo": "youtube",
+        "status": "AO VIVO",
+        "id": 1005
+    },
+    {
+        "nome": "CÂMERA AO VIVO FLORIANÓPOLIS - PRAIA DOS INGLESES - BEACH HOUSE BISTRO&LOUNGE",
+        "url": "https://www.youtube.com/watch?v=7wB8oa5wrKE",
+        "local": "Florianópolis, SC",
+        "setor": "BR",
+        "pais": "BR",
+        "tipo": "youtube",
+        "status": "AO VIVO",
+        "id": 1006
+    },
+    {
+        "nome": "CÂMERA AO VIVO FLORIANÓPOLIS - CANAL DA BARRA DA LAGOA - HOSTEL FAROL DA BARRRA",
+        "url": "https://www.youtube.com/watch?v=fV9AQHMJN0U",
+        "local": "Florianópolis, SC",
+        "setor": "BR",
+        "pais": "BR",
+        "tipo": "youtube",
+        "status": "AO VIVO",
+        "id": 1007
+    },
+    {
+        "nome": "CÂMERA AO VIVO JURERÊ INTERNACIONAL - RESTAURANTE CARAVELA",
+        "url": "https://www.youtube.com/watch?v=EKIDgJrXOLQ",
+        "local": "Florianópolis, SC",
+        "setor": "BR",
+        "pais": "BR",
+        "tipo": "youtube",
+        "status": "AO VIVO",
+        "id": 1008
+    },
+    {
+        "nome": "THIS IS HOW WE LIVE IN FLORIANOPOLIS BRAZIL",
+        "url": "https://www.youtube.com/watch?v=RRF-JCChOSw",
+        "local": "Florianópolis, SC",
+        "setor": "BR",
+        "pais": "BR",
+        "tipo": "youtube",
+        "status": "AO VIVO",
+        "id": 1009
+    },
+    {
+        "nome": "FLORIANOPOLIS LIVE CAM",
+        "url": "https://www.youtube.com/watch?v=Zzy5GvhzBDo",
+        "local": "Florianópolis, SC",
+        "setor": "BR",
+        "pais": "BR",
+        "tipo": "youtube",
+        "status": "AO VIVO",
+        "id": 1010
+    },
+    {
+        "nome": "CÂMERA AO VIVO FLORIANÓPOLIS - SANTO ANTÔNIO DE LISBOA",
+        "url": "https://www.youtube.com/watch?v=zh0swjLCvy4",
+        "local": "Florianópolis, SC",
+        "setor": "BR",
+        "pais": "BR",
+        "tipo": "youtube",
+        "status": "AO VIVO",
+        "id": 1011
+    },
+    {
+        "nome": "BALNEÁRIO CAMBORIÚ SC AO VIVO - AV. ATLÂNTICA – PRÓX. RUA 3700 - CONEXÃODCTV",
+        "url": "https://www.youtube.com/watch?v=c0VxcntfWhA",
+        "local": "Florianópolis, SC",
+        "setor": "BR",
+        "pais": "BR",
+        "tipo": "youtube",
+        "status": "AO VIVO",
+        "id": 1012
+    },
+    {
+        "nome": "THE SURPRISING REASONS WHY EVERYONE LOVES FLORIANÓPOLIS - THE BEST PLACE TO LIVE IN BRAZIL",
+        "url": "https://www.youtube.com/watch?v=Dvt_KRVxbpo",
+        "local": "Florianópolis, SC",
+        "setor": "BR",
+        "pais": "BR",
+        "tipo": "youtube",
+        "status": "AO VIVO",
+        "id": 1013
+    },
+    {
+        "nome": "🔴 LIVE CAM : UNBELIEVABLE MYSTERIOUS THINGS CAUGHT ON CAMERA SCARY - CRUISE SHIP IN STORM",
+        "url": "https://www.youtube.com/watch?v=nqdAu4iRf1E",
+        "local": "Florianópolis, SC",
+        "setor": "BR",
+        "pais": "BR",
+        "tipo": "youtube",
+        "status": "AO VIVO",
+        "id": 1014
+    },
+    {
+        "nome": "BALNEÁRIO CAMBORIÚ AO VIVO - MIRA LA VISTA DIRECTAMENTE DESDE EL HOTEL MARAMBAIA.",
+        "url": "https://www.youtube.com/watch?v=j4Wne61IJ3I",
+        "local": "Balneário Camboriú, SC",
+        "setor": "BR",
+        "pais": "BR",
+        "tipo": "youtube",
+        "status": "AO VIVO",
+        "id": 1015
+    },
+    {
+        "nome": "SBNF/ NVT - LIVE - CÂMERA AO VIVO 24H DO AEROPORTO DE NAVEGANTES VICTOR KONDER SANTA CATARINA -",
+        "url": "https://www.youtube.com/watch?v=WW0X2sWd0tQ",
+        "local": "Balneário Camboriú, SC",
+        "setor": "BR",
+        "pais": "BR",
+        "tipo": "youtube",
+        "status": "AO VIVO",
+        "id": 1016
+    },
+    {
+        "nome": "BALNEÁRIO CAMBORIÚ SC AO VIVO - PRAIA DE LARANJEIRAS – CASA DO CAMARÃO - CONEXÃODCTV",
+        "url": "https://www.youtube.com/watch?v=cR3mDWKha8s",
+        "local": "Balneário Camboriú, SC",
+        "setor": "BR",
+        "pais": "BR",
+        "tipo": "youtube",
+        "status": "AO VIVO",
+        "id": 1017
+    },
+    {
+        "nome": "BALNEÁRIO CAMBORIÚ AO VIVO",
+        "url": "https://www.youtube.com/watch?v=YN-Zbzhdee8",
+        "local": "Balneário Camboriú, SC",
+        "setor": "BR",
+        "pais": "BR",
+        "tipo": "youtube",
+        "status": "AO VIVO",
+        "id": 1018
+    },
+    {
+        "nome": "BALNEÁRIO CAMBORIÚ AO VIVO - AVENIDA ATLÂNTICA",
+        "url": "https://www.youtube.com/watch?v=zlS7gHZd8Uc",
+        "local": "Balneário Camboriú, SC",
+        "setor": "BR",
+        "pais": "BR",
+        "tipo": "youtube",
+        "status": "AO VIVO",
+        "id": 1019
+    },
+    {
+        "nome": "BALNEÁRIO CAMBORIÚ AO VIVO - CENTRAL",
+        "url": "https://www.youtube.com/watch?v=Hs2e1s5NQo4",
+        "local": "Balneário Camboriú, SC",
+        "setor": "BR",
+        "pais": "BR",
+        "tipo": "youtube",
+        "status": "AO VIVO",
+        "id": 1020
+    },
+    {
+        "nome": "BALNEÁRIO CAMBORIÚ SC AO VIVO - MIRANTE DA BARRA SUL – PARQUE UNIPRAIAS - CONEXÃODCTV",
+        "url": "https://www.youtube.com/watch?v=oOIprER3VzA",
+        "local": "Balneário Camboriú, SC",
+        "setor": "BR",
+        "pais": "BR",
+        "tipo": "youtube",
+        "status": "AO VIVO",
+        "id": 1021
+    },
+    {
+        "nome": "BALNEÁRIO CAMBORIÚ SC AO VIVO - PRAIA DO ESTALEIRO – BRISA DO MAR RESTAURANTE - CONEXÃODCTV",
+        "url": "https://www.youtube.com/watch?v=mpulBc5lhXg",
+        "local": "Balneário Camboriú, SC",
+        "setor": "BR",
+        "pais": "BR",
+        "tipo": "youtube",
+        "status": "AO VIVO",
+        "id": 1022
+    },
+    {
+        "nome": "BALNEÁRIO CAMBORIÚ SC AO VIVO - PRAIA CENTRAL / RODA GIGANTE - CONEXÃODCTV",
+        "url": "https://www.youtube.com/watch?v=OVLAbyUZOT8",
+        "local": "Balneário Camboriú, SC",
+        "setor": "BR",
+        "pais": "BR",
+        "tipo": "youtube",
+        "status": "AO VIVO",
+        "id": 1023
+    },
+    {
+        "nome": "BALNEÁRIO CAMBORIÚ SC AO VIVO - BR-101 – SENTIDO NORTE – MALUVAN HOME & SHOP - CONEXÃODCTV",
+        "url": "https://www.youtube.com/watch?v=hoCM_caHRGU",
+        "local": "Balneário Camboriú, SC",
+        "setor": "BR",
+        "pais": "BR",
+        "tipo": "youtube",
+        "status": "AO VIVO",
+        "id": 1024
+    },
+    {
+        "nome": "BALNEÁRIO CAMBORIÚ - AO VIVO - LIVE CAM NOW - SC",
+        "url": "https://www.youtube.com/watch?v=OcHbjSOh4rM",
+        "local": "Balneário Camboriú, SC",
+        "setor": "BR",
+        "pais": "BR",
+        "tipo": "youtube",
+        "status": "AO VIVO",
+        "id": 1025
+    },
+    {
+        "nome": "BALNEÁRIO CAMBORIÚ AO VIVO",
+        "url": "https://www.youtube.com/watch?v=mzupbpXw8sQ",
+        "local": "Balneário Camboriú, SC",
+        "setor": "BR",
+        "pais": "BR",
+        "tipo": "youtube",
+        "status": "AO VIVO",
+        "id": 1026
+    },
+    {
+        "nome": "BALNEÁRIO CAMBORIÚ - AO VIVO - LIVE CAM SC HOJE",
+        "url": "https://www.youtube.com/watch?v=E0AuK9Llzt4",
+        "local": "Balneário Camboriú, SC",
+        "setor": "BR",
+        "pais": "BR",
+        "tipo": "youtube",
+        "status": "AO VIVO",
+        "id": 1027
+    },
+    {
+        "nome": "TREM AO VIVO RINCÃO SP BRASIL",
+        "url": "https://www.youtube.com/watch?v=JUwARcYt8FI",
+        "local": "São Paulo, SP",
+        "setor": "BR",
+        "pais": "BR",
+        "tipo": "youtube",
+        "status": "AO VIVO",
+        "id": 1028
+    },
+    {
+        "nome": "AO VIVO - AV PAULISTA SP - ACORDA BRASIL - IMAGENS DIRETAS DO PALANQUE",
+        "url": "https://www.youtube.com/watch?v=ulzU5ueHAwQ",
+        "local": "São Paulo, SP",
+        "setor": "BR",
+        "pais": "BR",
+        "tipo": "youtube",
+        "status": "AO VIVO",
+        "id": 1029
+    },
+    {
+        "nome": "TREM AO VIVO EMBÚ GUAÇÚ  SP BRASIL",
+        "url": "https://www.youtube.com/watch?v=qyoZi1EbRO4",
+        "local": "São Paulo, SP",
+        "setor": "BR",
+        "pais": "BR",
+        "tipo": "youtube",
+        "status": "AO VIVO",
+        "id": 1030
+    },
+    {
+        "nome": "TREM AO VIVO PINDORAMA SP BRASIL",
+        "url": "https://www.youtube.com/watch?v=8GjxwU0F84M",
+        "local": "São Paulo, SP",
+        "setor": "BR",
+        "pais": "BR",
+        "tipo": "youtube",
+        "status": "AO VIVO",
+        "id": 1031
+    },
+    {
+        "nome": "🔴 1200 TOP LIVE WEBCAMS AROUND THE WORLD WITH RELAXING MUSIC ☕ AND MAP  -  SKYLINEWEBCAMS",
+        "url": "https://www.youtube.com/watch?v=EFum1rGUdkk",
+        "local": "São Paulo, SP",
+        "setor": "BR",
+        "pais": "BR",
+        "tipo": "youtube",
+        "status": "AO VIVO",
+        "id": 1032
+    },
+    {
+        "nome": "LIVE CAMERAS AROUND THE WORLD - MUSIC, TIMELAPSE, TRAVEL",
+        "url": "https://www.youtube.com/watch?v=2BLqhS59Elc",
+        "local": "São Paulo, SP",
+        "setor": "BR",
+        "pais": "BR",
+        "tipo": "youtube",
+        "status": "AO VIVO",
+        "id": 1033
+    },
+    {
+        "nome": "🔴 LIVE CAM AROUND THE WORLD - ROLLING CAM WITH CHILL & LOUNGE MUSIC",
+        "url": "https://www.youtube.com/watch?v=z7SiAaN4ogw",
+        "local": "São Paulo, SP",
+        "setor": "BR",
+        "pais": "BR",
+        "tipo": "youtube",
+        "status": "AO VIVO",
+        "id": 1034
+    },
+    {
+        "nome": "PROGRAMAÇÃO RÁDIO 80FM - AO VIVO - LIVE CAM SÃO PAULO - BRAZIL",
+        "url": "https://www.youtube.com/watch?v=RaHtbaMWUZ0",
+        "local": "São Paulo, SP",
+        "setor": "BR",
+        "pais": "BR",
+        "tipo": "youtube",
+        "status": "AO VIVO",
+        "id": 1035
+    },
+    {
+        "nome": "PORTO AO VIVO - ENTRADA NO CANAL DO PORTO DE SANTOS",
+        "url": "https://www.youtube.com/watch?v=tMYtrEBNVAU",
+        "local": "São Paulo, SP",
+        "setor": "BR",
+        "pais": "BR",
+        "tipo": "youtube",
+        "status": "AO VIVO",
+        "id": 1036
+    },
+    {
+        "nome": "PROGRAMAÇÃO RÁDIO 80FM - AO-VIVO - LIVE CAM - SÃO PAULO BRAZIL",
+        "url": "https://www.youtube.com/watch?v=VSrhdj0KcKw",
+        "local": "São Paulo, SP",
+        "setor": "BR",
+        "pais": "BR",
+        "tipo": "youtube",
+        "status": "AO VIVO",
+        "id": 1037
+    },
+    {
+        "nome": "PORTO AO VIVO - VISTA PANORÂMICA (4K)",
+        "url": "https://www.youtube.com/watch?v=AX74XKJZdJM",
+        "local": "São Paulo, SP",
+        "setor": "BR",
+        "pais": "BR",
+        "tipo": "youtube",
+        "status": "AO VIVO",
+        "id": 1038
+    },
+    {
+        "nome": "🌍🅻🅸🆅🅴🌍LIVE WORLDWIDE WEBCAM TOUR🎥WATCH 500 RANDOM CAMS FROM ALL AROUND THE WORLD🌐BERLIN PARIS TOKIO😍",
+        "url": "https://www.youtube.com/watch?v=HVGwLboIdYc",
+        "local": "São Paulo, SP",
+        "setor": "BR",
+        "pais": "BR",
+        "tipo": "youtube",
+        "status": "AO VIVO",
+        "id": 1039
+    },
+    {
+        "nome": "LIVE CAM SÃO PAULO/SP AO VIVO (DIA)",
+        "url": "https://www.youtube.com/watch?v=GxoKGDpUYps",
+        "local": "São Paulo, SP",
+        "setor": "BR",
+        "pais": "BR",
+        "tipo": "youtube",
+        "status": "AO VIVO",
+        "id": 1040
+    },
+    {
+        "nome": "LIVE: CROWDS GATHER IN TIMES SQUARE IN SUPPORT OF STRIKES ON IRAN",
+        "url": "https://www.youtube.com/watch?v=kJxQesfS3Jk",
+        "local": "New York, NY",
+        "setor": "US",
+        "pais": "US",
+        "tipo": "youtube",
+        "status": "AO VIVO",
+        "id": 1041
+    },
+    {
+        "nome": "LIVE: DEMONSTRATORS GATHER IN TIME SQUARE TO CELEBRATE U.S. STRIKE ON IRAN - AC1E",
+        "url": "https://www.youtube.com/watch?v=PeCIRfdSjKY",
+        "local": "New York, NY",
+        "setor": "US",
+        "pais": "US",
+        "tipo": "youtube",
+        "status": "AO VIVO",
+        "id": 1042
+    },
+    {
+        "nome": "EARTHCAM LIVE:  TIMES SQUARE IN 4K",
+        "url": "https://www.youtube.com/watch?v=rnXIjl_Rzy4",
+        "local": "New York, NY",
+        "setor": "US",
+        "pais": "US",
+        "tipo": "youtube",
+        "status": "AO VIVO",
+        "id": 1043
+    },
+    {
+        "nome": "MANHATTAN  MARCH 2026 CRAZY CROWDS IN TIMES SQUARE NYC 🎄 WALKING THROUGH NEW YORK",
+        "url": "https://www.youtube.com/watch?v=QL_Zx9QQDZ0",
+        "local": "New York, NY",
+        "setor": "US",
+        "pais": "US",
+        "tipo": "youtube",
+        "status": "AO VIVO",
+        "id": 1044
+    },
+    {
+        "nome": "NEWSROOM LIVE: NEW YEAR'S EVE IN TIMES SQUARE",
+        "url": "https://www.youtube.com/watch?v=If2j0pAVANs",
+        "local": "New York, NY",
+        "setor": "US",
+        "pais": "US",
+        "tipo": "youtube",
+        "status": "AO VIVO",
+        "id": 1045
+    },
+    {
+        "nome": "TIMES SQUARE: DUFFY SQUARE 4K VIEW LIVE",
+        "url": "https://www.youtube.com/watch?v=iiBTWU2FyFo",
+        "local": "New York, NY",
+        "setor": "US",
+        "pais": "US",
+        "tipo": "youtube",
+        "status": "AO VIVO",
+        "id": 1046
+    },
+    {
+        "nome": "NEW YORK'S TIMES SQUARE SNOW STORM LIVE CAM - NYC UNDER SNOW EMERGENCY - USA WEATHER NEWS - N18G",
+        "url": "https://www.youtube.com/watch?v=XQE6AAKzhLQ",
+        "local": "New York, NY",
+        "setor": "US",
+        "pais": "US",
+        "tipo": "youtube",
+        "status": "AO VIVO",
+        "id": 1047
+    },
+    {
+        "nome": "LIVE: NEW YORK RINGS IN THE NEW YEAR WITH THE TIMES SQUARE BALL DROP",
+        "url": "https://www.youtube.com/watch?v=PSEK5QIiv6A",
+        "local": "New York, NY",
+        "setor": "US",
+        "pais": "US",
+        "tipo": "youtube",
+        "status": "AO VIVO",
+        "id": 1048
+    },
+    {
+        "nome": "LIVE FROM NEW YORK CITY'S TIMES SQUARE AS STRONG WINTER STORM BRINGS SNOW TO THE BIG APPLE",
+        "url": "https://www.youtube.com/watch?v=1hwMz7j7gQg",
+        "local": "New York, NY",
+        "setor": "US",
+        "pais": "US",
+        "tipo": "youtube",
+        "status": "AO VIVO",
+        "id": 1049
+    },
+    {
+        "nome": "NEW YEAR’S COUNTDOWN 2026: LIVE NEW YORK BALL DROP IN TIMES SQUARE",
+        "url": "https://www.youtube.com/watch?v=ZFuvytV-cuA",
+        "local": "New York, NY",
+        "setor": "US",
+        "pais": "US",
+        "tipo": "youtube",
+        "status": "AO VIVO",
+        "id": 1050
+    },
+    {
+        "nome": "TIMES SQUARE NEW YEAR'S EVE 2026 🎉 TIMES SQUARE BALL DROP NEW YEAR 2026 NEW YORK CITY LIVE",
+        "url": "https://www.youtube.com/watch?v=hZOAvCGeHKk",
+        "local": "New York, NY",
+        "setor": "US",
+        "pais": "US",
+        "tipo": "youtube",
+        "status": "AO VIVO",
+        "id": 1051
+    },
+    {
+        "nome": "LIVE: NEW YEAR'S EVE 2026 BALL DROP COUNTDOWN IN TIMES SQUARE",
+        "url": "https://www.youtube.com/watch?v=2gnXxRZ4fVA",
+        "local": "New York, NY",
+        "setor": "US",
+        "pais": "US",
+        "tipo": "youtube",
+        "status": "AO VIVO",
+        "id": 1052
+    },
+    {
+        "nome": "NYC DEMONSTRATORS CELEBRATE IRAN STRIKES - NEWSNATION LIVE",
+        "url": "https://www.youtube.com/watch?v=2hCEnvD-UZY",
+        "local": "New York, NY",
+        "setor": "US",
+        "pais": "US",
+        "tipo": "youtube",
+        "status": "AO VIVO",
+        "id": 1053
+    },
+    {
+        "nome": "【ライブ】渋谷スクランブル交差点 / SHIBUYA SCRAMBLE CROSSING LIVE CAMERA【LIVE】ANN/テレ朝",
+        "url": "https://www.youtube.com/watch?v=8H3nRCFVR6Y",
+        "local": "Tokyo, Japan",
+        "setor": "JP",
+        "pais": "JP",
+        "tipo": "youtube",
+        "status": "AO VIVO",
+        "id": 1054
+    },
+    {
+        "nome": "【ライブ】いまの渋谷・スクランブル交差点　ライブカメラ　SHIBUYA SCRAMBLE CROSSING - TOKYO, JAPAN　 LIVE CAM",
+        "url": "https://www.youtube.com/watch?v=dfVK7ld38Ys",
+        "local": "Tokyo, Japan",
+        "setor": "JP",
+        "pais": "JP",
+        "tipo": "youtube",
+        "status": "AO VIVO",
+        "id": 1055
+    },
+    {
+        "nome": "LIVE SHIBUYA CROSSING",
+        "url": "https://www.youtube.com/watch?v=wgJjg-_5r7s",
+        "local": "Tokyo, Japan",
+        "setor": "JP",
+        "pais": "JP",
+        "tipo": "youtube",
+        "status": "AO VIVO",
+        "id": 1056
+    },
+    {
+        "nome": "SHIBUYA CROSSING LIVE!",
+        "url": "https://www.youtube.com/watch?v=LcTiMJMWLQ0",
+        "local": "Tokyo, Japan",
+        "setor": "JP",
+        "pais": "JP",
+        "tipo": "youtube",
+        "status": "AO VIVO",
+        "id": 1057
+    },
+    {
+        "nome": "WALKING AT SHIBUYA CROSSING LIVE",
+        "url": "https://www.youtube.com/watch?v=Fz-N28wu1e8",
+        "local": "Tokyo, Japan",
+        "setor": "JP",
+        "pais": "JP",
+        "tipo": "youtube",
+        "status": "AO VIVO",
+        "id": 1058
+    },
+    {
+        "nome": "SHIBUYA CITY SCRAMBLE CROSSING LIVE CAMERA 1/15/2026 2:30 PM - 9:28 PM (PARTLY CLOUDY - NIGHT)",
+        "url": "https://www.youtube.com/watch?v=oqCXKim_l20",
+        "local": "Tokyo, Japan",
+        "setor": "JP",
+        "pais": "JP",
+        "tipo": "youtube",
+        "status": "AO VIVO",
+        "id": 1059
+    },
+    {
+        "nome": "【LIVE】深夜の散歩配信　渋谷スクランブル交差点ライブカメラ  SHIBUYA SCRAMBLE CROSSING LIVE CAMERA 2026 2/28",
+        "url": "https://www.youtube.com/watch?v=nlgIaQzB198",
+        "local": "Tokyo, Japan",
+        "setor": "JP",
+        "pais": "JP",
+        "tipo": "youtube",
+        "status": "AO VIVO",
+        "id": 1060
+    },
+    {
+        "nome": "LIVE FROM SHIBUYA CROSSING!",
+        "url": "https://www.youtube.com/watch?v=jL9q2Azkemo",
+        "local": "Tokyo, Japan",
+        "setor": "JP",
+        "pais": "JP",
+        "tipo": "youtube",
+        "status": "AO VIVO",
+        "id": 1061
+    },
+    {
+        "nome": "🔴 SHIBUYA CROSSING LIVE",
+        "url": "https://www.youtube.com/watch?v=JuCALnDsa_o",
+        "local": "Tokyo, Japan",
+        "setor": "JP",
+        "pais": "JP",
+        "tipo": "youtube",
+        "status": "AO VIVO",
+        "id": 1062
+    },
+    {
+        "nome": "🔴LIVE IN TOKYO - STARBUCKS SHIBUYA CROSSING AND WALKING TOUR",
+        "url": "https://www.youtube.com/watch?v=G9k_wuXOPTU",
+        "local": "Tokyo, Japan",
+        "setor": "JP",
+        "pais": "JP",
+        "tipo": "youtube",
+        "status": "AO VIVO",
+        "id": 1063
+    },
+    {
+        "nome": "🔴LIVE: TOKYO LIVE - SHIBUYA CROSSING LIVE - LOFI HIP HOP - LIVE CAMERA-",
+        "url": "https://www.youtube.com/watch?v=04BnG-ommVU",
+        "local": "Tokyo, Japan",
+        "setor": "JP",
+        "pais": "JP",
+        "tipo": "youtube",
+        "status": "AO VIVO",
+        "id": 1064
+    },
+    {
+        "nome": "SHIBUYA CROSSING LIVE",
+        "url": "https://www.youtube.com/watch?v=9z8bXlHvnOQ",
+        "local": "Tokyo, Japan",
+        "setor": "JP",
+        "pais": "JP",
+        "tipo": "youtube",
+        "status": "AO VIVO",
+        "id": 1065
+    },
+    {
+        "nome": "SHIBUYA CITY SCRAMBLE CROSSING LIVE CAMERA 1/1/2023 12:33 AM - 6:32 AM (MIDNIGHT - SUNRISE 2023)",
+        "url": "https://www.youtube.com/watch?v=Zy4Wsd5N0sk",
+        "local": "Tokyo, Japan",
+        "setor": "JP",
+        "pais": "JP",
+        "tipo": "youtube",
+        "status": "AO VIVO",
+        "id": 1066
+    },
+    {
+        "nome": "KENSINGTON PHILADELPHIA. CAM 7",
+        "url": "https://www.youtube.com/watch?v=KMgq36ZOMZA",
+        "local": "Philadelphia, PA",
+        "setor": "US",
+        "pais": "US",
+        "tipo": "youtube",
+        "status": "AO VIVO",
+        "id": 1067
+    },
+    {
+        "nome": "KENSINGTON. PHILADELPHIA, PA. CAM 3",
+        "url": "https://www.youtube.com/watch?v=YYiid3jUUQE",
+        "local": "Philadelphia, PA",
+        "setor": "US",
+        "pais": "US",
+        "tipo": "youtube",
+        "status": "AO VIVO",
+        "id": 1068
+    },
+    {
+        "nome": "CAM 5 KENSINGTON PHILADELPHIA PA.",
+        "url": "https://www.youtube.com/watch?v=DBVeaQdjHww",
+        "local": "Philadelphia, PA",
+        "setor": "US",
+        "pais": "US",
+        "tipo": "youtube",
+        "status": "AO VIVO",
+        "id": 1069
+    },
+    {
+        "nome": "CAM 6 C - KENSINGTON AVE. PHILADELPHIA.",
+        "url": "https://www.youtube.com/watch?v=ONUNOwtvbFQ",
+        "local": "Philadelphia, PA",
+        "setor": "US",
+        "pais": "US",
+        "tipo": "youtube",
+        "status": "AO VIVO",
+        "id": 1070
+    },
+    {
+        "nome": "KENSINGTON. PHILADELPHIA, PA. CAM 2",
+        "url": "https://www.youtube.com/watch?v=NEE-lS4NgjE",
+        "local": "Philadelphia, PA",
+        "setor": "US",
+        "pais": "US",
+        "tipo": "youtube",
+        "status": "AO VIVO",
+        "id": 1071
+    },
+    {
+        "nome": "CAM 6B KENSINGTON PHILADELPHIA",
+        "url": "https://www.youtube.com/watch?v=uFdi0c9u4hE",
+        "local": "Philadelphia, PA",
+        "setor": "US",
+        "pais": "US",
+        "tipo": "youtube",
+        "status": "AO VIVO",
+        "id": 1072
+    },
+    {
+        "nome": "KENSINGTON AVE PHILADELPHIA LIVE – HOMELESS STREET LIFE",
+        "url": "https://www.youtube.com/watch?v=CHy4Au0IiyI",
+        "local": "Philadelphia, PA",
+        "setor": "US",
+        "pais": "US",
+        "tipo": "youtube",
+        "status": "AO VIVO",
+        "id": 1073
+    }
+]
