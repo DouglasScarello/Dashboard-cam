@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Intelligence Catalog — Olho de Deus</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- HEADER -->
+<header class="header">
+  <div class="header-left">
+    <div class="logo">
+      <span class="logo-icon">👁</span>
+      <span class="logo-text">INTELLIGENCE<span class="logo-sub">CATALOG</span></span>
+    </div>
+    <div class="stats-bar" id="statsBar">
+      <span class="stat"><span class="dot red"></span><span id="statWanted">—</span> Procurados</span>
+      <span class="stat"><span class="dot amber"></span><span id="statMissing">—</span> Desaparecidos</span>
+      <span class="stat"><span class="dot cyan"></span><span id="statBio">—</span> Biometria</span>
+    </div>
+  </div>
+  <div class="search-wrap">
+    <span class="search-icon">⌕</span>
+    <input type="text" id="searchInput" class="search-input" placeholder="Buscar por nome, crime..." autocomplete="off">
+    <kbd class="search-kbd">↵</kbd>
+  </div>
+</header>
+
+<!-- FILTERS -->
+<div class="filters-bar">
+  <div class="filter-group">
+    <button class="filter-btn active" data-category="">Todos</button>
+    <button class="filter-btn red" data-category="wanted">🔴 Procurados</button>
+    <button class="filter-btn amber" data-category="missing">🟡 Desaparecidos</button>
+  </div>
+  <div class="filter-group">
+    <select id="sourceFilter" class="filter-select">
+      <option value="">Todas as fontes</option>
+      <option value="FBI">FBI</option>
+      <option value="Interpol Red">Interpol Red</option>
+      <option value="Interpol Yellow">Interpol Yellow</option>
+      <option value="NCA">NCA UK</option>
+      <option value="Europol">Europol</option>
+    </select>
+    <select id="countryFilter" class="filter-select">
+      <option value="">Todos os países</option>
+      <option value="us">🇺🇸 EUA</option>
+      <option value="br">🇧🇷 Brasil</option>
+      <option value="ru">🇷🇺 Rússia</option>
+      <option value="mx">🇲🇽 México</option>
+      <option value="cn">🇨🇳 China</option>
+      <option value="ir">🇮🇷 Irã</option>
+      <option value="de">🇩🇪 Alemanha</option>
+      <option value="gb">🇬🇧 UK</option>
+    </select>
+    <label class="filter-toggle">
+      <input type="checkbox" id="bioOnly">
+      <span class="toggle-label">🧬 Só com biometria</span>
+    </label>
+  </div>
+  <div class="filter-right">
+    <span id="resultCount" class="result-count">— resultados</span>
+    <button class="icon-btn" id="exportBtn" title="Exportar CSV">↓ CSV</button>
+  </div>
+</div>
+
+<!-- GRID -->
+<main class="main">
+  <div class="grid" id="grid"></div>
+  <div class="load-more-wrap">
+    <button class="load-more-btn" id="loadMoreBtn">Carregar mais</button>
+  </div>
+  <div class="empty-state" id="emptyState" style="display:none">
+    <span class="empty-icon">🔍</span>
+    <p>Nenhum resultado encontrado.</p>
+  </div>
+</main>
+
+<!-- MODAL DE DETALHE -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal" id="modal">
+    <button class="modal-close" id="modalClose">✕</button>
+    <div class="modal-body" id="modalBody"></div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script src="main.js"></script>
+</body>
+</html>

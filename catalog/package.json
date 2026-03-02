@@ -1,0 +1,12 @@
+{
+    "name": "intelligence-catalog",
+    "version": "1.0.0",
+    "private": true,
+    "scripts": {
+        "dev": "cargo tauri dev",
+        "build": "cargo tauri build"
+    },
+    "devDependencies": {
+        "@tauri-apps/cli": "^2"
+    }
+}

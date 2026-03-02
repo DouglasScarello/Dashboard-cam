@@ -1,0 +1,10 @@
+/home/douglasdsr/Documentos/Projects/FBI/Dashboard/catalog/src-tauri/target/debug/deps/zbus_macros-fa114a4f84ceeb92.d: /home/douglasdsr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/zbus_macros-5.14.0/src/lib.rs /home/douglasdsr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/zbus_macros-5.14.0/src/error.rs /home/douglasdsr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/zbus_macros-5.14.0/src/iface.rs /home/douglasdsr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/zbus_macros-5.14.0/src/proxy.rs /home/douglasdsr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/zbus_macros-5.14.0/src/utils.rs /home/douglasdsr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/zbus_macros-5.14.0/src/../README.md
+
+/home/douglasdsr/Documentos/Projects/FBI/Dashboard/catalog/src-tauri/target/debug/deps/libzbus_macros-fa114a4f84ceeb92.so: /home/douglasdsr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/zbus_macros-5.14.0/src/lib.rs /home/douglasdsr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/zbus_macros-5.14.0/src/error.rs /home/douglasdsr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/zbus_macros-5.14.0/src/iface.rs /home/douglasdsr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/zbus_macros-5.14.0/src/proxy.rs /home/douglasdsr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/zbus_macros-5.14.0/src/utils.rs /home/douglasdsr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/zbus_macros-5.14.0/src/../README.md
+
+/home/douglasdsr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/zbus_macros-5.14.0/src/lib.rs:
+/home/douglasdsr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/zbus_macros-5.14.0/src/error.rs:
+/home/douglasdsr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/zbus_macros-5.14.0/src/iface.rs:
+/home/douglasdsr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/zbus_macros-5.14.0/src/proxy.rs:
+/home/douglasdsr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/zbus_macros-5.14.0/src/utils.rs:
+/home/douglasdsr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/zbus_macros-5.14.0/src/../README.md:

@@ -1,0 +1,21 @@
+[package]
+name = "intelligence-catalog"
+version = "1.0.0"
+description = "Intelligence Catalog — Olho de Deus OSS"
+authors = ["Olho de Deus"]
+edition = "2021"
+
+[lib]
+name = "intelligence_catalog_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri           = { version = "2", features = [] }
+tauri-plugin-opener = "2"
+serde           = { version = "1", features = ["derive"] }
+serde_json      = "1"
+rusqlite        = { version = "0.31", features = ["bundled"] }
+base64          = "0.22"

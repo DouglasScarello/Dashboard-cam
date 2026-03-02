@@ -1,0 +1,32 @@
+{
+    "$schema": "https://schema.tauri.app/config/2",
+    "productName": "intelligence-catalog",
+    "version": "1.0.0",
+    "identifier": "com.olhodedeus.intelligence-catalog",
+    "build": {
+        "frontendDist": "../src"
+    },
+    "app": {
+        "withGlobalTauri": true,
+        "windows": [
+            {
+                "title": "Intelligence Catalog — Olho de Deus",
+                "width": 1440,
+                "height": 900,
+                "minWidth": 1024,
+                "minHeight": 600,
+                "resizable": true,
+                "fullscreen": false,
+                "decorations": true
+            }
+        ],
+        "security": {
+            "csp": null
+        }
+    },
+    "bundle": {
+        "active": true,
+        "targets": "all",
+        "icon": []
+    }
+}
