@@ -10,6 +10,8 @@ package-mode = false
 python = "^3.10"
 opencv-python = "^4.13.0.92"
 yt-dlp = "^2026.2.21"
+requests = "^2.32.5"
+beautifulsoup4 = "^4.14.3"
 
 [build-system]
 requires = ["poetry-core"]
