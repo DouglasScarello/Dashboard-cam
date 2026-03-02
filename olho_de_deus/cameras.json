@@ -1,0 +1,40 @@
+{
+    "BR": {
+        "name": "Brasil",
+        "states": {
+            "SC": {
+                "name": "Santa Catarina",
+                "cities": {
+                    "Florianópolis": {
+                        "cameras": [
+                            {
+                                "id": "c3LNbKb45go",
+                                "name": "Beira Mar Norte (Koxixos)",
+                                "description": "Câmera ao vivo da Maaxcam na Beira Mar Norte, Florianópolis.",
+                                "type": "youtube_live",
+                                "lat": -27.5867,
+                                "long": -48.5445
+                            },
+                            {
+                                "id": "TBJzToxEvmk",
+                                "name": "Ponte Hercílio Luz",
+                                "description": "Câmera ao vivo da Maaxcam na Ponte Hercílio Luz.",
+                                "type": "youtube_live",
+                                "lat": -27.5938,
+                                "long": -48.5658
+                            },
+                            {
+                                "id": "GZWIulHdbFM",
+                                "name": "Trapiche Beira Mar Norte",
+                                "description": "Câmera ao vivo do Trapiche da Beira Mar Norte.",
+                                "type": "youtube_live",
+                                "lat": -27.5841,
+                                "long": -48.5492
+                            }
+                        ]
+                    }
+                }
+            }
+        }
+    }
+}

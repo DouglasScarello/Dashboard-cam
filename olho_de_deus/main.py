@@ -1,234 +1,210 @@
 #!/usr/bin/env python3
 """
-Olho de Deus - Módulo de captura de frames com suporte a arquivos locais
-
-Objetivo:
-- Ler frames de arquivos de vídeo local (MP4, AVI, MKV, etc.)
-- Suportar navegação por frame (próximo/anterior)
-- Preparar frames para futura análise de IA de reconhecimento facial
-
-Requisitos (já instalados):
-- opencv-python
-
-Como usar (arquivo local):
-$ python3 main.py --source /caminho/para/video.mp4 --mode file
-
-Controles:
-- Espaço: Pause/Resume
-- Seta Direita (→): Próximo frame
-- Seta Esquerda (←): Frame anterior
-- 'r': Resetar para o início
-- 'q': Sair
-- '+'/'-': Ajustar intervalo de processamento (em modo auto)
-
+Olho de Deus - Módulo Central de Monitoramento
+Suporta: Arquivos Locais, Streams de YouTube e Estrutura Geográfica.
 """
 
 import time
 import argparse
 import sys
 import os
-from typing import Optional, Tuple
+import json
+from typing import Optional, Tuple, List, Dict
 
 import cv2
+import yt_dlp
+import numpy as np
 
+# Importar o módulo de stream se estiver no mesmo diretório
+try:
+    from youtube_stream import get_live_url, check_stream_health
+except ImportError:
+    # Fallback se rodar de outro lugar
+    sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+    from youtube_stream import get_live_url, check_stream_health
 
-class VideoPlayer:
-    """Leitor de vídeo com suporte a navegação por frame."""
+class CameraLoader:
+    """Gerencia a hierarquia de câmeras do arquivo JSON."""
+    def __init__(self, json_path: str):
+        if not os.path.exists(json_path):
+            self.data = {}
+        else:
+            with open(json_path, 'r', encoding='utf-8') as f:
+                self.data = json.load(f)
 
-    def __init__(self, video_path: str):
-        """Inicializa o leitor de vídeo."""
-        if not os.path.exists(video_path):
-            raise FileNotFoundError(f"Arquivo não encontrado: {video_path}")
+    def find_camera(self, name: str) -> Optional[dict]:
+        """Busca câmera pelo nome em toda a hierarquia."""
+        for country in self.data.values():
+            for state in country.get("states", {}).values():
+                for city in state.get("cities", {}).values():
+                    for cam in city.get("cameras", []):
+                        if name.lower() in cam["name"].lower():
+                            return cam
+        return None
 
-        self.video_path = video_path
-        self.cap = cv2.VideoCapture(video_path)
+    def list_locations(self):
+        """Lista a estrutura disponível."""
+        print("\n[info] Localizações disponíveis:")
+        for country_code, country in self.data.items():
+            print(f"  - {country['name']} ({country_code})")
+            for state_code, state in country.get("states", {}).items():
+                print(f"    - {state['name']} ({state_code})")
+                for city_name in state.get("cities", {}).keys():
+                    print(f"      - {city_name}")
 
-        if not self.cap.isOpened():
-            raise RuntimeError(f"Não foi possível abrir o vídeo: {video_path}")
+class VideoMonitor:
+    """Gerencia a captura e exibição de vídeo com auto-healing."""
+    def __init__(self, source: str, youtube_id: Optional[str] = None):
+        self.source = source
+        self.youtube_id = youtube_id
+        self.cap = self._init_capture()
+        self.window_name = "Olho de Deus - OSS"
+        cv2.namedWindow(self.window_name, cv2.WINDOW_NORMAL)
+        cv2.resizeWindow(self.window_name, 1280, 720)
 
-        # Propriedades do vídeo
-        self.frame_count = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        self.fps = self.cap.get(cv2.CAP_PROP_FPS) or 30.0
-        self.frame_width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        self.frame_height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        self.current_frame_idx = 0
-        self.paused = False
+    def _init_capture(self):
+        cap = cv2.VideoCapture(self.source)
+        if not cap.isOpened():
+            print(f"[error] Falha ao abrir fonte: {self.source}")
+            return None
+        return cap
 
-        print(f"[info] Vídeo carregado: {video_path}")
-        print(f"[info]   Frames: {self.frame_count} | FPS: {self.fps:.1f} | Resolução: {self.frame_width}x{self.frame_height}")
+    def play(self, interval: float = 2.0):
+        """Inicia o loop de captura e processamento."""
+        if not self.cap:
+            print("[error] Não foi possível iniciar o monitoramento devido a falha na fonte.")
+            return
 
-    def read_frame(self) -> Optional[Tuple[bool, any]]:
-        """Lê o frame atual. Retorna (sucesso, frame)."""
-        ret, frame = self.cap.read()
-        if ret:
-            self.current_frame_idx = int(self.cap.get(cv2.CAP_PROP_POS_FRAMES))
-        return ret, frame
+        print(f"\n[sistema] Iniciando monitoramento (Intervalo: {interval}s)")
+        print("[controle] 'q' para sair | 's' para salvar frame\n")
 
-    def set_frame(self, frame_idx: int) -> bool:
-        """Posiciona o vídeo em um frame específico."""
-        frame_idx = max(0, min(frame_idx, self.frame_count - 1))
-        ret = self.cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
-        if ret:
-            self.current_frame_idx = frame_idx
-        return ret
+        last_time = 0
+        consecutive_failures = 0
+        
+        try:
+            while True:
+                current_time = time.time()
+                
+                # Controle de intervalo de processamento
+                if (current_time - last_time) < interval:
+                    if cv2.waitKey(1) & 0xFF == ord('q'):
+                        break
+                    continue
 
-    def next_frame(self) -> bool:
-        """Avança para o próximo frame."""
-        return self.set_frame(self.current_frame_idx + 1)
+                ret, frame = self.cap.read()
 
-    def prev_frame(self) -> bool:
-        """Volta para o frame anterior."""
-        return self.set_frame(self.current_frame_idx - 1)
+                # --- AUTO-HEALING LOGIC ---
+                is_healthy = check_stream_health(frame) if ret else False
+                
+                if not ret or not is_healthy:
+                    consecutive_failures += 1
+                    status_msg = "ERRO DE CAPTURA" if not ret else "STREAM INVÁLIDA (TELA PRETA)"
+                    print(f"[warning] {status_msg} ({consecutive_failures}/3)") # Changed to 3 for consistency with snippet
+                    
+                    if consecutive_failures >= 3: # Changed to 3 for consistency with snippet
+                        print("[auto-healing] Tentando re-sincronizar stream...")
+                        # Se for YouTube, tentar pegar nova URL
+                        if self.youtube_id:
+                            new_url = get_live_url(self.youtube_id)
+                            if new_url:
+                                self.source = new_url
+                            else:
+                                print("[error] Não foi possível obter nova URL do stream. Encerrando.")
+                                break
+                        
+                        self.cap.release()
+                        self.cap = self._init_capture()
+                        if not self.cap:
+                            print("[error] Falha ao re-inicializar a captura. Encerrando.")
+                            break
+                        consecutive_failures = 0
+                        time.sleep(2)
+                    
+                    last_time = current_time
+                    continue
+                
+                consecutive_failures = 0 # Reset se o frame for bom
+                last_time = current_time
 
-    def reset(self) -> bool:
-        """Volta para o início do vídeo."""
-        return self.set_frame(0)
+                # Exibição e Interface
+                display_frame = frame.copy()
+                
+                # Barra de Status Superior (Estilo FBI/OSS)
+                h, w = display_frame.shape[:2]
+                cv2.rectangle(display_frame, (0, 0), (w, 40), (0, 0, 0), -1)
+                monitor_label = self.youtube_id if self.youtube_id else "LOCAL"
+                status_text = f"OSS v0.1 | STATUS: AO VIVO | MONITOR: {monitor_label}"
+                cv2.putText(display_frame, status_text, (10, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+                
+                # Health Indicator
+                cv2.circle(display_frame, (w - 20, 20), 8, (0, 255, 0), -1)
 
-    def get_position_str(self) -> str:
-        """Retorna string com frame atual / total."""
-        return f"Frame {self.current_frame_idx + 1}/{self.frame_count}"
+                cv2.imshow(self.window_name, display_frame)
+                
+                key = cv2.waitKey(1) & 0xFF
+                if key == ord('q'):
+                    break
+                elif key == ord('s'):
+                    timestamp = int(time.time())
+                    filename = f"capture_{timestamp}.jpg"
+                    cv2.imwrite(filename, frame)
+                    print(f"[info] Frame salvo: {filename}")
 
-    def close(self):
-        """Fecha o leitor de vídeo."""
-        if self.cap:
-            self.cap.release()
-
+        except KeyboardInterrupt:
+            print("[info] Encerrando...")
+        finally:
+            if self.cap:
+                self.cap.release()
+            cv2.destroyAllWindows()
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Olho de Deus - Leitor de vídeo com navegação por frame"
-    )
-    parser.add_argument(
-        "--source", 
-        required=False,
-        default=None,
-        help="Caminho do arquivo de vídeo local (MP4, AVI, MKV, etc.)"
-    )
-    parser.add_argument(
-        "--mode",
-        required=False,
-        default="file",
-        choices=["file", "auto"],
-        help="Modo de operação: 'file' (manual) ou 'auto' (processamento automático)"
-    )
-    parser.add_argument(
-        "--interval",
-        required=False,
-        type=float,
-        default=1.0,
-        help="Intervalo em segundos entre frames a processar (modo auto)"
-    )
+    parser = argparse.ArgumentParser(description="Olho de Deus - Monitoramento Inteligente")
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument("--source", help="Caminho do arquivo de vídeo local")
+    group.add_argument("--cam", help="Nome da câmera no registro (ex: 'Koxixos', 'Ponte')")
+    group.add_argument("--id", help="ID direto do YouTube")
+    
+    parser.add_argument("--mode", default="auto", choices=["file", "auto"], help="Modo de operação")
+    parser.add_argument("--interval", type=float, default=2.0, help="Intervalo em segundos (Vivobook: 2-5s)")
+    parser.add_argument("--list", action="store_true", help="Listar câmeras e locais disponíveis")
+    
     args = parser.parse_args()
 
-    # Se não forneceu arquivo, pedir interativamente
-    if not args.source:
-        args.source = input("[input] Caminho do arquivo de vídeo: ").strip()
+    loader = CameraLoader("cameras.json")
 
-    if not args.source:
-        print("[error] Nenhum arquivo fornecido.")
+    if args.list:
+        loader.list_locations()
+        sys.exit(0)
+
+    video_source = None
+    stream_id = None
+
+    if args.source:
+        video_source = args.source
+    elif args.cam:
+        cam_data = loader.find_camera(args.cam)
+        if cam_data:
+            print(f"[info] Câmera encontrada: {cam_data['name']} ({cam_data['description']})")
+            stream_id = cam_data["id"]
+        else:
+            print(f"[error] Câmera '{args.cam}' não encontrada.")
+            sys.exit(1)
+    elif args.id:
+        stream_id = args.id
+    else:
+        print("[warning] Nenhuma fonte especificada. Use --source, --cam, --id ou --list.")
         sys.exit(1)
 
-    # Inicializar leitor de vídeo
-    try:
-        player = VideoPlayer(args.source)
-    except Exception as e:
-        print(f"[error] Falha ao carregar vídeo: {e}")
-        sys.exit(1)
+    # Se for stream do YouTube, obter a URL real
+    if stream_id:
+        video_source = get_live_url(stream_id)
+        if not video_source:
+            print("[error] Não foi possível obter URL do stream.")
+            sys.exit(1)
 
-    window_name = "Olho de Deus - Frame (Espaço: Pause | Setas: Next/Prev | R: Reset | Q: Sair)"
-    cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
-    cv2.resizeWindow(window_name, 960, 540)
-
-    print("[info] Controles:")
-    print("  - Espaço: Pause/Resume")
-    print("  - Seta Direita (→): Próximo frame")
-    print("  - Seta Esquerda (←): Frame anterior")
-    print("  - 'r': Resetar para o início")
-    print("  - '+'/'-': Ajustar intervalo (modo auto)")
-    print("  - 'q': Sair")
-
-    last_processed = 0.0
-    process_interval = max(0.001, args.interval)
-    auto_play = args.mode == "auto"
-
-    try:
-        while True:
-            # Ler frame
-            ret, frame = player.read_frame()
-            if not ret:
-                print("[info] Fim do vídeo alcançado.")
-                break
-
-            now = time.time()
-
-            # Modo auto: processar frames em intervalo
-            if auto_play and now - last_processed >= process_interval:
-                last_processed = now
-                frame_for_processing = frame.copy()
-                # TODO: Inserir IA de reconhecimento facial aqui
-                # - Ex: results = face_model.detect(frame_for_processing)
-            else:
-                frame_for_processing = frame.copy()
-
-            # Adicionar info de posição ao frame (overlay)
-            info_text = player.get_position_str()
-            status_text = "[AUTO]" if auto_play else "[MANUAL]"
-            if player.paused:
-                status_text += " [PAUSADO]"
-            
-            cv2.putText(
-                frame_for_processing,
-                f"{info_text} {status_text}",
-                (10, 30),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.7,
-                (0, 255, 0),
-                2
-            )
-
-            # Exibir frame
-            cv2.imshow(window_name, frame_for_processing)
-
-            # Capturar input de teclado
-            key = cv2.waitKey(30) & 0xFF
-
-            if key == ord("q"):
-                print("[info] Encerrando...")
-                break
-            elif key == ord(" "):  # Espaço: Pause/Resume
-                player.paused = not player.paused
-                status = "PAUSADO" if player.paused else "RETOMADO"
-                print(f"[info] {status}")
-            elif key == 83 or key == 2555904:  # Seta Direita
-                if player.paused or not auto_play:
-                    player.next_frame()
-                    print(f"[info] Próximo frame: {player.get_position_str()}")
-            elif key == 81 or key == 2424832:  # Seta Esquerda
-                if player.paused or not auto_play:
-                    player.prev_frame()
-                    print(f"[info] Frame anterior: {player.get_position_str()}")
-            elif key == ord("r"):
-                player.reset()
-                print("[info] Vídeo resetado para o início.")
-            elif key == ord("+") or key == ord("="):
-                process_interval = max(0.1, process_interval - 0.1)
-                print(f"[info] Intervalo: {process_interval:.1f}s")
-            elif key == ord("-"):
-                process_interval = min(5.0, process_interval + 0.1)
-                print(f"[info] Intervalo: {process_interval:.1f}s")
-
-            # Em modo manual ou pausado, ficar esperando input
-            if (not auto_play or player.paused) and key == 255:
-                time.sleep(0.05)
-
-    except KeyboardInterrupt:
-        print("[info] Interrompido pelo usuário (KeyboardInterrupt)")
-
-    finally:
-        player.close()
-        cv2.destroyAllWindows()
-        print("[info] Encerrado com sucesso.")
-
+    # Iniciar monitoramento usando a nova classe VideoMonitor (Auto-Healing)
+    monitor = VideoMonitor(video_source, youtube_id=stream_id)
+    monitor.play(interval=args.interval)
 
 if __name__ == "__main__":
     main()

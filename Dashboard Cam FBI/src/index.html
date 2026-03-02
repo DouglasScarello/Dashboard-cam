@@ -40,39 +40,12 @@
     </header>
 
     <main class="flex-1 overflow-hidden flex flex-col">
-        <!-- Barra de Setores / Filtros -->
-        <div class="bg-gray-900 border-b border-gray-800 p-2 overflow-x-auto whitespace-nowrap flex space-x-2">
-            <button id="btn-ALL" onclick="filterBySector('ALL')" class="sector-btn bg-emerald-600 text-white px-4 py-1 rounded text-xs font-bold uppercase tracking-widest border border-emerald-500 transition-all font-mono">Global</button>
-            <button id="btn-FL" onclick="filterBySector('FL')" class="sector-btn bg-gray-800 text-gray-400 px-4 py-1 rounded text-xs font-bold uppercase tracking-widest border border-gray-700 hover:border-emerald-500 transition-all font-mono">FL</button>
-            <button id="btn-NY" onclick="filterBySector('NY')" class="sector-btn bg-gray-800 text-gray-400 px-4 py-1 rounded text-xs font-bold uppercase tracking-widest border border-gray-700 hover:border-emerald-500 transition-all font-mono">NY</button>
-            <button id="btn-TX" onclick="filterBySector('TX')" class="sector-btn bg-gray-800 text-gray-400 px-4 py-1 rounded text-xs font-bold uppercase tracking-widest border border-gray-700 hover:border-emerald-500 transition-all font-mono">TX</button>
-            <button id="btn-CA" onclick="filterBySector('CA')" class="sector-btn bg-gray-800 text-gray-400 px-4 py-1 rounded text-xs font-bold uppercase tracking-widest border border-gray-700 hover:border-emerald-500 transition-all font-mono">CA</button>
-            <button id="btn-GA" onclick="filterBySector('GA')" class="sector-btn bg-gray-800 text-gray-400 px-4 py-1 rounded text-xs font-bold uppercase tracking-widest border border-gray-700 hover:border-emerald-500 transition-all font-mono">GA</button>
-            <button id="btn-NV" onclick="filterBySector('NV')" class="sector-btn bg-gray-800 text-gray-400 px-4 py-1 rounded text-xs font-bold uppercase tracking-widest border border-gray-700 hover:border-emerald-500 transition-all font-mono">NV</button>
-            <button id="btn-IL" onclick="filterBySector('IL')" class="sector-btn bg-gray-800 text-gray-400 px-4 py-1 rounded text-xs font-bold uppercase tracking-widest border border-gray-700 hover:border-emerald-500 transition-all font-mono">IL</button>
-            <button id="btn-WA" onclick="filterBySector('WA')" class="sector-btn bg-gray-800 text-gray-400 px-4 py-1 rounded text-xs font-bold uppercase tracking-widest border border-gray-700 hover:border-emerald-500 transition-all font-mono">WA</button>
-            <button id="btn-NC" onclick="filterBySector('NC')" class="sector-btn bg-gray-800 text-gray-400 px-4 py-1 rounded text-xs font-bold uppercase tracking-widest border border-gray-700 hover:border-emerald-500 transition-all font-mono">NC</button>
-            <button id="btn-PA" onclick="filterBySector('PA')" class="sector-btn bg-gray-800 text-gray-400 px-4 py-1 rounded text-xs font-bold uppercase tracking-widest border border-gray-700 hover:border-emerald-500 transition-all font-mono">PA</button>
-            <button id="btn-TN" onclick="filterBySector('TN')" class="sector-btn bg-gray-800 text-gray-400 px-4 py-1 rounded text-xs font-bold uppercase tracking-widest border border-gray-700 hover:border-emerald-500 transition-all font-mono">TN</button>
-            <button id="btn-LA" onclick="filterBySector('LA')" class="sector-btn bg-gray-800 text-gray-400 px-4 py-1 rounded text-xs font-bold uppercase tracking-widest border border-gray-700 hover:border-emerald-500 transition-all font-mono">LA</button>
-            <button id="btn-VA" onclick="filterBySector('VA')" class="sector-btn bg-gray-800 text-gray-400 px-4 py-1 rounded text-xs font-bold uppercase tracking-widest border border-gray-700 hover:border-emerald-500 transition-all font-mono">VA</button>
-            <button id="btn-MD" onclick="filterBySector('MD')" class="sector-btn bg-gray-800 text-gray-400 px-4 py-1 rounded text-xs font-bold uppercase tracking-widest border border-gray-700 hover:border-emerald-500 transition-all font-mono">MD</button>
-            <button id="btn-CO" onclick="filterBySector('CO')" class="sector-btn bg-gray-800 text-gray-400 px-4 py-1 rounded text-xs font-bold uppercase tracking-widest border border-gray-700 hover:border-emerald-500 transition-all font-mono">CO</button>
-            <button id="btn-AZ" onclick="filterBySector('AZ')" class="sector-btn bg-gray-800 text-gray-400 px-4 py-1 rounded text-xs font-bold uppercase tracking-widest border border-gray-700 hover:border-emerald-500 transition-all font-mono">AZ</button>
-            <button id="btn-OH" onclick="filterBySector('OH')" class="sector-btn bg-gray-800 text-gray-400 px-4 py-1 rounded text-xs font-bold uppercase tracking-widest border border-gray-700 hover:border-emerald-500 transition-all font-mono">OH</button>
-            <button id="btn-MI" onclick="filterBySector('MI')" class="sector-btn bg-gray-800 text-gray-400 px-4 py-1 rounded text-xs font-bold uppercase tracking-widest border border-gray-700 hover:border-emerald-500 transition-all font-mono">MI</button>
-            <button id="btn-MN" onclick="filterBySector('MN')" class="sector-btn bg-gray-800 text-gray-400 px-4 py-1 rounded text-xs font-bold uppercase tracking-widest border border-gray-700 hover:border-emerald-500 transition-all font-mono">MN</button>
-            <button id="btn-MA" onclick="filterBySector('MA')" class="sector-btn bg-gray-800 text-gray-400 px-4 py-1 rounded text-xs font-bold uppercase tracking-widest border border-gray-700 hover:border-emerald-500 transition-all font-mono">MA</button>
-            <button id="btn-INTL" onclick="filterBySector('INTL')" class="sector-btn bg-gray-800 text-gray-400 px-4 py-1 rounded text-xs font-bold uppercase tracking-widest border border-gray-700 hover:border-emerald-500 transition-all font-mono">INTL</button>
-            
-            <div class="border-l border-gray-700 mx-2 h-6 self-center"></div>
-            
-            <button onclick="openBulkModal()" class="bg-blue-900 hover:bg-blue-800 text-blue-100 px-4 py-1 rounded text-xs font-bold uppercase tracking-widest border border-blue-700 transition-all flex items-center font-mono">
-                IMPORTAÇÃO BULK
-            </button>
+        <!-- Barra de Setores / Filtros (Dinamizada para Hierarquia) -->
+        <div id="filterBar" class="bg-gray-900 border-b border-gray-800 p-2 overflow-x-auto whitespace-nowrap flex space-x-2 items-center">
+            <!-- Gerado via JavaScript -->
         </div>
 
-        <div id="cameraGrid" class="flex-1 overflow-y-auto p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+        <div id="cameraGrid" class="flex-1 overflow-y-auto p-3" style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px;">
         </div>
     </main>
 
@@ -179,67 +152,152 @@
         let currentSector = 'ALL';
 
         // === SISTEMA DE VERSIONAMENTO DO DATASET ===
-        const OSS_DATASET_VERSION = '5.0'; // 2026: EarthCam + YouTube streams verificados com foco em ruas/pessoas
+        const OSS_DATASET_VERSION = '14.0'; // Auto-Healing & Thumbnail First
 
         const DEFAULT_CAMERAS = [
-            // ═══ NEW YORK — EarthCam 🎥 ═══
-            { id: 10, nome: "EARTHCAM — TIMES SQUARE NYC 🗽", status: "AO VIVO", url: "https://www.earthcam.com/usa/newyork/timessquare/?cam=tsrobo1", local: "Times Square, NY", setor: "NY", tipo: "earthcam" },
-            { id: 11, nome: "EARTHCAM — NEW YORK CITY MIDTOWN", status: "AO VIVO", url: "https://www.earthcam.com/usa/newyork/42ndstreet/?cam=42nd_st", local: "Midtown Manhattan, NY", setor: "NY", tipo: "earthcam" },
-            { id: 12, nome: "NYC WINTER STORM — RUAS AO VIVO 🌨", status: "AO VIVO", url: "https://www.youtube.com/watch?v=M-58uNMXGOI", local: "New York, NY", setor: "NY", tipo: "youtube" },
-            { id: 13, nome: "NYC TIMES SQUARE 24/7 — PEDESTRES", status: "AO VIVO", url: "https://www.youtube.com/watch?v=1EiC9bvVGnk", local: "Times Square, NY", setor: "NY", tipo: "youtube" },
-            // ═══ TENNESSEE — EarthCam Nashville 👁 ═══
-            { id: 70, nome: "EARTHCAM — NASHVILLE BROADWAY 🎸", status: "AO VIVO", url: "https://www.earthcam.com/usa/tennessee/nashville/?cam=nashville", local: "Nashville, TN", setor: "TN", tipo: "earthcam" },
-            { id: 71, nome: "NASHVILLE BROADWAY LIVE 24/7", status: "AO VIVO", url: "https://www.youtube.com/watch?v=ej-j7bTjMfc", local: "Nashville, TN", setor: "TN", tipo: "youtube" },
-            // ═══ NEVADA — EarthCam Las Vegas 🎰 ═══
-            { id: 80, nome: "EARTHCAM — LAS VEGAS STRIP 🎰", status: "AO VIVO", url: "https://www.earthcam.com/usa/nevada/lasvegas/?cam=lasvegas", local: "Las Vegas, NV", setor: "NV", tipo: "earthcam" },
-            { id: 81, nome: "LAS VEGAS STRIP LIVE 24/7", status: "AO VIVO", url: "https://www.youtube.com/watch?v=wSg9b4RjIXM", local: "Las Vegas, NV", setor: "NV", tipo: "youtube" },
-            { id: 82, nome: "FREMONT STREET LV LIVE", status: "AO VIVO", url: "https://www.youtube.com/watch?v=TtaQuaI80LU", local: "Las Vegas, NV", setor: "NV", tipo: "youtube" },
-            // ═══ ILLINOIS — EarthCam Chicago ═══
-            { id: 50, nome: "EARTHCAM — CHICAGO MILLENNIUM PARK 🌆", status: "AO VIVO", url: "https://www.earthcam.com/usa/illinois/chicago/?cam=chicago", local: "Chicago, IL", setor: "IL", tipo: "earthcam" },
-            { id: 51, nome: "CHICAGO DOWNTOWN 24/7", status: "AO VIVO", url: "https://www.youtube.com/watch?v=pDkPaxb0UlY", local: "Chicago, IL", setor: "IL", tipo: "youtube" },
-            // ═══ FLÓRIDA — EarthCam + FL511 ═══
-            { id: 1, nome: "EARTHCAM — MIAMI BEACH OCEAN DRIVE 🏖️", status: "AO VIVO", url: "https://www.earthcam.com/usa/florida/miamibeach/?cam=miamibeach", local: "Miami Beach, FL", setor: "FL", tipo: "earthcam" },
-            { id: 2, nome: "FL511 - I-95 MIAMI DOWNTOWN", status: "AO VIVO", url: "https://fl511.com/map/Cctv/1164CCTV1164CCTV2", local: "Miami, FL", setor: "FL", tipo: "iframe" },
-            { id: 3, nome: "FL511 - I-4 ORLANDO", status: "AO VIVO", url: "https://fl511.com/map/Cctv/1004CCTV1004CCTV1", local: "Orlando, FL", setor: "FL", tipo: "iframe" },
-            { id: 4, nome: "ELBO ROOM BAR CAM 24/7 🍺", status: "AO VIVO", url: "https://www.youtube.com/watch?v=OkQ0utdxwBY", local: "Fort Lauderdale, FL", setor: "FL", tipo: "youtube" },
-            // ═══ CALIFÓRNIA — EarthCam + Ruas 👁 ═══
-            { id: 20, nome: "EARTHCAM — SANTA MONICA PIER 🌊", status: "AO VIVO", url: "https://www.earthcam.com/usa/california/santamonica/?cam=santamonica", local: "Santa Monica, CA", setor: "CA", tipo: "earthcam" },
-            { id: 21, nome: "VENICE BEACH BOARDWALK 24/7", status: "AO VIVO", url: "https://www.youtube.com/watch?v=86YLFOog4GM", local: "Venice Beach, CA", setor: "CA", tipo: "youtube" },
-            { id: 22, nome: "LA LIVE — SKID ROW", status: "AO VIVO", url: "https://www.youtube.com/watch?v=NsmJg4oSDVg", local: "Los Angeles, CA", setor: "CA", tipo: "youtube" },
-            // ═══ PENSILVÂNIA — Kensington 👁 ═══
-            { id: 30, nome: "KENSINGTON AVE CAM 3 👁", status: "AO VIVO", url: "https://www.youtube.com/watch?v=YYiid3jUUQE", local: "Philadelphia, PA", setor: "PA", tipo: "youtube" },
-            { id: 31, nome: "KENSINGTON AVE CAM 6C 👁", status: "AO VIVO", url: "https://www.youtube.com/watch?v=ONUNOwtvbFQ", local: "Philadelphia, PA", setor: "PA", tipo: "youtube" },
-            // ═══ TEXAS ═══
-            { id: 40, nome: "HOUSTON DOWNTOWN LIVE", status: "AO VIVO", url: "https://www.youtube.com/watch?v=H3PcHUdmTNQ", local: "Houston, TX", setor: "TX", tipo: "youtube" },
-            { id: 41, nome: "DALLAS STREETS LIVE CAM", status: "AO VIVO", url: "https://www.youtube.com/watch?v=mB2tMoSKJk0", local: "Dallas, TX", setor: "TX", tipo: "youtube" },
-            // ═══ GEORGIA ═══
-            { id: 90, nome: "EARTHCAM — SAVANNAH RIVER STREET 🌿", status: "AO VIVO", url: "https://www.earthcam.com/usa/georgia/savannah/?cam=savannah", local: "Savannah, GA", setor: "GA", tipo: "earthcam" },
-            { id: 91, nome: "ATLANTA DOWNTOWN LIVE", status: "AO VIVO", url: "https://www.youtube.com/watch?v=bUfJLMSS5hI", local: "Atlanta, GA", setor: "GA", tipo: "youtube" },
-            // ═══ MASSACHUSETTS ═══
-            { id: 110, nome: "EARTHCAM — BOSTON FANEUIL HALL 🦞", status: "AO VIVO", url: "https://www.earthcam.com/usa/massachusetts/boston/?cam=boston", local: "Boston, MA", setor: "MA", tipo: "earthcam" },
-            // ═══ WASHINGTON STATE ═══
-            { id: 60, nome: "WSDOT - I-5 SEATTLE LIVE", status: "AO VIVO", url: "https://wsdot.com/travel/real-time/cameras", local: "Seattle, WA", setor: "WA", tipo: "iframe" },
-            // ═══ INTERNACIONAL 🌍 ═══
-            { id: 100, nome: "EARTHCAM — ABBEY ROAD CROSSING 🎸", status: "AO VIVO", url: "https://www.earthcam.com/world/england/london/?cam=abbeyroad", local: "London, UK", setor: "INTL", tipo: "earthcam" },
-            { id: 101, nome: "ABBEY ROAD CROSSING — LONDON 4K", status: "AO VIVO", url: "https://www.youtube.com/watch?v=M3EYAY2MftI", local: "London, UK", setor: "INTL", tipo: "youtube" },
-            { id: 102, nome: "BONDI BEACH AUSTRALIA 🏄", status: "AO VIVO", url: "https://www.youtube.com/watch?v=VR-x3HdhKLQ", local: "Sydney, Australia", setor: "INTL", tipo: "youtube" },
-            { id: 103, nome: "EARTHCAM — DUBLIN TEMPLE BAR 🍀", status: "AO VIVO", url: "https://www.earthcam.com/world/ireland/dublin/?cam=templebar", local: "Dublin, Ireland", setor: "INTL", tipo: "earthcam" },
+            { id: 701, nome: "BEIRA MAR NORTE — KOXIXOS", status: "AO VIVO", url: "https://www.youtube.com/watch?v=c3LNbKb45go", local: "Florianópolis, SC", pais: "BR", estado: "SC", cidade: "Florianópolis", tipo: "youtube" },
+            { id: 702, nome: "PONTE HERCÍLIO LUZ — AO VIVO", status: "AO VIVO", url: "https://www.youtube.com/watch?v=TBJzToxEvmk", local: "Florianópolis, SC", pais: "BR", estado: "SC", cidade: "Florianópolis", tipo: "youtube" },
+            { id: 703, nome: "TRAPICHE BEIRA MAR — NORTE", status: "AO VIVO", url: "https://www.youtube.com/watch?v=GZWIulHdbFM", local: "Florianópolis, SC", pais: "BR", estado: "SC", cidade: "Florianópolis", tipo: "youtube" },
+            { id: 10, nome: "NYC — TIMES SQUARE 24/7", status: "AO VIVO", url: "https://www.youtube.com/watch?v=1EiC9bvVGnk", local: "Times Square, NY", pais: "US", estado: "NY", cidade: "New York", tipo: "youtube" },
+            { id: 20, nome: "MIAMI BEACH — OCEAN DRIVE", status: "AO VIVO", url: "https://www.youtube.com/watch?v=OkQ0utdxwBY", local: "Miami Beach, FL", pais: "US", estado: "FL", cidade: "Miami", tipo: "youtube" },
+            { id: 15, nome: "TOKYO — SHIBUYA CROSSING", status: "AO VIVO", url: "https://www.youtube.com/watch?v=dfVK7ld38Ys", local: "Shibuya, Tokyo", pais: "JP", estado: "Tokyo", cidade: "Shibuya", tipo: "youtube" },
+            { id: 30, nome: "LAS VEGAS — THE STRIP LIVE", status: "AO VIVO", url: "https://www.youtube.com/watch?v=jtvmwjzZY0c", local: "Las Vegas, NV", pais: "US", estado: "NV", cidade: "Las Vegas", tipo: "youtube" },
+            { id: 40, nome: "NASHVILLE — BROADWAY LIVE", status: "AO VIVO", url: "https://www.youtube.com/watch?v=m6jK1pG-Ryg", local: "Nashville, TN", pais: "US", estado: "TN", cidade: "Nashville", tipo: "youtube" },
+            { id: 41, nome: "NEW ORLEANS — BOURBON ST", status: "AO VIVO", url: "https://www.youtube.com/watch?v=Ksrleaxxxhw", local: "New Orleans, LA", pais: "US", estado: "LA", cidade: "New Orleans", tipo: "youtube" },
+            { id: 50, nome: "KEY WEST — DUVAL STREET", status: "AO VIVO", url: "https://www.youtube.com/watch?v=rbMK4p6zUwI", local: "Key West, FL", pais: "US", estado: "FL", cidade: "Key West", tipo: "youtube" },
+            { id: 60, nome: "LONDON — ABBEY ROAD", status: "AO VIVO", url: "https://www.youtube.com/watch?v=M3EYAY2MftI", local: "London, UK", pais: "UK", estado: "London", cidade: "London", tipo: "youtube" },
+            { id: 70, nome: "VENICE — CANAL VIEW", status: "AO VIVO", url: "https://www.youtube.com/watch?v=ph1vpnYIxJk", local: "Venice, Italy", pais: "IT", estado: "Venice", cidade: "Venice", tipo: "youtube" },
+            { id: 80, nome: "PARIS — EIFFEL TOWER", status: "AO VIVO", url: "https://www.youtube.com/watch?v=OzYp4NRZlwQ", local: "Paris, France", pais: "FR", estado: "Paris", cidade: "Paris", tipo: "youtube" },
+            { id: 90, nome: "SEATTLE — SPACE NEEDLE", status: "AO VIVO", url: "https://www.youtube.com/watch?v=4cgSE12k9Sc", local: "Seattle, WA", pais: "US", estado: "WA", cidade: "Seattle", tipo: "youtube" },
+            { id: 100, nome: "RIO — COPACABANA BEACH", status: "AO VIVO", url: "https://www.youtube.com/watch?v=jOny1lDk158", local: "Rio de Janeiro, BR", pais: "BR", estado: "RJ", cidade: "Rio de Janeiro", tipo: "youtube" },
+            { id: 160, nome: "WASHINGTON DC — WHITE HOUSE", status: "AO VIVO", url: "https://www.youtube.com/watch?v=Fu8vYoIkaeM", local: "Washington, DC", pais: "US", estado: "DC", cidade: "Washington", tipo: "youtube" }
         ];
 
-        // Verifica versão — se mudou, reseta o dataset base mas preserva câmeras adicionadas manualmente
+        // Árvore de Localizações para o "IA-Flow"
+        const LOCATIONS_TREE = {
+            "BR": {
+                name: "Brasil",
+                states: {
+                    "SC": { name: "Santa Catarina", cities: ["Florianópolis"] },
+                    "RJ": { name: "Rio de Janeiro", cities: ["Rio de Janeiro"] }
+                }
+            },
+            "US": {
+                name: "EUA",
+                states: {
+                    "NY": { name: "New York", cities: ["New York"] },
+                    "FL": { name: "Florida", cities: ["Miami", "Key West"] },
+                    "NV": { name: "Nevada", cities: ["Las Vegas"] },
+                    "TN": { name: "Tennessee", cities: ["Nashville"] },
+                    "LA": { name: "Louisiana", cities: ["New Orleans"] },
+                    "WA": { name: "Washington", cities: ["Seattle"] },
+                    "DC": { name: "Dist. Columbia", cities: ["Washington"] }
+                }
+            },
+            "JP": { name: "Japão", states: { "TYO": { name: "Tokyo", cities: ["Shibuya"] } } },
+            "UK": { name: "UK", states: { "LDN": { name: "London", cities: ["London"] } } },
+            "IT": { name: "Itália", states: { "VNC": { name: "Venice", cities: ["Venice"] } } },
+            "FR": { name: "França", states: { "PRS": { name: "Paris", cities: ["Paris"] } } }
+        };
+
+        let currentSelection = { pais: null, estado: null, cidade: null };
+
+        function updateFilterBar() {
+            const bar = document.getElementById('filterBar');
+            bar.innerHTML = '';
+
+            // Botão Global
+            bar.appendChild(createFilterBtn('GLOBAL', () => {
+                currentSelection = { pais: null, estado: null, cidade: null };
+                updateUI();
+            }, !currentSelection.pais));
+
+            if (!currentSelection.pais) {
+                // Listar Países
+                Object.keys(LOCATIONS_TREE).forEach(pCode => {
+                    bar.appendChild(createFilterBtn(LOCATIONS_TREE[pCode].name, () => {
+                        currentSelection.pais = pCode;
+                        updateUI();
+                    }));
+                });
+            } else if (!currentSelection.estado) {
+                // Listar Estados do País selecionado
+                bar.appendChild(createSeparator());
+                Object.keys(LOCATIONS_TREE[currentSelection.pais].states).forEach(sCode => {
+                    bar.appendChild(createFilterBtn(LOCATIONS_TREE[currentSelection.pais].states[sCode].name, () => {
+                        currentSelection.estado = sCode;
+                        updateUI();
+                    }));
+                });
+            } else if (!currentSelection.cidade) {
+                // Listar Cidades do Estado selecionado
+                bar.appendChild(createSeparator());
+                LOCATIONS_TREE[currentSelection.pais].states[currentSelection.estado].cities.forEach(city => {
+                    bar.appendChild(createFilterBtn(city, () => {
+                        currentSelection.cidade = city;
+                        updateUI();
+                    }));
+                });
+            } else {
+                // Final da hierarquia - botão de voltar para estado
+                bar.appendChild(createSeparator());
+                bar.appendChild(createFilterBtn(`[${currentSelection.cidade}] - RESET`, () => {
+                    currentSelection.cidade = null;
+                    updateUI();
+                }, true));
+            }
+
+            // Botão Bulk sempre visível no final
+            const spacer = document.createElement('div');
+            spacer.className = 'flex-1';
+            bar.appendChild(spacer);
+            
+            const bulkBtn = document.createElement('button');
+            bulkBtn.onclick = openBulkModal;
+            bulkBtn.className = "bg-blue-900 hover:bg-blue-800 text-blue-100 px-4 py-1 rounded text-xs font-bold uppercase tracking-widest border border-blue-700 transition-all font-mono";
+            bulkBtn.innerText = 'IMPORTAÇÃO BULK';
+            bar.appendChild(bulkBtn);
+        }
+
+        function createFilterBtn(text, onClick, isActive = false) {
+            const btn = document.createElement('button');
+            btn.innerText = text;
+            btn.onclick = onClick;
+            btn.className = `px-4 py-1 rounded text-xs font-bold uppercase tracking-widest border transition-all font-mono ${isActive ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-gray-800 text-gray-400 border-gray-700 hover:border-emerald-500'}`;
+            return btn;
+        }
+
+        function createSeparator() {
+            const sep = document.createElement('div');
+            sep.className = "border-l border-gray-700 mx-2 h-6 self-center";
+            return sep;
+        }
+
+        function updateUI() {
+            updateFilterBar();
+            renderizarCameras(filterCurrentSet(activeCameras));
+        }
+
+        function filterCurrentSet(cameras) {
+            return cameras.filter(c => {
+                if (currentSelection.cidade) return c.cidade === currentSelection.cidade;
+                if (currentSelection.estado) return c.estado === currentSelection.estado;
+                if (currentSelection.pais) return c.pais === currentSelection.pais;
+                return true;
+            });
+        }
+
+        // Força o reset completo do dataset ao mudar de versão para eliminar lixo acumulado
         function loadCameras() {
             const savedVersion = localStorage.getItem('oss_version');
-            const saved = JSON.parse(localStorage.getItem('oss_cameras') || '[]');
-
+            
             if (savedVersion !== OSS_DATASET_VERSION) {
-                // Nova versão: usa dataset padrão + câmeras manuais (id >= 1000 ou sem id padrão)
-                const defaultIds = new Set(DEFAULT_CAMERAS.map(c => c.id));
-                const userCams = saved.filter(c => !defaultIds.has(c.id));
-                const merged = [...DEFAULT_CAMERAS, ...userCams];
-                localStorage.setItem('oss_cameras', JSON.stringify(merged));
+                localStorage.setItem('oss_cameras', JSON.stringify(DEFAULT_CAMERAS));
                 localStorage.setItem('oss_version', OSS_DATASET_VERSION);
-                return merged;
+                return DEFAULT_CAMERAS;
             }
+            
+            const saved = JSON.parse(localStorage.getItem('oss_cameras') || '[]');
             return saved.length > 0 ? saved : DEFAULT_CAMERAS;
         }
 
@@ -321,25 +379,13 @@
             }
         }
 
-        function filterBySector(sector) {
-            currentSector = sector;
-            
-            // Atualizar UI dos botões
-            document.querySelectorAll('.sector-btn').forEach(btn => {
-                btn.classList.remove('bg-emerald-600', 'text-white', 'border-emerald-500');
-                btn.classList.add('bg-gray-800', 'text-gray-400', 'border-gray-700');
-            });
-            
-            const activeBtn = document.getElementById(`btn-${sector}`);
-            activeBtn.classList.remove('bg-gray-800', 'text-gray-400', 'border-gray-700');
-            activeBtn.classList.add('bg-emerald-600', 'text-white', 'border-emerald-500');
-
-            renderizarCameras(filterCurrentSet(activeCameras));
-        }
-
         function filterCurrentSet(cameras) {
-            if (currentSector === 'ALL') return cameras;
-            return cameras.filter(c => c.setor === currentSector);
+            return cameras.filter(c => {
+                if (currentSelection.cidade) return c.cidade === currentSelection.cidade;
+                if (currentSelection.estado) return c.estado === currentSelection.estado;
+                if (currentSelection.pais) return c.pais === currentSelection.pais;
+                return true;
+            });
         }
 
         function openEditModal(id) {
@@ -414,16 +460,11 @@
             const url = cam.url;
             const tipo = cam.tipo || (url.includes('youtube.com/watch') ? 'youtube' : url.endsWith('.m3u8') ? 'hls' : url.includes('fl511.com') ? 'iframe' : 'jpeg');
 
-            if (tipo === 'earthcam') {
-                // EarthCam — exibe a página oficial como iframe (câmera ao vivo embutida)
-                return `<div class="relative w-full h-full overflow-hidden pointer-events-none">
-                    <iframe src="${url}" class="absolute top-[-20%] left-[-5%] w-[110%] h-[150%] border-0" scrolling="no" sandbox="allow-scripts allow-same-origin"></iframe>
-                    <div class="absolute inset-0 z-20"></div>
-                </div>`;
-            } else if (tipo === 'youtube' || url.includes('youtube.com/watch')) {
+            if (tipo === 'youtube' || url.includes('youtube.com/watch')) {
                 let videoId = url.split('v=')[1];
                 const amp = videoId.indexOf('&');
                 if (amp !== -1) videoId = videoId.substring(0, amp);
+                
                 if (isFullscreen) {
                     return `<div class="relative w-full h-full overflow-hidden">
                         <iframe class="absolute top-[-10%] left-[-2%] w-[104%] h-[120%]" 
@@ -433,41 +474,38 @@
                         <div class="absolute inset-0 z-20"></div>
                     </div>`;
                 } else {
-                    return `<div class="relative w-full h-full overflow-hidden pointer-events-none">
-                        <iframe class="absolute top-[-60px] left-[-2px] w-[101%] h-[calc(100%+120px)]" 
-                            src="https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&controls=0&modestbranding=1&vq=hd2160&rel=0&showinfo=0" 
-                            frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen>
-                        </iframe>
-                        <div class="absolute inset-0 z-20"></div>
+                    // THUMBNAIL FIRST: Apenas imagem se não estiver em tela cheia
+                    const thumbUrl = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
+                    return `<div class="relative w-full h-full">
+                        <img src="${thumbUrl}" class="w-full h-full object-cover">
+                        <div class="absolute inset-0 flex items-center justify-center bg-black bg-opacity-20 group-hover:bg-opacity-0 transition-all duration-300">
+                            <svg class="w-12 h-12 text-white opacity-60 group-hover:opacity-100 transition-opacity" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd" />
+                            </svg>
+                        </div>
                     </div>`;
                 }
-            } else if (tipo === 'iframe') {
-                // Câmera CCTV embarcada como iframe (ex: FL511, WSDOT)
-                return `<div class="relative w-full h-full overflow-hidden pointer-events-none">
-                    <iframe src="${url}" class="absolute inset-0 w-full h-full border-0" scrolling="no"></iframe>
-                    <div class="absolute inset-0 z-20"></div>
-                </div>`;
             } else if (tipo === 'hls' || url.endsWith('.m3u8')) {
-                const videoId = `hls-${cam.id}`;
-                setTimeout(() => {
-                    const video = document.getElementById(videoId);
-                    if (video && Hls.isSupported()) {
-                        const hls = new Hls();
-                        hls.loadSource(url);
-                        hls.attachMedia(video);
-                    } else if (video && video.canPlayType('application/vnd.apple.mpegurl')) {
-                        video.src = url;
-                    }
-                }, 100);
-                return `<video id="${videoId}" class="w-full h-full object-cover" autoplay muted playsinline></video>`;
+                if (isFullscreen) {
+                    const videoId = `hls-${cam.id}`;
+                    setTimeout(() => {
+                        const video = document.getElementById(videoId);
+                        if (video && Hls.isSupported()) {
+                            const hls = new Hls();
+                            hls.loadSource(url);
+                            hls.attachMedia(video);
+                        }
+                    }, 100);
+                    return `<video id="${videoId}" class="w-full h-full object-cover" autoplay muted playsinline></video>`;
+                } else {
+                    return `<div class="w-full h-full bg-gray-900 flex items-center justify-center text-emerald-500 font-mono text-[10px] uppercase">
+                        <span>HLS STREAM READY</span>
+                    </div>`;
+                }
             } else {
-                // CCTV JPEG snapshot — atualiza a cada 2s
-                const imgId = `snap-${cam.id}`;
-                setTimeout(() => {
-                    const img = document.getElementById(imgId);
-                    if (img) setInterval(() => { img.src = url + '?t=' + Date.now(); }, 2000);
-                }, 200);
-                return `<img id="${imgId}" src="${url}" class="w-full h-full object-cover bg-gray-900" onerror="this.src='';this.style.background='#111';this.parentElement.innerHTML='<div class=\'w-full h-full flex flex-col items-center justify-center text-gray-600\' ><span class=\'text-3xl\'>📵</span><span class=\'text-xs mt-2\'>SEM SINAL</span></div>'">`;
+                return `<div class="w-full h-full bg-gray-900 flex items-center justify-center text-gray-600 font-mono text-[10px]">
+                    <span>FEED ATIVO</span>
+                </div>`;
             }
         }
 
@@ -494,20 +532,23 @@
                             <span class="w-2 h-2 rounded-full ${dotColor} mr-2 animate-pulse"></span>
                             <span class="${statusColor}">${cam.status}</span>
                         </div>
-                        <div class="h-[400px] bg-black flex items-center justify-center relative">
+                        <div style="height: 220px;" class="bg-black flex items-center justify-center relative">
                             ${videoPlayerHtml}
                         </div>
                         <div class="p-3 bg-gray-800 border-t border-gray-700">
                             <div class="flex justify-between items-center mb-1">
-                                <div class="flex items-center space-x-1 w-4/5">
+                                <div class="flex items-center space-x-1 w-3/5">
                                     <span class="text-sm font-semibold truncate">${cam.nome}</span>
                                     ${tipoBadge}
                                 </div>
-                                <svg onclick="event.stopPropagation(); openEditModal(${cam.id})" class="w-5 h-5 text-gray-500 hover:text-yellow-500 cursor-pointer transition-colors flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                                <div class="flex items-center space-x-2">
+                                    <svg onclick="event.stopPropagation(); refreshCamera(${cam.id})" class="w-4 h-4 text-gray-500 hover:text-blue-400 cursor-pointer transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                                    <svg onclick="event.stopPropagation(); openEditModal(${cam.id})" class="w-4 h-4 text-gray-500 hover:text-yellow-500 cursor-pointer transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                                </div>
                             </div>
                             <div class="flex justify-between items-center text-[10px] text-gray-500 font-mono italic">
                                 <span>${cam.local || 'LOCAL DESCONHECIDO'}</span>
-                                <span class="bg-gray-700 px-1 rounded text-emerald-400">${cam.setor || 'N/A'}</span>
+                                <span class="bg-gray-700 px-1 rounded text-emerald-400">${cam.pais || 'N/A'}-${cam.estado || 'N/A'}</span>
                             </div>
                         </div>
                     </div>
@@ -525,8 +566,14 @@
             renderizarCameras(camerasFiltradas);
         });
 
+        // Função de Refresh Individual
+        function refreshCamera(id) {
+            updateUI();
+            console.log(`[HEALTH] Unidade ${id} re-sincronizada.`);
+        }
+
         // Renderiza tudo ao iniciar a página
-        renderizarCameras(activeCameras);
+        updateUI();
     </script>
 </body>
 </html>
