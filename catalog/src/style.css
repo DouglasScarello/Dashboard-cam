@@ -637,6 +637,50 @@ body {
   color: var(--text-dim);
 }
 
+/* ──────────────────────────────────────────────────────────────────────────────
+   SCROLL & EMPTY STATE
+   ──────────────────────────────────────────────────────────────────────────── */
+.scroll-sentinel {
+  height: 60px;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 20px;
+}
+
+.scroll-sentinel::after {
+  content: "";
+  width: 24px;
+  height: 24px;
+  border: 2px solid var(--border-light);
+  border-top-color: var(--accent-blue);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.empty-state {
+  padding: 80px 20px;
+  text-align: center;
+  opacity: 0.5;
+}
+
+.empty-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+.empty-text {
+  font-size: 14px;
+  font-weight: 500;
+}
+
 .hidden {
-  display: none;
+  display: none !important;
 }

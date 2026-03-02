@@ -76,16 +76,17 @@
 </div>
 
 <!-- GRID -->
-<main class="main">
-  <div class="grid" id="grid"></div>
-  <div class="load-more-wrap">
-    <button class="load-more-btn" id="loadMoreBtn">Carregar mais</button>
-  </div>
-  <div class="empty-state" id="emptyState" style="display:none">
-    <span class="empty-icon">🔍</span>
-    <p>Nenhum resultado encontrado.</p>
-  </div>
-</main>
+  <main class="main" id="main">
+    <div class="grid" id="grid"></div>
+    
+    <!-- Sentinel for Infinite Scroll -->
+    <div id="scrollSentinel" class="scroll-sentinel"></div>
+
+    <div id="emptyState" class="empty-state hidden">
+      <div class="empty-icon">📂</div>
+      <div class="empty-text">Nenhum registro encontrado para esta busca.</div>
+    </div>
+  </main>
 
 <!-- MODAL DE DETALHE -->
 <div class="modal-overlay" id="modalOverlay">

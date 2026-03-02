@@ -25,7 +25,6 @@ const state = {
 
 // ── Elementos ─────────────────────────────────────────────────────────────────
 const grid = document.getElementById("grid");
-const loadMoreBtn = document.getElementById("loadMoreBtn");
 const emptyState = document.getElementById("emptyState");
 const resultCount = document.getElementById("resultCount");
 const searchInput = document.getElementById("searchInput");
@@ -35,10 +34,12 @@ const bioCheck = document.getElementById("bioOnly");
 const modalOverlay = document.getElementById("modalOverlay");
 const modalClose = document.getElementById("modalClose");
 const modalBody = document.getElementById("modalBody");
+const scrollSentinel = document.getElementById("scrollSentinel");
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 (async () => {
     window.addEventListener("hashchange", handleRouting);
+    setupInfiniteScroll();
     await loadStats();
     await handleRouting();
 })();
@@ -88,9 +89,9 @@ async function loadPage(reset = false) {
         });
 
         if (reset && results.length === 0) {
-            emptyState.style.display = "flex";
-            loadMoreBtn.classList.add("hidden");
-            resultCount.textContent = "0 registros";
+            emptyState.style.display = "block";
+            scrollSentinel.classList.add("hidden");
+            resultCount.textContent = "0 resultados";
             return;
         }
 
@@ -102,14 +103,23 @@ async function loadPage(reset = false) {
 
         state.hasMore = results.length === state.limit;
         state.page++;
-        resultCount.textContent = `${grid.children.length}${state.hasMore ? "+" : ""} registros`;
-        loadMoreBtn.classList.toggle("hidden", !state.hasMore);
+        resultCount.textContent = `${grid.children.length}${state.hasMore ? "+" : ""} resultados`;
+        scrollSentinel.classList.toggle("hidden", !state.hasMore);
     } catch (e) {
         console.error(e);
         showToast("Erro: " + e);
     } finally {
         state.loading = false;
     }
+}
+
+function setupInfiniteScroll() {
+    const observer = new IntersectionObserver((entries) => {
+        if (entries[0].isIntersecting && state.hasMore && !state.loading) {
+            loadPage(false);
+        }
+    }, { rootMargin: "200px" });
+    observer.observe(scrollSentinel);
 }
 
 // ── Card ──────────────────────────────────────────────────────────────────────
@@ -286,7 +296,6 @@ window.addEventListener("keydown", e => {
     }
 });
 
-loadMoreBtn.addEventListener("click", () => loadPage(false));
 modalClose.addEventListener("click", () => window.location.hash = "");
 modalOverlay.addEventListener("click", e => { if (e.target === modalOverlay) window.location.hash = ""; });
 document.getElementById("exportBtn")?.addEventListener("click", () => showToast("Exportando CSV..."));
