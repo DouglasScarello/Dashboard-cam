@@ -19,13 +19,15 @@ Dashboard/
 
 Interface de alta performance para busca e análise de perfis criminais globais. Redesenhada para um visual **Premium Dark**.
 
-- **Stack:** Tauri V2 + HTML / CSS Vanilla / JS
+- **Stack:** Tauri V2 + React + Vite + Tailwind CSS
 - **Destaques:**
     - **Premium Dark UI:** Estética inspirada em interfaces forenses militares.
-    - **Galeria Forense:** Suporte a múltiplos indivíduos/faces em um único registro (ex: grupos de hackers, cartéis).
+    - **Suporte Multi-idioma (i18n):** Interface e dados dinâmicos traduzíveis para **Português, Inglês e Russo**.
+    - **Tradução Neural Local:** Integração com **LibreTranslate (Docker)** para traduzir 100% dos dados dinâmicos (crimes, locais, descrições) mantendo o Ghost Protocol.
+    - **Galeria Forense:** Suporte a múltiplos indivíduos/faces em um único registro.
     - **Filtros Avançados:** Busca por nome, crime, país e status biométrico.
     - **Rotas por Hash:** Navegação direta para perfis específicos (`#/id/UID`).
-- **Inicia com:** `npm run dev` dentro de `catalog/`
+- **Inicia com:** `npm run tauri dev` dentro de `catalog/`
 
 ---
 
@@ -79,12 +81,13 @@ poetry run python intelligence_db.py search
 
 | Camada | Tecnologia |
 |---|---|
-| Frontend | Tauri V2 (Rust) + Web Tech |
+| Frontend | Tauri V2 (Rust) + React / Vite / Tailwind |
+| Core i18n | react-i18next (PT, EN, RU) |
+| Tradução Neural | LibreTranslate (Auto-hospedado via Docker) |
 | Detecção | YOLOv8n (Ultralytics) |
 | Biometria | ArcFace (DeepFace Framework) |
 | Vetor DB | FAISS (Vetorização de 16k+ faces) |
 | Storage | SQLite 3 (WAL Mode) |
-| Scrapers | Playwright (Headless anti-bot) |
 | Hardware-alvo | AMD Ryzen 4600H (Otimizado p/ CPU) |
 
 ---
@@ -92,15 +95,18 @@ poetry run python intelligence_db.py search
 ## 🚀 Quickstart
 
 ```bash
-# 1. Prepare o banco de inteligência
+# 1. Inicie o motor de tradução (Ghost Protocol - 100% Local)
+docker run -d -p 5000:5000 -e LT_LOAD_ONLY=pt,en,ru libretranslate/libretranslate
+
+# 2. Prepare o banco de inteligência
 cd intelligence
 poetry install
 poetry run python populate_db.py --sync-photos
 
-# 2. Inicie o Catálogo Visual
+# 3. Inicie o Catálogo Visual
 cd ../catalog
 npm install
-npm run dev
+npm run tauri dev
 ```
 
 > [!NOTE]

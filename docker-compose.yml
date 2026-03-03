@@ -1,9 +1,9 @@
 version: '3.8'
 
 services:
-  # Banco de Dados Profissional para Inteligência
+  # Banco de Dados Profissional para Inteligência com Suporte Vetorial
   db:
-    image: postgres:15-alpine
+    image: ankane/pgvector:v0.5.1
     container_name: intelligence_db_pg
     environment:
       POSTGRES_DB: intelligence

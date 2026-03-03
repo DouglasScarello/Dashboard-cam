@@ -159,6 +159,9 @@ fn search_individuals(
         where_clause = conds.join(" AND ")
     );
 
+    println!("[TAURI-DEBUG] SQL: {}", sql);
+    println!("[TAURI-DEBUG] Params: {:?}", vals);
+
     let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
     
     let mut query_params: Vec<&dyn rusqlite::ToSql> = Vec::new();
@@ -188,6 +191,7 @@ fn search_individuals(
     for row in rows {
         results.push(row.map_err(|e| e.to_string())?);
     }
+    println!("[TAURI-DEBUG] Encontrados: {} indivíduos", results.len());
     Ok(results)
 }
 
@@ -265,10 +269,20 @@ fn get_individual(id: String) -> Result<IndividualDetail, String> {
 #[tauri::command]
 fn get_stats() -> Result<Stats, String> {
     let conn = open_db().map_err(|e| e.to_string())?;
-    let total:           i64 = conn.query_row("SELECT COUNT(*) FROM individuals", [], |r| r.get(0)).unwrap_or(0);
-    let wanted:          i64 = conn.query_row("SELECT COUNT(*) FROM individuals WHERE category='wanted'", [], |r| r.get(0)).unwrap_or(0);
-    let missing:         i64 = conn.query_row("SELECT COUNT(*) FROM individuals WHERE category='missing'", [], |r| r.get(0)).unwrap_or(0);
-    let with_biometrics: i64 = conn.query_row("SELECT COUNT(*) FROM individuals WHERE has_embedding=1", [], |r| r.get(0)).unwrap_or(0);
+    
+    let total: i64 = conn.query_row("SELECT COUNT(*) FROM individuals", params![], |r| r.get(0))
+        .map_err(|e| format!("Erro total: {}", e))?;
+        
+    let wanted: i64 = conn.query_row("SELECT COUNT(*) FROM individuals WHERE category='wanted'", params![], |r| r.get(0))
+        .map_err(|e| format!("Erro wanted: {}", e))?;
+        
+    let missing: i64 = conn.query_row("SELECT COUNT(*) FROM individuals WHERE category='missing'", params![], |r| r.get(0))
+        .map_err(|e| format!("Erro missing: {}", e))?;
+        
+    let with_biometrics: i64 = conn.query_row("SELECT COUNT(*) FROM individuals WHERE has_embedding=1", params![], |r| r.get(0))
+        .map_err(|e| format!("Erro bio: {}", e))?;
+
+    println!("[TAURI-DEBUG] Stats - Total: {}, Bio: {}", total, with_biometrics);
 
     let mut stmt = conn.prepare("SELECT source,COUNT(*) FROM individuals GROUP BY source ORDER BY COUNT(*) DESC LIMIT 10")
         .map_err(|e| e.to_string())?;
@@ -298,6 +312,32 @@ fn get_image_base64(img_path: String) -> Result<String, String> {
     let bytes = std::fs::read(&abs_path).map_err(|e| e.to_string())?;
     Ok(format!("data:image/jpeg;base64,{}", B64.encode(&bytes)))
 }
+#[tauri::command]
+fn translate_text(q: String, source: String, target: String) -> Result<String, String> {
+    let client = reqwest::blocking::Client::new();
+    let res = client
+        .post("http://localhost:5000/translate")
+        .json(&serde_json::json!({
+            "q": q,
+            "source": source,
+            "target": target,
+            "format": "text",
+            "api_key": ""
+        }))
+        .send()
+        .map_err(|e| format!("Erro na requisição: {}", e))?;
+
+    if !res.status().is_success() {
+        return Err(format!("LibreTranslate retornou erro: {}", res.status()));
+    }
+
+    let json: serde_json::Value = res.json().map_err(|e| format!("Erro ao ler JSON: {}", e))?;
+    let translated = json["translatedText"]
+        .as_str()
+        .ok_or_else(|| "translatedText não encontrado no JSON".to_string())?;
+
+    Ok(translated.to_string())
+}
 
 // ─── Entry ────────────────────────────────────────────────────────────────────
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -309,6 +349,7 @@ pub fn run() {
             get_individual,
             get_stats,
             get_image_base64,
+            translate_text,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

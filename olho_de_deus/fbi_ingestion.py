@@ -1,176 +1,113 @@
 #!/usr/bin/env python3
+"""
+fbi_ingestion.py — Olho de Deus
+Fulfill: Muni's Tip #3 (Modularization)
+Inherits from BaseIngestor for standardized intelligence gathering.
+"""
 import requests
 import os
-import json
 import time
-import numpy as np
-import faiss
 from tqdm import tqdm
 from typing import List, Dict, Optional
-from deepface import DeepFace
+from core.ingestor import BaseIngestor
 from playwright.sync_api import sync_playwright
 
-# Configuração de Logs p/ DeepFace (evitar ruído)
-import logging
-logging.getLogger("deepface").setLevel(logging.ERROR)
-
-def _playwright_download(url: str, dest_path: str, page) -> bool:
-    """Usa uma página Playwright existente para baixar uma imagem."""
-    try:
-        response = page.goto(url, timeout=20000, wait_until="domcontentloaded")
-        if response and response.ok:
-            content_type = response.headers.get("content-type", "")
-            if "image" in content_type:
-                with open(dest_path, 'wb') as f:
-                    f.write(response.body())
-                return True
-            else:
-                # Fallback: screenshot da área de imagem visible na página
-                page.screenshot(path=dest_path, type="jpeg", clip={"x": 0, "y": 0, "width": 400, "height": 500})
-                return True
-    except Exception as e:
-        print(f"[warning] playwright_download falhou: {e}")
-    return False
-
-class FBIIngestor:
-    def __init__(self, base_url: str = "https://api.fbi.gov/wanted/v1/list"):
-        self.base_url = base_url
-        self.output_dir = "data/fbi_faces"
+class FBIIngestor(BaseIngestor):
+    def __init__(self, db=None):
+        super().__init__(source_name="FBI", db=db)
+        self.api_url = "https://api.fbi.gov/wanted/v1/list"
+        self.output_dir = "intelligence/data/images/fbi"
         os.makedirs(self.output_dir, exist_ok=True)
-        self.db_path = "data/fbi_intelligence.json"
-        self.delay = 0.25  # 4 requisições por segundo (rate limit balanceado)
 
-    def fetch_page(self, page: int = 1) -> Dict:
-        """Busca uma página específica da API."""
-        params = {"page": page}
-        response = requests.get(self.base_url, params=params)
-        if response.status_code == 200:
-            return response.json()
-        else:
-            print(f"[error] Falha na página {page}: {response.status_code}")
-            return {}
-
-    def sync(self, limit_pages: Optional[int] = None):
-        """Sincroniza a base local com a API do FBI."""
-        print("[sistema] Iniciando sincronização com FBI Wanted API...")
+    def fetch_data(self, limit_pages: int = 1):
+        """Busca dados da API do FBI e processa via BaseIngestor."""
+        self.logger.info(f"Iniciando captura FBI: {limit_pages} páginas.")
         
-        first_page = self.fetch_page(1)
-        total_items = first_page.get("total", 0)
-        items_per_page = 20
-        total_pages = (total_items // items_per_page) + 1
-        
-        if limit_pages:
-            total_pages = min(total_pages, limit_pages)
-
-        intelligence_base = []
-
-        for page in tqdm(range(1, total_pages + 1), desc="Baixando metadados"):
-            data = self.fetch_page(page)
-            for item in data.get("items", []):
-                intelligence_base.append({
-                    "uid": item.get("uid"),
-                    "title": item.get("title"),
-                    "description": item.get("description"),
-                    "images": item.get("images", []),
-                    "files": item.get("files", []),
-                })
-            time.sleep(self.delay)
-
-        with open(self.db_path, "w", encoding="utf-8") as f:
-            json.dump(intelligence_base, f, indent=4, ensure_ascii=False)
-            
-        print(f"[sucesso] {len(intelligence_base)} registros sincronizados em {self.db_path}")
-        self.process_biometrics(intelligence_base)
-
-    def process_biometrics(self, intelligence_base: List[Dict]):
-        """Baixa imagens e gera embeddings para cada registro."""
-        print("\n[sistema] Iniciando extração biométrica (ArcFace)...")
-        
-        embeddings_list = []
-        metadata_list = []
-        
-        # Garantir que o diretório de dados existe
-        os.makedirs("data", exist_ok=True)
-
-        # Abrir UMA sessão de browser compartilhada p/ todos os downloads
         with sync_playwright() as pw:
             browser = pw.chromium.launch(headless=True)
-            context = browser.new_context(
-                user_agent="Mozilla/5.0 (X11; Linux x86_64) Chrome/122.0.0.0 Safari/537.36",
-                extra_http_headers={"Referer": "https://www.fbi.gov/"}
-            )
+            context = browser.new_context(user_agent="Mozilla/5.0")
             page = context.new_page()
-            # Bloquear recursos desnecessários p/ acelerar
-            page.route("**/*.{css,woff,woff2,ttf,eot,js}", lambda route: route.abort())
+            # Bloquear lixo para performance
+            page.route("**/*.{css,woff,js}", lambda r: r.abort())
 
-            self._process_loop(intelligence_base, page, embeddings_list, metadata_list)
+            for p in range(1, limit_pages + 1):
+                try:
+                    resp = requests.get(self.api_url, params={"page": p}, timeout=15)
+                    if resp.status_code != 200: break
+                    
+                    data = resp.json()
+                    if not data: break
+                    items = data.get("items", [])
+                    
+                    for item in tqdm(items, desc=f"Página {p}"):
+                        self._process_item(item, page)
+                        
+                except Exception as e:
+                    self.logger.error(f"Erro na página {p}: {e}")
+            
             browser.close()
 
-        if embeddings_list:
-            self.save_vector_db(embeddings_list, metadata_list)
+    def _process_item(self, item: Dict, pw_page):
+        """Traduz formato FBI para formato interno do Olho de Deus."""
+        uid = item.get("uid")
+        if not uid: return
 
-    def _process_loop(self, intelligence_base, page, embeddings_list, metadata_list):
-        """Loop interno de biometria com sessão Playwright compartilhada."""
-        for person in tqdm(intelligence_base, desc="Processando Biometria"):
-            uid = person["uid"]
-            images = person.get("images", [])
-            if not images:
-                continue
-                
-            # Buscar a imagem original/maior
-            img_url = (
-                images[0].get("large") or
-                images[0].get("thumb") or
-                images[0].get("original")
-            )
-            if not img_url:
-                continue
+        # Normalização de Campos
+        normalized = {
+            "id": uid,
+            "name": (item.get("title") or "Desconhecido").upper(),
+            "category": "wanted", 
+            "source": "FBI",
+            "description": (item.get("description") or "") + "\n\n" + (item.get("details") or ""),
+            "sex": item.get("sex"),
+            "birth_date": (item.get("dates_of_birth_used") or [None])[0],
+            "occupation": item.get("occupations"),
+            "reward": item.get("reward_text"),
+            "nationalities": item.get("nationality"),
+            "crimes": (item.get("caution") or "").split(",") if item.get("caution") else []
+        }
 
-            img_path = os.path.join(self.output_dir, f"{uid}.jpg")
+        # Tratamento de Imagens
+        images = item.get("images")
+        if images and isinstance(images, list) and len(images) > 0:
+            primary_img = images[0]
+            if isinstance(primary_img, dict):
+                p_url = primary_img.get("original") or primary_img.get("large") or primary_img.get("thumb")
+                if p_url:
+                    img_name = f"{uid}.jpg"
+                    img_path = os.path.join(self.output_dir, img_name)
+                    
+                    if not os.path.exists(img_path):
+                        self.download_image_pw(p_url, img_path, pw_page)
+                    
+                    normalized["img_url"] = p_url
+                    normalized["img_path"] = f"data/images/fbi/{img_name}" 
 
-            # Download via Playwright (bypassa 403 do CDN do FBI)
-            if not os.path.exists(img_path):
-                ok = _playwright_download(img_url, img_path, page)
-                if not ok:
-                    continue
+            # Galeria extra
+            normalized["gallery"] = [
+                img.get("original") or img.get("large") 
+                for img in images[1:] 
+                if isinstance(img, dict) and (img.get("original") or img.get("large"))
+            ]
 
-            # Extração de Embedding
-            try:
-                # Usando ArcFace via DeepFace
-                objs = DeepFace.represent(
-                    img_path = img_path, 
-                    model_name = "ArcFace", 
-                    enforce_detection = False,
-                    detector_backend = "opencv"
-                )
-                
-                if objs:
-                    embedding = objs[0]["embedding"]
-                    embeddings_list.append(embedding)
-                    metadata_list.append({
-                        "uid": uid,
-                        "title": person["title"],
-                        "description": person["description"]
-                    })
-            except Exception as e:
-                print(f"[warning] Falha ao processar {uid}: {type(e).__name__}: {e}")
-                continue
+        # Ingestão via Classe Base
+        self.process_individual(normalized)
 
-    def save_vector_db(self, embeddings: List[List[float]], metadata: List[Dict]):
-        """Cria e salva o índice FAISS e metadados associados."""
-        embeddings_np = np.array(embeddings).astype('float32')
-        dimension = embeddings_np.shape[1]
-        
-        index = faiss.IndexFlatL2(dimension)
-        index.add(embeddings_np)
-        
-        faiss.write_index(index, "data/vector_db.faiss")
-        with open("data/vector_metadata.json", "w", encoding="utf-8") as f:
-            json.dump(metadata, f, indent=4, ensure_ascii=False)
-            
-        print(f"[sucesso] Base vetorial criada: {len(metadata)} faces mapeadas.")
+    def download_image_pw(self, url: str, dest: str, page):
+        """Download especializado usando Playwright para evitar bloqueios de CDN."""
+        try:
+            resp = page.goto(url, timeout=30000)
+            if resp and resp.ok:
+                with open(dest, "wb") as f:
+                    f.write(resp.body())
+                return True
+        except Exception as e:
+            self.logger.warning(f"Falha PW download {url}: {e}")
+        return False
 
 if __name__ == "__main__":
-    ingestor = FBIIngestor()
-    # Para teste, limitamos a 2 páginas
-    ingestor.sync(limit_pages=2)
+    from intelligence_db import DB
+    db = DB()
+    ingestor = FBIIngestor(db=db)
+    ingestor.fetch_data(limit_pages=20)
+    ingestor.close()

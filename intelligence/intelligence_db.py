@@ -128,7 +128,8 @@ CREATE TABLE IF NOT EXISTS locations (
 
 CREATE TABLE IF NOT EXISTS face_embeddings (
     individual_id   TEXT PRIMARY KEY REFERENCES individuals(id),
-    embedding_blob  BYTEA NOT NULL,
+    embedding       vector(512), -- Postgres native vector
+    embedding_blob  BYTEA,       -- SQLite fallback
     model           TEXT DEFAULT 'ArcFace',
     created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -149,12 +150,16 @@ def init_db():
         # SQLite não suporta SERIAL ou BYTEA nativamente do mesmo jeito
         schema = SCHEMA_SQL.replace("SERIAL PRIMARY KEY", "INTEGER PRIMARY KEY AUTOINCREMENT")
         schema = schema.replace("BYTEA", "BLOB")
+        schema = schema.replace("vector(512)", "BLOB") # Fallback simples
+        db._connect_sqlite()
         db.conn.executescript(schema)
     else:
+        # Habilitar pgvector no Postgres
+        db.execute("CREATE EXTENSION IF NOT EXISTS vector;")
         db.execute(SCHEMA_SQL)
     db.commit()
     db.close()
-    print(f"[db] Banco inicializado ({db.type})")
+    print(f"[db] Banco inicializado ({db.type}) com suporte vetorial.")
 
 # ─────────────────────────────────────────────────────────────────
 # CRUD E BUSCA
@@ -178,12 +183,14 @@ def upsert_individual(db: DB, data: Dict):
             has_embedding = EXCLUDED.has_embedding
     """
     params = (
-        data.get("id"), data.get("name"), json.dumps(data.get("aliases", [])),
+        data.get("id"), data.get("name"), json.dumps(data.get("aliases", []), ensure_ascii=False),
         data.get("category"), data.get("source"), data.get("birth_date"),
         data.get("sex"), data.get("height_cm"), data.get("weight_kg"),
         data.get("eye_color"), data.get("hair_color"), 
-        json.dumps(data.get("nationalities", [])), json.dumps(data.get("languages", [])),
-        data.get("occupation"), data.get("description"), data.get("reward"),
+        json.dumps(data.get("nationalities", []) if isinstance(data.get("nationalities"), list) else [data.get("nationalities")] if data.get("nationalities") else [], ensure_ascii=False),
+        json.dumps(data.get("languages", []) if isinstance(data.get("languages"), list) else [data.get("languages")] if data.get("languages") else [], ensure_ascii=False),
+        json.dumps(data.get("occupation", []) if isinstance(data.get("occupation"), list) else [data.get("occupation")] if data.get("occupation") else [], ensure_ascii=False),
+        data.get("description"), data.get("reward"),
         data.get("url"), data.get("img_url"), data.get("img_path"),
         1 if data.get("has_embedding") else 0,
         data.get("first_seen"), data.get("last_seen")
@@ -224,21 +231,41 @@ def search(db: DB, **kwargs) -> List[Dict]:
     rows = cur.fetchall()
     return [dict(r) for r in rows]
 
-def get_individual(db: DB, individual_id: str) -> Optional[Dict]:
-    cur = db.execute("SELECT * FROM individuals WHERE id = ?", (individual_id,))
-    row = cur.fetchone()
-    if not row: return None
-    data = dict(row)
-    
-    # Crimes
-    cur = db.execute("SELECT crime FROM crimes WHERE individual_id = ?", (individual_id,))
-    data["crimes"] = [r["crime"] if isinstance(r, dict) else r[0] for r in cur.fetchall()]
-    
-    # Imagens
-    cur = db.execute("SELECT * FROM individual_images WHERE individual_id = ?", (individual_id,))
-    data["images"] = [dict(r) for r in cur.fetchall()]
-    
     return data
+
+def save_embedding(db: DB, individual_id: str, embedding: List[float]):
+    """Salva vetor biométrico no Postgres (pgvector) ou SQLite (BLOB)."""
+    if db.type == "postgres":
+        # Converte lista [0.1, 0.2...] para string formatada '[0.1, 0.2...]' para o pgvector
+        emb_str = str(embedding).replace(" ", "")
+        q = "INSERT INTO face_embeddings (individual_id, embedding) VALUES (?, ?) ON CONFLICT(individual_id) DO UPDATE SET embedding = EXCLUDED.embedding"
+        db.execute(q, (individual_id, emb_str))
+    else:
+        # SQLite: fallback p/ BLOB (binário)
+        import struct
+        blob = struct.pack(f"{len(embedding)}f", *embedding)
+        q = "INSERT OR REPLACE INTO face_embeddings (individual_id, embedding_blob) VALUES (?, ?)"
+        db.execute(q, (individual_id, blob))
+    db.commit()
+
+def search_biometric(db: DB, target_embedding: List[float], limit: int = 10) -> List[Dict]:
+    """Busca alvos similares usando similaridade de cosseno/L2 (via pgvector se disponível)."""
+    if db.type == "postgres":
+        emb_str = str(target_embedding).replace(" ", "")
+        # Operador <-> é para distância L2
+        q = """
+            SELECT i.*, (f.embedding <-> ?) as distance
+            FROM individuals i
+            JOIN face_embeddings f ON i.id = f.individual_id
+            ORDER BY distance ASC LIMIT ?
+        """
+        cur = db.execute(q, (emb_str, limit))
+    else:
+        # No SQLite fazemos uma busca simples ou via FAISS (externo).
+        # Para Muni, vamos focar no Postgres como motor principal de performance.
+        return []
+        
+    return [dict(r) for r in cur.fetchall()]
 
 if __name__ == "__main__":
     init_db()

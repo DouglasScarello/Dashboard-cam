@@ -20,6 +20,8 @@ tqdm = "^4.67.1"
 insightface = "^0.7.3"
 tf-keras = "^2.18.0"
 lancedb = "^0.29.2"
+psycopg2-binary = "^2.9.11"
+python-dotenv = "^1.2.2"
 
 [build-system]
 requires = ["poetry-core"]
