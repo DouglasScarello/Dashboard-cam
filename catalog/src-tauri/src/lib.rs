@@ -45,6 +45,14 @@ struct Individual {
 }
 
 #[derive(Serialize, Deserialize)]
+struct IndividualImage {
+    img_url:     Option<String>,
+    img_path:    Option<String>,
+    caption:     Option<String>,
+    is_primary:  i32,
+}
+
+#[derive(Serialize, Deserialize)]
 struct IndividualDetail {
     id:            String,
     name:          String,
@@ -59,6 +67,13 @@ struct IndividualDetail {
     aliases:       Option<String>,
     sex:           Option<String>,
     url:           Option<String>,
+    // Novos campos
+    height_cm:     Option<f64>,
+    weight_kg:     Option<f64>,
+    eye_color:     Option<String>,
+    hair_color:    Option<String>,
+    occupation:    Option<String>,
+    images:        Vec<IndividualImage>,
     crimes:        Vec<String>,
     locations:     Vec<Location>,
     ingested_at:   Option<String>,
@@ -139,7 +154,7 @@ fn search_individuals(
                 i.description, i.reward, i.img_path, i.has_embedding, i.ingested_at
          FROM individuals i {crime_join}
          WHERE {where_clause}
-         ORDER BY i.has_embedding DESC, i.name ASC LIMIT ? OFFSET ?",
+         ORDER BY i.has_embedding DESC, i.ingested_at DESC, i.name ASC LIMIT ? OFFSET ?",
         crime_join = crime_join,
         where_clause = conds.join(" AND ")
     );
@@ -182,7 +197,9 @@ fn get_individual(id: String) -> Result<IndividualDetail, String> {
     
     let mut stmt = conn.prepare(
         "SELECT id,name,category,source,birth_date,nationalities,description,
-                reward,img_path,has_embedding,aliases,sex,url,ingested_at FROM individuals WHERE id=?"
+                reward,img_path,has_embedding,aliases,sex,url,ingested_at,
+                height_cm, weight_kg, eye_color, hair_color, occupation
+         FROM individuals WHERE id=?"
     ).map_err(|e| e.to_string())?;
     
     let row = stmt.query_row(params![id], |r| Ok(IndividualDetail {
@@ -200,6 +217,12 @@ fn get_individual(id: String) -> Result<IndividualDetail, String> {
             sex:           r.get(11)?,
             url:           r.get(12)?,
             ingested_at:   r.get(13)?,
+            height_cm:     r.get(14)?,
+            weight_kg:     r.get(15)?,
+            eye_color:     r.get(16)?,
+            hair_color:    r.get(17)?,
+            occupation:    r.get(18)?,
+            images:        vec![], // Preenchido depois
             crimes:        vec![],
             locations:     vec![],
         })).map_err(|e| e.to_string())?;
@@ -224,7 +247,19 @@ fn get_individual(id: String) -> Result<IndividualDetail, String> {
         })
     }).map_err(|e| e.to_string())?.filter_map(|r| r.ok()).collect();
 
-    Ok(IndividualDetail { crimes, locations, ..row })
+    // Images (Galeria)
+    let mut stmt_imgs = conn.prepare("SELECT img_url, img_path, caption, is_primary FROM individual_images WHERE individual_id=?")
+        .map_err(|e| e.to_string())?;
+    let images: Vec<IndividualImage> = stmt_imgs.query_map(params![id], |r| {
+        Ok(IndividualImage {
+            img_url:  r.get(0)?,
+            img_path: r.get(1)?,
+            caption:  r.get(2)?,
+            is_primary: r.get(3)?,
+        })
+    }).map_err(|e| e.to_string())?.filter_map(|r| r.ok()).collect();
+
+    Ok(IndividualDetail { crimes, locations, images, ..row })
 }
 
 #[tauri::command]

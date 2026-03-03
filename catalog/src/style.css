@@ -575,13 +575,57 @@ body {
   font-weight: 800;
   margin-bottom: 4px;
   color: #fff;
+  line-height: 1.1;
+}
+
+.dossier-aliases {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent-blue);
+  margin-bottom: 4px;
+  opacity: 0.8;
+  font-family: 'JetBrains Mono', monospace;
 }
 
 .dossier-meta {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--text-muted);
   margin-bottom: 24px;
   font-family: monospace;
+  letter-spacing: 0.5px;
+}
+
+.dossier-reward-box {
+  background: rgba(245, 158, 11, 0.05);
+  border: 1px dashed rgba(245, 158, 11, 0.3);
+  padding: 16px;
+  border-radius: 8px;
+  margin-bottom: 24px;
+}
+
+.dossier-reward-box label {
+  display: block;
+  font-size: 9px;
+  font-weight: 900;
+  color: var(--accent-amber);
+  margin-bottom: 4px;
+  letter-spacing: 1px;
+}
+
+.reward-val {
+  font-size: 20px;
+  font-weight: 800;
+  color: #fff;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.gallery-title {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  margin-bottom: 12px;
+  letter-spacing: 1px;
 }
 
 .info-grid {

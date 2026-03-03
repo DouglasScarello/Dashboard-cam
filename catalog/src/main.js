@@ -199,6 +199,12 @@ async function openModal(id) {
 function renderDossier(p) {
     const isWanted = p.category === "wanted";
     const crimes = p.crimes.length ? p.crimes.map(c => `<li class="crime-tag">${escHtml(c)}</li>`).join("") : "<li>Sem acusações específicas.</li>";
+    const aliases = parseNats(p.aliases);
+    const aliasText = aliases.length ? `<div class="dossier-aliases">AKA: ${aliases.join(", ")}</div>` : "";
+
+    // Formatar altura/peso
+    const height = p.height_cm ? `${p.height_cm} cm` : 'Desconhecido';
+    const weight = p.weight_kg ? `${p.weight_kg} kg` : 'Desconhecido';
 
     modalBody.innerHTML = `
     <div class="dossier">
@@ -209,7 +215,7 @@ function renderDossier(p) {
           <img class="main-img" id="dossier-main-img" style="display:none">
         </div>
 
-        <div class="gallery-section" id="gallerySection">
+        <div class="gallery-section ${p.images?.length ? '' : 'hidden'}" id="gallerySection">
           <h3 class="gallery-title">Galeria Forense / Membros</h3>
           <div class="gallery-grid" id="galleryGrid"></div>
         </div>
@@ -218,13 +224,23 @@ function renderDossier(p) {
       <main class="dossier-content">
         <div class="dossier-status ${p.category}">${isWanted ? '🔴 INVESTIGAÇÃO ATIVA' : '🟡 ALERTA DE DESAPARECIMENTO'}</div>
         <h1 class="dossier-name">${escHtml(p.name)}</h1>
+        ${aliasText}
         <div class="dossier-meta">ID: ${p.id} | FONTE: ${p.source}</div>
 
         <div class="info-grid">
           <div class="info-item"><label>Gênero</label><span>${p.sex || 'N/A'}</span></div>
           <div class="info-item"><label>Nascimento</label><span>${p.birth_date || 'Desconhecido'}</span></div>
-          <div class="info-item"><label>Países</label><span>${parseNats(p.nationalities).join(", ") || 'N/A'}</span></div>
-          <div class="info-item"><label>Recompensa</label><span>${p.reward || 'N/A'}</span></div>
+          <div class="info-item"><label>Nacionalidade</label><span>${parseNats(p.nationalities).join(", ") || 'N/A'}</span></div>
+          <div class="info-item"><label>Ocupação</label><span>${p.occupation || 'N/A'}</span></div>
+          <div class="info-item"><label>Altura</label><span>${height}</span></div>
+          <div class="info-item"><label>Peso</label><span>${weight}</span></div>
+          <div class="info-item"><label>Olhos</label><span>${p.eye_color || 'N/A'}</span></div>
+          <div class="info-item"><label>Cabelo</label><span>${p.hair_color || 'N/A'}</span></div>
+        </div>
+
+        <div class="dossier-reward-box ${p.reward ? '' : 'hidden'}">
+          <label>RECOMPENSA</label>
+          <div class="reward-val">${escHtml(p.reward || '')}</div>
         </div>
 
         <h3 class="section-label">Acusações e Infrações</h3>
@@ -232,6 +248,10 @@ function renderDossier(p) {
 
         <h3 class="section-label">Descrição Adicional</h3>
         <div class="desc-text">${escHtml(p.description) || 'Nenhum dado adicional.'}</div>
+        
+        <div style="margin-top: 40px; opacity: 0.3; font-size: 11px; font-family: monospace;">
+          INFORMAÇÃO COLETADA EM: ${p.ingested_at || 'N/A'}
+        </div>
       </main>
     </div>`;
 }
@@ -239,6 +259,7 @@ function renderDossier(p) {
 async function loadGalleryThumbnails() {
     const gridEl = document.getElementById("galleryGrid");
     if (!gridEl) return;
+    gridEl.innerHTML = ""; // Limpar
 
     state.activeImages.forEach(async (img, idx) => {
         const thumb = document.createElement("img");
@@ -246,12 +267,14 @@ async function loadGalleryThumbnails() {
         if (img.is_primary) thumb.classList.add("active");
 
         try {
-            const b64 = await invoke("get_image_base64", { imgPath: img.img_path });
+            const path = img.img_path;
+            if (!path) return;
+            const b64 = await invoke("get_image_base64", { imgPath: path });
             thumb.src = b64;
             thumb.addEventListener("click", () => {
                 document.querySelectorAll(".gallery-thumb").forEach(t => t.classList.remove("active"));
                 thumb.classList.add("active");
-                switchDossierImage(img.img_path);
+                switchDossierImage(path);
             });
             gridEl.appendChild(thumb);
         } catch { }

@@ -153,14 +153,23 @@ def load_fbi(limit_pages: Optional[int] = None):
     print(f"[FBI] ✓ {loaded} registros carregados")
 
 
-def _parse_num(val) -> Optional[float]:
-    """Converte altura/peso para número."""
-    if val is None:
-        return None
+def _parse_num(val):
+    if not val: return None
+    if isinstance(val, (int, float)): return float(val)
+    # Tratar strings como "57" (5'7") ou "150 lbs"
+    s = str(val).lower().replace("lbs", "").strip()
     try:
-        return float(str(val).replace("\"", "").replace("'", "").split()[0])
-    except Exception:
-        return None
+        if "'" in s or "\"" in s:
+            # TODO: converter pés/polegadas se necessário. 
+            # Por ora, apenas pegamos os dígitos se for simples
+            pass
+        return float(''.join(c for c in s if c.isdigit() or c == '.'))
+    except: return None
+
+def _clean_str(s):
+    if not s: return None
+    if isinstance(s, list): s = ", ".join(filter(None, s))
+    return str(s).strip() or None
 
 
 # ─────────────────────────────────────────────────────────────────
