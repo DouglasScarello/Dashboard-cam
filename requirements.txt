@@ -1,0 +1,14 @@
+opencv-python-headless
+yt-dlp
+requests
+beautifulsoup4
+playwright
+ultralytics
+deepface
+faiss-cpu
+tqdm
+insightface
+tf-keras
+lancedb
+psycopg2-binary
+python-dotenv
