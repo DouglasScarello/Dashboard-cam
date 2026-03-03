@@ -55,6 +55,12 @@ async function handleRouting() {
     }
 }
 
+function closeModal() {
+    modalOverlay.classList.remove("open");
+    document.body.style.overflow = "auto";
+    state.activeId = null;
+}
+
 async function loadStats() {
     try {
         const s = await invoke("get_stats");
@@ -293,6 +299,9 @@ window.addEventListener("keydown", e => {
     if ((e.metaKey || e.ctrlKey) && e.key === "k") {
         e.preventDefault();
         searchInput.focus();
+    }
+    if (e.key === "Escape" && modalOverlay.classList.contains("open")) {
+        window.location.hash = "";
     }
 });
 
