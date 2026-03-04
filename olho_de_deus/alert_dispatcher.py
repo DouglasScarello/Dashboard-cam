@@ -76,10 +76,25 @@ def _is_rate_limited(event_type: str, channel: str, max_per_min: int, cooldown: 
 
 def _render(template: str, **kwargs) -> str:
     kwargs.setdefault("timestamp", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+    
+    # Lógica de Destaque para High-Score (Fase 12)
+    score = kwargs.get("threat_score")
+    prefix = ""
+    if score is not None:
+        try:
+            s_val = float(score)
+            if s_val >= 9.0:
+                prefix = "🚨🚨🚨 [CRITICAL TARGET] 🚨🚨🚨\n"
+            elif s_val >= 8.0:
+                prefix = "⚠️ [HIGH THREAT] ⚠️\n"
+        except (ValueError, TypeError):
+            pass
+
     try:
-        return template.format(**kwargs)
+        rendered = template.format(**kwargs)
+        return prefix + rendered
     except KeyError as e:
-        return template + f"\n[template key missing: {e}]"
+        return prefix + template + f"\n[template key missing: {e}]"
 
 
 # ─── Canais ───────────────────────────────────────────────────────────────────
@@ -255,7 +270,10 @@ async def dispatch(event_type: str, **kwargs) -> None:
             ch_cfg = channels_cfg.get(ch_name, {})
             if not ch_cfg.get("enabled", False):
                 continue
-            if _is_rate_limited(event_type, ch_name, max_per_min, cooldown):
+            
+            # Suporte a bypass para emergências (Fase 30)
+            bypass = kwargs.get("bypass_rate_limit", False)
+            if not bypass and _is_rate_limited(event_type, ch_name, max_per_min, cooldown):
                 log.debug(f"[{ch_name}] Rate-limited para {event_type}")
                 continue
 

@@ -153,6 +153,13 @@ CREATE TABLE IF NOT EXISTS evidence (
     captured_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS threat_scores (
+    individual_id   TEXT PRIMARY KEY REFERENCES individuals(id),
+    score           FLOAT DEFAULT 1.0,
+    factors_json    TEXT, -- Detalhes do cálculo (JSON)
+    updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 """
 
 def init_db():
@@ -370,9 +377,38 @@ def get_evidence(db: DB, individual_id: str) -> List[Dict]:
 
 
 def get_all_evidence_hashes(db: DB) -> List[Dict]:
-    """Retorna todos os hashes de evidência para auditoria global."""
+    """Retorna todos os registros de evidência para auditoria."""
     cur = db.execute("SELECT id, individual_id, file_hash, file_path FROM evidence")
-    return [dict(r) for r in cur.fetchall()]
+    return [dict(row) for row in cur.fetchall()]
+
+# ─────────────────────────────────────────────────────────────────
+# THREAT SCORING (FASE 12)
+# ─────────────────────────────────────────────────────────────────
+
+def upsert_threat_score(db: DB, individual_id: str, score: float, factors: Dict):
+    """Insere ou atualiza o score de ameaça de um indivíduo."""
+    f_json = json.dumps(factors)
+    q = """
+    INSERT INTO threat_scores (individual_id, score, factors_json, updated_at)
+    VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(individual_id) DO UPDATE SET
+        score = excluded.score,
+        factors_json = excluded.factors_json,
+        updated_at = CURRENT_TIMESTAMP
+    """
+    db.execute(q, (individual_id, score, f_json))
+    db.commit()
+
+def get_threat_score(db: DB, individual_id: str) -> Optional[Dict]:
+    """Recupera o score e fatores de um indivíduo."""
+    q = "SELECT score, factors_json, updated_at FROM threat_scores WHERE individual_id = ?"
+    cur = db.execute(q, (individual_id,))
+    row = cur.fetchone()
+    if row:
+        res = dict(row)
+        res["factors"] = json.loads(res["factors_json"]) if res["factors_json"] else {}
+        return res
+    return None
 
 
 def stats(db: DB) -> Dict:
