@@ -38,6 +38,7 @@ log = logging.getLogger("alert_dispatcher")
 _CONFIG_PATH = Path(__file__).parent / "alert_config.yaml"
 _config: Optional[Dict] = None
 _rate_tracker: Dict[str, List[float]] = defaultdict(list)  # key → timestamps
+_dedup_tracker: Dict[str, Dict] = {} # uid → {"last_seen": t, "cameras": set()} (Fase 31)
 
 
 def _load_config() -> Dict:
@@ -287,6 +288,24 @@ async def dispatch(event_type: str, **kwargs) -> None:
                 tasks.append(_send_pushover(ch_cfg, event_type, message, severity, session))
 
         if tasks:
+            # Lógica de Deduplicação / Agrupamento Espacial (Fase 31)
+            uid = kwargs.get("uid")
+            if event_type == "MATCH_DETECTED" and uid:
+                now = time.time()
+                entry = _dedup_tracker.get(uid, {"last_seen": 0, "cameras": set()})
+                
+                # Se visto recentemente em outra câmera, podemos transformar o alerta
+                if now - entry["last_seen"] < 600: # 10 minutos
+                    entry["cameras"].add(kwargs.get("camera_id", "UNK"))
+                    if len(entry["cameras"]) > 1:
+                        message = f"🗺️ **MOVIMENTAÇÃO SUSPEITA: {kwargs.get('name', 'ALVO')}**\n"
+                        message += f"Detectado em {len(entry['cameras'])} locais (Última: {kwargs.get('camera_id')})\n"
+                        message += f"Histórico Recente: {', '.join(entry['cameras'])}"
+                
+                entry["last_seen"] = now
+                entry["cameras"].add(kwargs.get("camera_id", "UNK"))
+                _dedup_tracker[uid] = entry
+
             results = await asyncio.gather(*tasks, return_exceptions=True)
             failed = sum(1 for r in results if isinstance(r, Exception) or r is False)
             if failed:

@@ -52,7 +52,7 @@ class TrackedFace:
 
 class BiometricProcessor:
     def __init__(self,
-                 model_path: str = "yolov8n-face.pt",
+                 model_path: str = "yolov8n_openvino_model",
                  index_path: Optional[str] = None,
                  metadata_path: Optional[str] = None,
                  iou_threshold: float = 0.4,
@@ -71,11 +71,18 @@ class BiometricProcessor:
         # REID: dicionário de faces ativamente rastreadas {track_id: TrackedFace}
         self.tracked_faces: Dict[int, TrackedFace] = {}
 
-        # Modelo de detecção YOLO (Nano — otimizado p/ Ryzen 4600H)
+        # Modelo de detecção YOLO (OpenVINO Otimizado — Ryzen 7)
         try:
-            self.detector = YOLO(model_path)
+            # Buscar preferencialmente o modelo OpenVINO na pasta corrrente
+            ov_model = str(root / "olho_de_deus" / "yolov8n_openvino_model")
+            if os.path.exists(ov_model):
+                log_msg = f"Iniciando YOLO com OpenVINO em: {ov_model}"
+                self.detector = YOLO(ov_model, task="detect")
+            else:
+                self.detector = YOLO(model_path)
+            print(f"[🛰️] Engine de Visão: OpenVINO / CPU RT")
         except Exception as e:
-            print(f"[warning] YOLO falhou ({e}), tentando yolov8n...")
+            print(f"[warning] OpenVINO/YOLO falhou ({e}), tentando fallback...")
             try:
                 self.detector = YOLO("yolov8n.pt")
             except Exception:

@@ -217,7 +217,7 @@ if __name__ == "__main__":
     import json
     parser = argparse.ArgumentParser(description="Olho de Deus — Live Biometric Pipeline")
     parser.add_argument("--id", help="ID da câmera ou URL Stream")
-    parser.add_argument("--type", default="youtube", choices=["youtube,rtsp,webcam"], help="Tipo de fonte")
+    parser.add_argument("--type", default="youtube", choices=["youtube", "rtsp", "webcam"], help="Tipo de fonte")
     parser.add_argument("--threshold", type=float, default=0.48, help="Match threshold")
     parser.add_argument("--city", help="Filtrar câmeras de uma cidade no cameras.json")
     parser.add_argument("--all", action="store_true", help="Rodar todas as câmeras do cameras.json em sequência")
