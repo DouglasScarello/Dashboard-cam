@@ -33,5 +33,15 @@ services:
     command: [ "tail", "-f", "/dev/null" ]
     restart: unless-stopped
 
+  # Servidor de Streaming Zero Latency (Fase 31.3)
+  go2rtc:
+    image: alexxit/go2rtc
+    container_name: go2rtc_streamer
+    network_mode: host # Recomendado para WebRTC/UDP simplificado em ambiente local
+    privileged: true
+    volumes:
+      - ./config/go2rtc.yaml:/config/go2rtc.yaml
+    restart: unless-stopped
+
 volumes:
   pgdata:

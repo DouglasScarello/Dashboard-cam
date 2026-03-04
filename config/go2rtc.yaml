@@ -1,0 +1,16 @@
+api:
+  listen: ":1984"
+
+rtsp:
+  listen: ":8554"
+
+webrtc:
+  listen: ":8555"
+  # O host é necessário para o WebRTC funcionar corretamente em LAN/Local
+  candidates:
+    - 127.0.0.1
+    - host.docker.internal
+
+streams:
+  # O pipeline IA irá criar streams dinamicamente via API ou enviando para porta RTSP
+  # Exemplo: camera1: rtsp://localhost:8554/camera1

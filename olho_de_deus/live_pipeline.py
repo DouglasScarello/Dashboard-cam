@@ -16,6 +16,8 @@ import cv2
 import threading
 import logging
 import argparse
+import subprocess
+import json
 from collections import deque
 from datetime import datetime
 from pathlib import Path
@@ -58,6 +60,17 @@ class LivePipeline:
         self.report_dir = ROOT / "intelligence" / "data" / "reports"
         os.makedirs(self.evidence_dir, exist_ok=True)
         os.makedirs(self.report_dir, exist_ok=True)
+
+        # Configuração de Streaming (Fase 31.3)
+        self.streamer = None
+        self.enable_stream = False
+
+    def setup_stream(self, stream_name: str, width: int = 1280, height: int = 720, fps: int = 20):
+        """Inicializa o pusher de vídeo via FFmpeg para o go2rtc."""
+        self.stream_name = stream_name
+        self.enable_stream = True
+        self.streamer = StreamPusher(stream_name, width, height, fps)
+        log.info(f"🛰️ Stream WebRTC habilitado: rtsp://localhost:8554/{stream_name}")
 
     def _capture_loop(self, stream_url: str):
         """Thread que mantém o buffer de frames sempre atualizado (descartando atraso)."""
@@ -184,6 +197,11 @@ class LivePipeline:
                 
                 # Visualização opcional (pode ser desativada para servidores)
                 self._draw_hud(frame, results)
+                
+                # Enviar para o Stream (WebRTC/go2rtc)
+                if self.enable_stream and self.streamer:
+                    self.streamer.push(frame)
+
                 cv2.imshow(f"Olho de Deus - {self.camera_id}", frame)
                 if cv2.waitKey(1) & 0xFF == ord('q'):
                     break
@@ -192,7 +210,8 @@ class LivePipeline:
             log.info("Encerrando pipeline...")
         finally:
             self.running = False
-            self.capture_thread.join()
+            if self.capture_thread: self.capture_thread.join()
+            if self.streamer: self.streamer.stop()
             cv2.destroyAllWindows()
             self.db.close()
 
@@ -211,6 +230,49 @@ class LivePipeline:
             
             cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
             cv2.putText(frame, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+
+class StreamPusher:
+    """Envia frames processados para o go2rtc via RTSP usando FFmpeg."""
+    def __init__(self, stream_name: str, width: int, height: int, fps: int):
+        self.rtsp_url = f"rtsp://localhost:8554/{stream_name}"
+        
+        # Comando FFmpeg otimizado para latência zero
+        self.cmd = [
+            'ffmpeg',
+            '-y',
+            '-f', 'rawvideo',
+            '-vcodec', 'rawvideo',
+            '-pix_fmt', 'bgr24',
+            '-s', f"{width}x{height}",
+            '-r', str(fps),
+            '-i', '-',
+            '-c:v', 'libx264',
+            '-pix_fmt', 'yuv420p',
+            '-preset', 'ultrafast',
+            '-tune', 'zerolatency',
+            '-f', 'rtsp',
+            self.rtsp_url
+        ]
+        
+        try:
+            self.process = subprocess.Popen(self.cmd, stdin=subprocess.PIPE, stderr=subprocess.DEVNULL)
+            log.info(f"Processo FFmpeg iniciado para {stream_name}")
+        except Exception as e:
+            log.error(f"Falha ao iniciar FFmpeg: {e}")
+            self.process = None
+
+    def push(self, frame):
+        if self.process and self.process.poll() is None:
+            try:
+                self.process.stdin.write(frame.tobytes())
+            except Exception as e:
+                log.error(f"Erro ao enviar frame para stream: {e}")
+
+    def stop(self):
+        if self.process:
+            self.process.stdin.close()
+            self.process.terminate()
+            log.info("Processo de stream encerrado.")
 
 def load_cameras_from_json(path="cameras.json"):
     """Achata a estrutura do cameras.json para uma lista simples de dicts."""
@@ -236,6 +298,7 @@ if __name__ == "__main__":
     parser.add_argument("--id", help="ID da câmera ou URL Stream")
     parser.add_argument("--type", default="youtube", choices=["youtube", "rtsp", "webcam"], help="Tipo de fonte")
     parser.add_argument("--threshold", type=float, default=0.48, help="Match threshold")
+    parser.add_argument("--stream", action="store_true", help="Habilitar streaming WebRTC (go2rtc)")
     parser.add_argument("--city", help="Filtrar câmeras de uma cidade no cameras.json")
     parser.add_argument("--all", action="store_true", help="Rodar todas as câmeras do cameras.json em sequência")
     
@@ -258,6 +321,8 @@ if __name__ == "__main__":
             if ctype == "youtube_live": ctype = "youtube"
             
             pipeline = LivePipeline(cid, source_type=ctype, match_threshold=args.threshold)
+            if args.stream:
+                pipeline.setup_stream(cid)
             try:
                 pipeline.run()
             except KeyboardInterrupt:
@@ -266,6 +331,10 @@ if __name__ == "__main__":
     elif args.id:
         cid = int(args.id) if args.type == "webcam" else args.id
         pipeline = LivePipeline(cid, source_type=args.type, match_threshold=args.threshold)
+        if args.stream:
+            # Se for ID numérico (webcam), converter para string amigável
+            stream_name = f"webcam_{cid}" if isinstance(cid, int) else cid
+            pipeline.setup_stream(stream_name)
         pipeline.run()
     else:
         parser.print_help()

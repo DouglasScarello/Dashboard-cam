@@ -1134,6 +1134,20 @@
                     return `<img src="${url}" class="w-full h-full object-cover"
                         onerror="this.style.opacity='0.1'">`;
                 }
+            } else if (tipo === 'webrtc') {
+                const videoId = `webrtc-${cam.id}-${Date.now()}`;
+                setTimeout(() => initWebRTC(cam.id, videoId), 100);
+                return `
+                    <video id="${videoId}" class="w-full h-full object-cover" autoplay muted playsinline></video>
+                    <div id="webrtcLoader-${videoId}" class="absolute inset-0 flex items-center justify-center bg-black/60 z-10">
+                        <div class="flex flex-col items-center">
+                            <div class="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
+                            <span class="text-[8px] text-emerald-500 mt-2 font-mono tracking-widest">CONNECTING AI STREAM...</span>
+                        </div>
+                    </div>`;
+            } else {
+                // Tipo desconhecido ou fallback
+                return `<div class="w-full h-full bg-gray-950 flex items-center justify-center text-gray-500 text-[8px] font-mono">PLAYER INDISPONÍVEL</div>`;
             }
         }
 
@@ -1196,8 +1210,11 @@
                                     </span>
                                 </div>
                                 <div class="flex space-x-1 pointer-events-auto">
-                                    <button onclick="event.stopPropagation(); refreshCamera(${cam.id})" class="p-1 hover:bg-emerald-500/20 rounded border border-white/5 text-white/40 hover:text-emerald-400 transition-all">
+                                    <button onclick="event.stopPropagation(); refreshCamera(${cam.id})" class="p-1 hover:bg-emerald-500/20 rounded border border-white/5 text-white/40 hover:text-emerald-400 transition-all" title="Reset/Recuperar Stream">
                                         <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                                    </button>
+                                    <button onclick="event.stopPropagation(); switchToAIStream(${cam.id})" class="p-1 hover:bg-rose-500/20 rounded border border-white/5 text-white/40 hover:text-rose-400 transition-all font-bold text-[8px]" title="Modo IA (Latência Zero)">
+                                        AI
                                     </button>
                                     <button onclick="event.stopPropagation(); openEditModal(${cam.id})" class="p-1 hover:bg-yellow-500/20 rounded border border-white/5 text-white/40 hover:text-yellow-500 transition-all">
                                         <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path></svg>
@@ -1258,6 +1275,61 @@
             } finally {
                 if (btn) btn.classList.remove('animate-spin', 'text-blue-400');
             }
+        }
+
+        // === SUPORTE WEBRTC (Fase 31.3) ===
+        async function initWebRTC(streamName, videoId) {
+            const video = document.getElementById(videoId);
+            const loader = document.getElementById(`webrtcLoader-${videoId}`);
+            if (!video) return;
+
+            console.log(`[WebRTC] Iniciando stream: ${streamName}`);
+            
+            // O go2rtc usa WebSocket para negociar WebRTC
+            const pc = new RTCPeerConnection({
+                iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+            });
+
+            pc.ontrack = (event) => {
+                video.srcObject = event.streams[0];
+                if (loader) loader.classList.add('hidden');
+            };
+
+            // Negociação simplificada via API do go2rtc (rodando no host:1984)
+            try {
+                const ws = new WebSocket(`ws://${location.hostname || 'localhost'}:1984/api/ws?src=${streamName}`);
+                
+                ws.onopen = () => {
+                    pc.addTransceiver('video', { direction: 'recvonly' });
+                    pc.createOffer().then(offer => {
+                        pc.setLocalDescription(offer);
+                        ws.send(JSON.stringify({ type: 'offer', sdp: offer.sdp }));
+                    });
+                };
+
+                ws.onmessage = (e) => {
+                    const msg = JSON.parse(e.data);
+                    if (msg.type === 'answer') {
+                        pc.setRemoteDescription(new RTCSessionDescription(msg));
+                    }
+                };
+
+                ws.onerror = () => {
+                   if (loader) loader.innerHTML = '<span class="text-rose-500 text-[8px]">STREAM OFFLINE</span>';
+                };
+
+            } catch (err) {
+                console.error("[WebRTC] Erro de negociação:", err);
+            }
+        }
+
+        function switchToAIStream(id) {
+            const cam = activeCameras.find(c => c.id === id);
+            if (!cam) return;
+            
+            // Força o tipo para webrtc para carregar o player correto
+            cam.tipo = 'webrtc';
+            updateUI();
         }
 
         // Renderiza tudo ao iniciar a página
