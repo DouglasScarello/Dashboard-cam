@@ -112,32 +112,74 @@ class BehaviorPipeline:
         return len(current_potential_falls) > 0
 
     def _analyze_weapons(self, frame):
-        """Detecta armas e objetos perigosos."""
-        # Aqui usaríamos o weapon_model específico. 
-        # Como stub, simulamos a lógica
-        results = self.weapon_model(frame, verbose=False, imgsz=320, conf=0.4)[0]
-        
-        found_weapon = False
+        """
+        Detecta armas e objetos perigosos com lógica de intersecção (Fase 30.1).
+        Verifica se a arma está em contato/empunhada por uma pessoa.
+        """
+        # 1. Detecção (Utilizando o modelo já carregado/OpenVINO)
+        results = self.weapon_model(frame, verbose=False, imgsz=320, conf=0.5)[0]
+        person_results = self.pose_model(frame, verbose=False, imgsz=320, conf=0.5)[0]
+
+        weapon_boxes = []
+        person_boxes = []
+
+        # Mapeamento de classes (Stub: no modelo real, classes como 0:gun, 1:knife)
+        # Por enquanto, tratamos 'cell phone' como stub se o modelo for o original yolov8n.pt
         for box in results.boxes:
             cls = int(box.cls[0])
-            # Se for um modelo de armas, checaríamos as classes certas
-            # Ex: if cls in [handgun_idx, knife_idx]:
-            pass
-            
-        if found_weapon:
+            # Se for um modelo de armas, checaríamos as classes [0, 1, 2...]
+            # Usando classes de exemplo do COCO para teste: 67 (cell phone) -> stub de arma
+            if cls in [0, 1, 67]: # person (0), handgun/knife stub
+                weapon_boxes.append(box.xyxy[0].cpu().numpy())
+
+        for box in person_results.boxes:
+            person_boxes.append(box.xyxy[0].cpu().numpy())
+
+        found_active_threat = False
+        for w_box in weapon_boxes:
+            for i, p_box in enumerate(person_boxes):
+                # 1. Checagem básica de Overlap
+                if self._check_overlap(w_box, p_box):
+                    # 2. Refinamento por Keypoints (Mão/Pulso)
+                    # No yolov8-pose: 9 (l_wrist), 10 (r_wrist)
+                    if person_results.keypoints.data.shape[0] > i:
+                        kpts = person_results.keypoints.data[i]
+                        if kpts.shape[0] >= 11:
+                            l_wrist = kpts[9][:2].cpu().numpy()
+                            r_wrist = kpts[10][:2].cpu().numpy()
+                            
+                            # Se a arma estiver perto de um dos pulsos, confirma ameaça ativa
+                            for wrist in [l_wrist, r_wrist]:
+                                if wrist[0] > 0 and wrist[1] > 0: # Check valid kpt
+                                    if (w_box[0] <= wrist[0] <= w_box[2] and 
+                                        w_box[1] <= wrist[1] <= w_box[3]):
+                                        found_active_threat = True
+                                        break
+                if found_active_threat: break
+
+        if found_active_threat:
             self.weapon_counter += 1
-            if self.weapon_counter > 5: # Confirmação rápida
+            if self.weapon_counter > 8: # Persistência: ~1.5 segundos
                 log.error(f"🚨🚨🚨 [CRÍTICO] AMEAÇA ARMADA DETECTADA na câmera {self.camera_id}")
                 dispatch_sync("AMEAÇA_ARMADA", 
                     camera_id=self.camera_id, 
-                    type="ARMA DE FOGO / FACA DETECTADA",
+                    type="POSSÍVEL ARMA EMPUNHADA DETECTADA",
                     bypass_rate_limit=True
                 )
-                self.weapon_counter = -100
+                self.weapon_counter = -100 # Cooldown
         else:
             self.weapon_counter = max(0, self.weapon_counter - 1)
         
-        return found_weapon
+        return found_active_threat
+
+    def _check_overlap(self, box1, box2):
+        """Verifica se há intersecção entre duas bounding boxes."""
+        x1_max = max(box1[0], box2[0])
+        y1_max = max(box1[1], box2[1])
+        x2_min = min(box1[2], box2[2])
+        y2_min = min(box1[3], box2[3])
+        
+        return x1_max < x2_min and y1_max < y2_min
 
     def run(self):
         stream_url = self.camera_id
@@ -152,8 +194,10 @@ class BehaviorPipeline:
         try:
             while self.running:
                 if not self.frame_buffer:
-                    time.sleep(0.1)
+                    time.sleep(0.01)
                     continue
+                
+                frame = self.frame_buffer.pop()
                 
                 # 1. Análise de Pose e Comportamento
                 start_time = time.time()

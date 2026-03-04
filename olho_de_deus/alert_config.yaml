@@ -7,8 +7,8 @@
 channels:
   telegram:
     enabled: true
-    bot_token: ""          # Ex: "123456789:AAxxxxxx" — obter via @BotFather
-    chat_id: ""            # Ex: "-1001234567890" — obter via @userinfobot
+    bot_token: "8633505158:AAEXn6dKsxVqxVWvKxG7iMU5oJ-KkdL-EJk"
+    chat_id: "8265627051"     # Chat ID do Douglas Dyogo Scarello Remor
     parse_mode: "Markdown" # "Markdown" ou "HTML"
 
   webhook:
