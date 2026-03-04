@@ -269,5 +269,93 @@ def search_biometric(db: DB, target_embedding: List[float], limit: int = 10) -> 
         
     return [dict(r) for r in cur.fetchall()]
 
+
+# ─────────────────────────────────────────────────────────────────
+# FASE 14 — DELTA EMBEDDING SUPPORT
+# ─────────────────────────────────────────────────────────────────
+
+def get_embedding_delta(db: DB, limit: Optional[int] = None) -> List[Dict]:
+    """
+    Retorna apenas os indivíduos que precisam de (re)processamento biométrico:
+        1. Nunca tiveram embedding gerado (has_embedding = 0)
+        2. Foram atualizados (last_seen) DEPOIS do último embedding calculado
+    
+    Usa LEFT JOIN para detectar ambos os casos numa única query eficiente.
+    Exige img_path preenchido (sem imagem não há como gerar embedding).
+    """
+    q = """
+        SELECT
+            i.id,
+            i.name,
+            i.img_path,
+            i.last_seen,
+            fe.created_at AS emb_created_at
+        FROM individuals i
+        LEFT JOIN face_embeddings fe ON fe.individual_id = i.id
+        WHERE i.img_path IS NOT NULL
+          AND (
+              i.has_embedding = 0
+              OR fe.individual_id IS NULL
+              OR (i.last_seen IS NOT NULL AND fe.created_at IS NOT NULL
+                  AND i.last_seen > fe.created_at)
+          )
+        ORDER BY
+            CASE WHEN i.has_embedding = 0 THEN 0 ELSE 1 END,  -- novos primeiro
+            i.last_seen DESC
+    """
+    if limit:
+        q += f" LIMIT {int(limit)}"
+
+    cur = db.execute(q)
+    rows = cur.fetchall()
+    return [dict(r) for r in rows]
+
+
+def mark_embedded(db: DB, individual_id: str) -> None:
+    """Marca um indivíduo como tendo embedding processado."""
+    db.execute(
+        "UPDATE individuals SET has_embedding = 1 WHERE id = ?",
+        (individual_id,)
+    )
+    db.commit()
+
+
+def get_all_embeddings_for_index(db: DB) -> List[Dict]:
+    """
+    Retorna todos os embeddings já calculados para reconstrução
+    do IndexIDMap ao inicializar o delta_embedder.
+    Retorna list de {individual_id, embedding_blob} ou {individual_id, embedding}.
+    """
+    cur = db.execute(
+        "SELECT individual_id, embedding_blob FROM face_embeddings WHERE embedding_blob IS NOT NULL"
+    )
+    return [dict(r) for r in cur.fetchall()]
+
+
+def stats(db: DB) -> Dict:
+    """Estatísticas gerais do banco."""
+    def count(q):
+        return db.execute(q).fetchone()[0]
+
+    total   = count("SELECT COUNT(*) FROM individuals")
+    wanted  = count("SELECT COUNT(*) FROM individuals WHERE category = 'wanted'")
+    missing = count("SELECT COUNT(*) FROM individuals WHERE category = 'missing'")
+    with_b  = count("SELECT COUNT(*) FROM individuals WHERE has_embedding = 1")
+
+    cur = db.execute(
+        "SELECT source, COUNT(*) as cnt FROM individuals GROUP BY source ORDER BY cnt DESC LIMIT 20"
+    )
+    by_source = [dict(r) for r in cur.fetchall()]
+
+    return {
+        "total":           total,
+        "wanted":          wanted,
+        "missing":         missing,
+        "with_biometrics": with_b,
+        "by_source":       by_source,
+    }
+
+
 if __name__ == "__main__":
     init_db()
+

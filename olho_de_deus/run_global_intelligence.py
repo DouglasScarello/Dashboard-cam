@@ -164,14 +164,19 @@ async def pipeline(
 
     # ─── Extração de embeddings ───────────────────────────────────────────────
     if not no_embed and total_loaded > 0:
-        print("\n  🧬 Iniciando extração de embeddings ArcFace...")
-        proc = await asyncio.create_subprocess_exec(
-            sys.executable, "extract_embeddings.py",
-            cwd=str(Path(__file__).parent),
-        )
-        await proc.wait()
+        print("\n  🧬 Iniciando Delta Embedding Updater [Fase 14]...")
+        try:
+            from delta_embedder import run_delta
+            embed_stats = run_delta(batch_size=32)
+            print(
+                f"  🧬 Embeddings: "
+                f"+{embed_stats['processed']} novos | "
+                f"{embed_stats['total_indexed']} total no FAISS"
+            )
+        except Exception as e:
+            log.error(f"Erro no delta_embedder: {e}. Tente manualmente: python extract_embeddings.py")
 
-    print("\n  ✅ Pipeline Fase 10 concluído.\n")
+    print("\n  ✅ Pipeline Fase 10+14 concluído.\n")
 
 
 def main():
