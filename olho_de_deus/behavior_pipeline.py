@@ -17,6 +17,7 @@ import logging
 import argparse
 import psutil
 import numpy as np
+import math
 from collections import deque
 from datetime import datetime
 from pathlib import Path
@@ -121,56 +122,76 @@ class BehaviorPipeline:
         person_results = self.pose_model(frame, verbose=False, imgsz=320, conf=0.5)[0]
 
         weapon_boxes = []
-        person_boxes = []
+        person_results_list = []
 
-        # Mapeamento de classes (Stub: no modelo real, classes como 0:gun, 1:knife)
-        # Por enquanto, tratamos 'cell phone' como stub se o modelo for o original yolov8n.pt
+        # 2. Mapeamento de classes (Stub: no modelo real, classes como 0:gun, 1:knife)
+        # Usando classes de exemplo do COCO para teste: 0 (person), 67 (cell phone) -> stub de arma
         for box in results.boxes:
             cls = int(box.cls[0])
-            # Se for um modelo de armas, checaríamos as classes [0, 1, 2...]
-            # Usando classes de exemplo do COCO para teste: 67 (cell phone) -> stub de arma
-            if cls in [0, 1, 67]: # person (0), handgun/knife stub
-                weapon_boxes.append(box.xyxy[0].cpu().numpy())
+            if cls in [67, 73]: # Stub: Objetos que podem ser armas (phone, laptop/book stub)
+                weapon_boxes.append(box)
 
-        for box in person_results.boxes:
-            person_boxes.append(box.xyxy[0].cpu().numpy())
+        # 3. Análise de Pessoas (Pose)
+        for i, kpts in enumerate(person_results.keypoints.data):
+            if kpts.shape[0] >= 11:
+                person_results_list.append({
+                    "box": person_results.boxes.xyxy[i].cpu().numpy(),
+                    "kpts": kpts
+                })
 
-        found_active_threat = False
-        for w_box in weapon_boxes:
-            for i, p_box in enumerate(person_boxes):
-                # 1. Checagem básica de Overlap
-                if self._check_overlap(w_box, p_box):
-                    # 2. Refinamento por Keypoints (Mão/Pulso)
-                    # No yolov8-pose: 9 (l_wrist), 10 (r_wrist)
-                    if person_results.keypoints.data.shape[0] > i:
-                        kpts = person_results.keypoints.data[i]
-                        if kpts.shape[0] >= 11:
-                            l_wrist = kpts[9][:2].cpu().numpy()
-                            r_wrist = kpts[10][:2].cpu().numpy()
+        alert_level = 0
+        active_threat_details = ""
+
+        for w_obj in weapon_boxes:
+            w_box_xyxy = w_obj.xyxy[0].cpu().numpy()
+            w_center = [(w_box_xyxy[0] + w_box_xyxy[2]) / 2, (w_box_xyxy[1] + w_box_xyxy[3]) / 2]
+            w_size = max(w_box_xyxy[2] - w_box_xyxy[0], w_box_xyxy[3] - w_box_xyxy[1])
+            
+            for person in person_results_list:
+                p_box = person["box"]
+                kpts = person["kpts"]
+                
+                # Check Overlap Inicial (Nível 5-7)
+                if self._check_overlap(w_box_xyxy, p_box):
+                    alert_level = max(alert_level, 5) # Arma em repouso/coldre próximo ao corpo
+                    
+                    # Refinamento Euclidiano (Nível 8-10)
+                    l_wrist = kpts[9][:2].cpu().numpy()
+                    r_wrist = kpts[10][:2].cpu().numpy()
+                    
+                    # Limiar dinâmico S baseado no tamanho da bbox da arma
+                    # S = 1.2 * w_size (margem de segurança para empunhadura)
+                    S = 1.2 * w_size
+
+                    for wrist in [l_wrist, r_wrist]:
+                        if wrist[0] > 0 and wrist[1] > 0:
+                            dist = math.sqrt((w_center[0] - wrist[0])**2 + (w_center[1] - wrist[1])**2)
                             
-                            # Se a arma estiver perto de um dos pulsos, confirma ameaça ativa
-                            for wrist in [l_wrist, r_wrist]:
-                                if wrist[0] > 0 and wrist[1] > 0: # Check valid kpt
-                                    if (w_box[0] <= wrist[0] <= w_box[2] and 
-                                        w_box[1] <= wrist[1] <= w_box[3]):
-                                        found_active_threat = True
-                                        break
-                if found_active_threat: break
+                            if dist < S:
+                                alert_level = 10 # AMEAÇA ATIVA: ARMA EMPUNHADA
+                                active_threat_details = f"Arma detectada a {dist:.1f}px do pulso (Limiar: {S:.1f}px)"
+                                break
+                if alert_level == 10: break
+            if alert_level == 10: break
 
-        if found_active_threat:
+        # 4. Pipeline de Disparo Baseado em Nível
+        if alert_level >= 8:
             self.weapon_counter += 1
-            if self.weapon_counter > 8: # Persistência: ~1.5 segundos
-                log.error(f"🚨🚨🚨 [CRÍTICO] AMEAÇA ARMADA DETECTADA na câmera {self.camera_id}")
+            if self.weapon_counter > 5: # Persistência reduzida para ameaças confirmadas (~1s)
+                priority = "CRÍTICO" if alert_level == 10 else "ALTO"
+                log.error(f"🚨 [{priority}] NÍVEL {alert_level}: {active_threat_details} na câmera {self.camera_id}")
+                
                 dispatch_sync("AMEAÇA_ARMADA", 
                     camera_id=self.camera_id, 
-                    type="POSSÍVEL ARMA EMPUNHADA DETECTADA",
-                    bypass_rate_limit=True
+                    level=alert_level,
+                    details=active_threat_details,
+                    bypass_rate_limit=(alert_level == 10)
                 )
-                self.weapon_counter = -100 # Cooldown
+                self.weapon_counter = -50 # Cooldown ponderado
         else:
             self.weapon_counter = max(0, self.weapon_counter - 1)
         
-        return found_active_threat
+        return alert_level >= 8
 
     def _check_overlap(self, box1, box2):
         """Verifica se há intersecção entre duas bounding boxes."""
