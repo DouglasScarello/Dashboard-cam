@@ -1,84 +1,96 @@
 #!/usr/bin/env python3
 """
-opensanctions_ingestion.py — Olho de Deus
-Foco: Agregação Global 🌍 (OpenSanctions Targets CSV)
-Cobre: Europol, UK NCA, Holanda, Polônia, Espanha, etc.
+opensanctions_ingestion.py — Olho de Deus  [Fase 10: Async Migration]
+Fonte: OpenSanctions Bulk CSV (Europol, NCA UK, NL, PL, ES)
+Usa aiohttp para download de CSVs em paralelo por dataset.
 """
-import requests
 import os
+import sys
 import csv
 import io
-import sys
-from tqdm import tqdm
-from typing import Dict, List, Optional
+import asyncio
+import aiohttp
+from pathlib import Path
+from tqdm.asyncio import tqdm
+from typing import Dict, Optional
 
-# Injetar caminho para intelligence_db
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "intelligence")))
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "intelligence"))
 
 from core.ingestor import BaseIngestor
+
+BASE_URL = "https://data.opensanctions.org/datasets/latest/{dataset}/targets.simple.csv"
+
+DATASETS = {
+    "eu_europol_wanted":   "Europol (União Europeia)",
+    "gb_nca_most_wanted":  "NCA (Reino Unido)",
+    "nl_most_wanted":      "Holanda (Países Baixos)",
+    "pl_wanted":           "Polônia",
+    "es_most_wanted":      "Espanha",
+}
+
 
 class OpenSanctionsIngestor(BaseIngestor):
     def __init__(self, db=None):
         super().__init__(source_name="OpenSanctions", db=db)
-        self.base_url = "https://data.opensanctions.org/datasets/latest/{dataset}/targets.simple.csv"
-        # Datasets solicitados pelo usuário
-        self.datasets = {
-            "eu_europol_wanted": "Europol (União Europeia)",
-            "gb_nca_most_wanted": "NCA (Reino Unido)",
-            "nl_most_wanted": "Holanda (Países Baixos)",
-            "pl_wanted": "Polônia",
-            "es_most_wanted": "Espanha"
-        }
 
-    def fetch_data(self, specific_dataset: Optional[str] = None):
-        """Baixa e processa datasets do OpenSanctions."""
-        target_datasets = {specific_dataset: self.datasets[specific_dataset]} if specific_dataset else self.datasets
-        
-        for ds_key, ds_label in target_datasets.items():
-            self.logger.info(f"Iniciando captura OpenSanctions: {ds_label}")
-            url = self.base_url.format(dataset=ds_key)
-            
-            try:
-                resp = requests.get(url, timeout=60, stream=True)
-                resp.raise_for_status()
-                
-                # Processar stream CSV para não carregar tudo na RAM
-                content = resp.content.decode("utf-8")
-                reader = csv.DictReader(io.StringIO(content))
-                
-                rows = list(reader)
-                for row in tqdm(rows, desc=f"OS {ds_key}"):
-                    self._process_row(row, ds_key, ds_label)
-                    
-            except Exception as e:
-                self.logger.error(f"Erro ao processar dataset {ds_key}: {e}")
+    async def run(self, session: aiohttp.ClientSession, specific_dataset: Optional[str] = None, **kwargs) -> Dict:
+        target = (
+            {specific_dataset: DATASETS[specific_dataset]}
+            if specific_dataset and specific_dataset in DATASETS
+            else DATASETS
+        )
+
+        self.logger.info(f"[OpenSanctions] Baixando {len(target)} datasets em paralelo")
+
+        # Todos os datasets disparam em paralelo
+        tasks = [self._fetch_dataset(session, key, label) for key, label in target.items()]
+        await tqdm.gather(*tasks, desc="[OpenSanctions] Datasets")
+
+        self.logger.info(self.report())
+        return self.stats
+
+    async def _fetch_dataset(self, session: aiohttp.ClientSession, ds_key: str, ds_label: str):
+        url = BASE_URL.format(dataset=ds_key)
+        try:
+            self.logger.info(f"[OS] Baixando {ds_label}...")
+            raw = await self.get_text(session, url)
+            reader = csv.DictReader(io.StringIO(raw))
+            rows = list(reader)
+            self.logger.info(f"[OS] {ds_label}: {len(rows)} registros")
+            for row in rows:
+                self._process_row(row, ds_key, ds_label)
+        except Exception as e:
+            self.logger.error(f"[OS] Falha dataset {ds_key}: {e}")
+            self.stats["errors"] += 1
 
     def _process_row(self, row: Dict, ds_key: str, ds_label: str):
-        """Normaliza uma linha do CSV para o formato Olho de Deus."""
-        uid = f"OS_{ds_key.upper()}_{row.get('id', '')}"
-        name = row.get("name", "DESCONHECIDO").strip().upper()
-        if not name or name == "N/A": return
+        uid  = f"OS_{ds_key.upper()}_{row.get('id', '')}"
+        name = row.get("name", "").strip().upper()
+        if not name:
+            self.stats["skipped"] += 1
+            return
 
-        normalized = {
-            "id": uid,
-            "name": name,
-            "category": "wanted",
-            "source": f"OpenSanctions/{ds_label}",
-            "description": f"Fonte Original: {ds_label}\nSanções/Motivo: {row.get('sanctions', 'Não especificado')}",
-            "birth_date": row.get("birth_date"),
-            "nationalities": row.get("countries", "").split(";"),
-        }
+        self.save({
+            "id":           uid,
+            "name":         name,
+            "category":     "wanted",
+            "source":       f"OpenSanctions/{ds_label}",
+            "description":  f"Fonte: {ds_label}\nSanções: {row.get('sanctions', 'N/E')}",
+            "birth_date":   row.get("birth_date"),
+            "nationalities": [c.strip() for c in row.get("countries", "").split(";") if c.strip()],
+            "crimes":       [row.get("sanctions", "")] if row.get("sanctions") else [],
+            "first_seen":   row.get("first_seen"),
+            "last_seen":    row.get("last_seen"),
+        })
 
-        # OpenSanctions Simple CSV geralmente não tem URLs de imagem diretamente.
-        # Imagens para estas fontes exigiriam scraping tático dos sites originais,
-        # mas por hora indexamos os metadados para busca textual e futura biometria.
-        
-        self.process_individual(normalized)
 
 if __name__ == "__main__":
     from intelligence_db import DB
-    db = DB()
-    ingestor = OpenSanctionsIngestor(db=db)
-    # Baixar todos os datasets configurados
-    ingestor.fetch_data()
-    ingestor.close()
+    async def _main():
+        db = DB()
+        ingestor = OpenSanctionsIngestor(db=db)
+        async with aiohttp.ClientSession() as session:
+            await ingestor.run(session)
+        ingestor.close()
+    asyncio.run(_main())

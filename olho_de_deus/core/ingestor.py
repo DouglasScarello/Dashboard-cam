@@ -1,66 +1,154 @@
 #!/usr/bin/env python3
 """
 core/ingestor.py — Olho de Deus
-BaseIngestor: Classe base para normalizar a ingestão de inteligência.
-Fulfill: Muni's Tip #3 (Modularization)
+BaseIngestor ASYNC: Contrato base para ingestão paralela de inteligência.
+
+Fase 10: Migração de sync → async com aiohttp + tenacity.
+Ingestores que dependem de Playwright mantêm o padrão sync
+via executor para não bloquear o event loop.
 """
 import os
-import requests
+import sys
+import asyncio
 import logging
+import aiohttp
+import aiofiles
 from abc import ABC, abstractmethod
-from typing import Dict, List, Optional
+from pathlib import Path
+from typing import Dict, List, Optional, Any
+from tenacity import (
+    retry, stop_after_attempt, wait_exponential,
+    retry_if_exception_type, before_sleep_log
+)
+
+# Path resolução para intelligence_db
+ROOT = Path(__file__).resolve().parent.parent.parent
+sys.path.insert(0, str(ROOT / "intelligence"))
+
 from intelligence_db import DB, upsert_individual, insert_crimes, insert_image
 
+logger_root = logging.getLogger("ingestor")
+
+
 class BaseIngestor(ABC):
+    """
+    Classe base assíncrona para todos os ingestores do Olho de Deus.
+
+    Contrato:
+        - Implementar `run(session, **kwargs)` como coroutine principal.
+        - Chamar `self.save(data)` para persistir cada indivíduo.
+        - Resultados acumulados em `self.stats` para relatório final.
+    """
+
     def __init__(self, source_name: str, db: Optional[DB] = None):
         self.source_name = source_name
         self.db = db or DB()
         self.logger = logging.getLogger(f"ingestor.{source_name}")
-        
-    @abstractmethod
-    def fetch_data(self, limit: Optional[int] = None):
-        """Busca dados da fonte remota."""
-        pass
+        self.stats = {"loaded": 0, "skipped": 0, "errors": 0}
 
-    def process_individual(self, data: Dict):
-        """Normaliza e salva um indivíduo no banco."""
+    @abstractmethod
+    async def run(self, session: aiohttp.ClientSession, **kwargs) -> Dict[str, int]:
+        """
+        Coroutine principal de ingestão.
+        Deve retornar self.stats ao final.
+        """
+
+    # ─── Persistência ────────────────────────────────────────────────────────
+
+    def save(self, data: Dict) -> bool:
+        """Normaliza e persiste um indivíduo no banco de forma síncrona."""
         try:
-            # 1. Upsert dos dados básicos
             upsert_individual(self.db, data)
-            
-            # 2. Inserir Crimes
-            if "crimes" in data:
+
+            if data.get("crimes"):
                 insert_crimes(self.db, data["id"], data["crimes"])
-                
-            # 3. Registrar Imagens (Galeria)
-            if "img_url" in data and data["img_url"]:
+
+            if data.get("img_url"):
                 insert_image(self.db, data["id"], img_url=data["img_url"], is_primary=True)
-                
-            if "gallery" in data:
-                for img_url in data["gallery"]:
-                    insert_image(self.db, data["id"], img_url=img_url, is_primary=False)
-            
+
+            for extra_url in (data.get("gallery") or []):
+                insert_image(self.db, data["id"], img_url=extra_url, is_primary=False)
+
             self.db.commit()
+            self.stats["loaded"] += 1
             return True
         except Exception as e:
-            self.logger.error(f"Erro ao processar {data.get('id')}: {e}")
+            self.logger.error(f"[{self.source_name}] Erro ao salvar {data.get('id')}: {e}")
+            self.stats["errors"] += 1
             return False
 
-    def download_image(self, url: str, target_path: str):
-        """Utilitário para download seguro de evidências visuais."""
-        if os.path.exists(target_path):
+    # ─── HTTP helpers (com retry automático) ─────────────────────────────────
+
+    @retry(
+        stop=stop_after_attempt(4),
+        wait=wait_exponential(multiplier=1, min=2, max=30),
+        retry=retry_if_exception_type((aiohttp.ClientError, asyncio.TimeoutError)),
+        before_sleep=before_sleep_log(logger_root, logging.WARNING),
+        reraise=True,
+    )
+    async def get_json(self, session: aiohttp.ClientSession, url: str, **kwargs) -> Any:
+        """GET com retry exponencial. Retorna JSON parseado."""
+        async with session.get(url, timeout=aiohttp.ClientTimeout(total=30), **kwargs) as resp:
+            resp.raise_for_status()
+            return await resp.json(content_type=None)
+
+    @retry(
+        stop=stop_after_attempt(4),
+        wait=wait_exponential(multiplier=1, min=2, max=30),
+        retry=retry_if_exception_type((aiohttp.ClientError, asyncio.TimeoutError)),
+        before_sleep=before_sleep_log(logger_root, logging.WARNING),
+        reraise=True,
+    )
+    async def get_text(self, session: aiohttp.ClientSession, url: str, **kwargs) -> str:
+        """GET com retry exponencial. Retorna texto."""
+        async with session.get(url, timeout=aiohttp.ClientTimeout(total=60), **kwargs) as resp:
+            resp.raise_for_status()
+            return await resp.text(encoding="utf-8")
+
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=3, max=20),
+        retry=retry_if_exception_type((aiohttp.ClientError, asyncio.TimeoutError)),
+        reraise=False,
+    )
+    async def download_image(
+        self, session: aiohttp.ClientSession, url: str, dest: str
+    ) -> bool:
+        """Download assíncrono de imagem com retry. Pula se já existe."""
+        if os.path.exists(dest):
             return True
         try:
-            os.makedirs(os.path.dirname(target_path), exist_ok=True)
-            r = requests.get(url, timeout=20, stream=True)
-            if r.status_code == 200:
-                with open(target_path, 'wb') as f:
-                    for chunk in r.iter_content(1024):
-                        f.write(chunk)
-                return True
+            os.makedirs(os.path.dirname(dest), exist_ok=True)
+            async with session.get(url, timeout=aiohttp.ClientTimeout(total=30)) as resp:
+                if resp.status == 200:
+                    async with aiofiles.open(dest, "wb") as f:
+                        async for chunk in resp.content.iter_chunked(8192):
+                            await f.write(chunk)
+                    return True
         except Exception as e:
-            self.logger.error(f"Falha no download {url}: {e}")
+            self.logger.warning(f"[{self.source_name}] Falha download {url}: {e}")
         return False
+
+    # ─── Playwright helper (bloqueia em executor para não travar o loop) ─────
+
+    async def run_playwright_sync(self, func, *args):
+        """
+        Executa uma função Playwright síncrona em thread pool,
+        sem bloquear o event loop principal do asyncio.
+        """
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, func, *args)
+
+    # ─── Relatório ────────────────────────────────────────────────────────────
+
+    def report(self) -> str:
+        s = self.stats
+        return (
+            f"[{self.source_name}] "
+            f"✓ {s['loaded']} carregados | "
+            f"⚠ {s['skipped']} ignorados | "
+            f"✗ {s['errors']} erros"
+        )
 
     def close(self):
         self.db.close()

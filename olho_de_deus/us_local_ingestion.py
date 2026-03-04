@@ -1,86 +1,95 @@
 #!/usr/bin/env python3
 """
-us_local_ingestion.py — Olho de Deus
-Foco: EUA Local 🇺🇸 (Phoenix Police e NamUs)
-Integração com portais de Open Data municipais.
+us_local_ingestion.py — Olho de Deus  [Fase 10: Async Migration]
+Fonte: EUA Local — Phoenix Open Data + NamUs + marshals.gov
 """
-import requests
 import os
-import json
 import sys
-from tqdm import tqdm
-from typing import Dict, List, Optional
+import asyncio
+import aiohttp
+from pathlib import Path
+from typing import Dict, Optional
 
-# Injetar caminho para intelligence_db
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "intelligence")))
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "intelligence"))
 
 from core.ingestor import BaseIngestor
+
+MARSHALS_API = "https://www.usmarshals.gov/api/wanted"
+
 
 class USLocalIngestor(BaseIngestor):
     def __init__(self, db=None):
         super().__init__(source_name="US_Local_Police", db=db)
-        self.output_dir = "intelligence/data/images/us_local"
+        self.output_dir = str(ROOT / "intelligence" / "data" / "images" / "us_local")
         os.makedirs(self.output_dir, exist_ok=True)
 
-    def fetch_data(self, limit: Optional[int] = None):
-        """Implementação da BaseIngestor para capturar dados de polícias locais dos EUA."""
-        self.fetch_phoenix_police()
-        self.fetch_namus()
+    async def run(self, session: aiohttp.ClientSession, **kwargs) -> Dict:
+        self.logger.info("[USLocal] Iniciando captura")
 
-    def fetch_phoenix_police(self):
-        """Phoenix Police - phoenixopendata.com"""
-        self.logger.info("Iniciando captura Phoenix Police (Open Data)")
-        # Endpoint de pessoas procuradas/ocorrências
-        url = "https://www.phoenixopendata.com/api/3/action/datastore_search"
-        # Resource ID para Cold Cases ou Wanted (Exemplo simulado)
-        resource_id = "wanted-persons-resource-id" 
-        params = {
-            "resource_id": resource_id,
-            "limit": 50
-        }
-        
+        await asyncio.gather(
+            self._fetch_marshals(session),
+            self._fetch_namus_stub(),
+            return_exceptions=True,
+        )
+
+        self.logger.info(self.report())
+        return self.stats
+
+    async def _fetch_marshals(self, session: aiohttp.ClientSession):
+        """US Marshals Service Wanted — api pública (se disponível)."""
+        self.logger.info("[USLocal/Marshals] Tentando US Marshals API")
         try:
-            # Em portais CKAN como o de Phoenix, a busca é via GET
-            # resp = requests.get(url, params=params, timeout=15)
-            # if resp.status_code == 200:
-            #     items = resp.json().get("result", {}).get("records", [])
-            #     for item in items:
-            #         self._process_phoenix_item(item)
-            self.logger.info("Phoenix: Consultando via OpenSanctions fallback para dados municipais dos EUA.")
-            os.system("python opensanctions_ingestion.py --dataset us_phoenix_wanted")
+            data = await self.get_json(session, MARSHALS_API)
+            items = data if isinstance(data, list) else data.get("items", data.get("wanted", []))
+            self.logger.info(f"[USLocal/Marshals] {len(items)} registros")
+            for item in items:
+                self._process_marshal_item(item)
         except Exception as e:
-            self.logger.error(f"Erro ao buscar dados de Phoenix: {e}")
+            # Marshals API pode não estar pública — fallback para Phoenix Open Data CKAN
+            self.logger.warning(f"[USLocal/Marshals] {e} — pode exigir autenticação")
+            await self._fetch_phoenix_fallback(session)
 
-    def fetch_namus(self):
-        """NamUs (National Missing and Unidentified Persons System)"""
-        self.logger.info("NamUs: Requer registro oficial em namus.nij.ojp.gov para acesso via API.")
-        # Adicionamos metadados de referência
-        normalized = {
-            "id": "NAMUS_REFERENCE",
-            "name": "NAMUS SYSTEM",
+    async def _fetch_phoenix_fallback(self, session: aiohttp.ClientSession):
+        """Phoenix Open Data (CKAN) — cold cases / wanted persons."""
+        url = "https://www.phoenixopendata.com/api/3/action/package_search?q=wanted&rows=20"
+        try:
+            data = await self.get_json(session, url)
+            results = data.get("result", {}).get("results", [])
+            self.logger.info(f"[USLocal/Phoenix] {len(results)} datasets encontrados")
+            # Registra os datasets encontrados como referências
+            for pkg in results[:5]:
+                uid = f"US_PHX_{abs(hash(pkg.get('name', '')))}"
+                self.save({
+                    "id":       uid,
+                    "name":     pkg.get("title", "UNKNOWN").upper(),
+                    "category": "info",
+                    "source":   "Phoenix Open Data",
+                    "description": pkg.get("notes", "")[:500],
+                    "nationalities": ["EUA"],
+                })
+        except Exception as e:
+            self.logger.error(f"[USLocal/Phoenix] Falha: {e}")
+            self.stats["errors"] += 1
+
+    async def _fetch_namus_stub(self):
+        """NamUs — requer registro oficial para API completa."""
+        self.logger.warning("[USLocal/NamUs] namus.nij.ojp.gov requer registro — registrando stub")
+        self.save({
+            "id":       "NAMUS_REFERENCE",
+            "name":     "NAMUS SYSTEM — US MISSING PERSONS",
             "category": "info",
-            "source": "NamUs EUA",
-            "description": "Banco de dados nacional de pessoas desaparecidas dos EUA (namus.gov)"
-        }
-        self.process_individual(normalized)
+            "source":   "NamUs EUA",
+            "description": "Banco nacional de desaparecidos (namus.gov) — requer registro para acesso via API",
+        })
 
-    def _process_phoenix_item(self, item: Dict):
-        """Normaliza item da Phoenix Police."""
-        uid = f"US_PHX_{item.get('id', 'UNKNOWN')}"
-        normalized = {
-            "id": uid,
-            "name": item.get("name", "DESCONHECIDO").upper(),
-            "category": "wanted",
-            "source": "Phoenix Police",
-            "description": f"Caso: {item.get('case_number')}\nDetalhes: {item.get('details')}",
-            "nationalities": ["EUA"]
-        }
-        self.process_individual(normalized)
 
 if __name__ == "__main__":
     from intelligence_db import DB
-    db = DB()
-    ingestor = USLocalIngestor(db=db)
-    ingestor.fetch_phoenix_police()
-    ingestor.fetch_namus()
-    ingestor.close()
+    async def _main():
+        db = DB()
+        ingestor = USLocalIngestor(db=db)
+        async with aiohttp.ClientSession() as session:
+            await ingestor.run(session)
+        ingestor.close()
+    asyncio.run(_main())
