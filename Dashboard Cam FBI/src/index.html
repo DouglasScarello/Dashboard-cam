@@ -184,6 +184,31 @@
             transition: all 0.2s;
         }
         .log-entry:hover { background: rgba(16, 185, 129, 0.05); }
+
+        /* Filtros Avançados Panel */
+        #advancedFilters {
+            transition: all 0.3s ease-in-out;
+            max-height: 0;
+            overflow: hidden;
+            background: rgba(11, 17, 26, 0.95);
+            border-bottom: 0px solid rgba(16, 185, 129, 0.2);
+        }
+        #advancedFilters.active {
+            max-height: 100px;
+            border-bottom-width: 1px;
+            padding: 10px;
+        }
+
+        .filter-input {
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #10B981;
+            font-size: 10px;
+            padding: 4px 8px;
+            border-radius: 3px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .filter-input:focus { border-color: #10B981; outline: none; }
     </style>
 </head>
 <body class="bg-gray-900 text-gray-200 h-screen flex flex-col font-mono overflow-hidden cursor-default select-none">
@@ -201,13 +226,52 @@
             <input type="text" id="searchInput" class="bg-gray-900 border border-gray-600 text-gray-100 text-sm rounded-md block w-full pl-10 p-2.5 transition-all duration-300" placeholder="Pesquisar câmera pelo nome único...">
         </div>
 
-        <button onclick="openAddModal()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 px-4 rounded transition-colors duration-200 flex items-center">
-            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
-            ADICIONAR CÂMERA
-        </button>
+        <div class="flex items-center space-x-3">
+            <button onclick="toggleFilters()" class="bg-gray-700 hover:bg-emerald-900/40 text-gray-300 hover:text-emerald-400 font-bold py-2 px-4 rounded transition-all flex items-center border border-gray-600 hover:border-emerald-500">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"></path></svg>
+                FILTROS
+            </button>
+            <button onclick="openAddModal()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 px-4 rounded transition-colors duration-200 flex items-center">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                ADICIONAR CÂMERA
+            </button>
+        </div>
     </header>
 
     <main class="flex-1 overflow-hidden flex flex-col">
+        <!-- Filtros Avançados (Fase 15) -->
+        <div id="advancedFilters" class="z-30 px-4 flex items-center space-x-6">
+            <div class="flex flex-col">
+                <label class="text-[7px] text-gray-500 uppercase font-bold mb-1">Score Mínimo</label>
+                <div class="flex items-center space-x-2">
+                    <input type="range" id="filterMinScore" min="0" max="10" step="0.5" value="0" class="w-24 h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-emerald-500" oninput="updateFilters()">
+                    <span id="minScoreLabel" class="text-[9px] font-bold text-emerald-500 w-4">0</span>
+                </div>
+            </div>
+            
+            <div class="flex flex-col">
+                <label class="text-[7px] text-gray-500 uppercase font-bold mb-1">Categoria de Ameaça</label>
+                <select id="filterCategory" class="filter-input" onchange="updateFilters()">
+                    <option value="ALL">TODAS AS CATEGORIAS</option>
+                    <option value="AMEAÇA ARMADA">AMEAÇA ARMADA</option>
+                    <option value="EMERGÊNCIA MÉDICA">EMERGÊNCIA MÉDICA</option>
+                    <option value="SUSPEITO">SUSPEITO</option>
+                    <option value="ROTINA">ROTINA/IDENTIFICADO</option>
+                </select>
+            </div>
+
+            <div class="flex flex-col">
+                <label class="text-[7px] text-gray-500 uppercase font-bold mb-1">Filtrar Cidade</label>
+                <input type="text" id="filterCity" placeholder="Ex: Florianópolis" class="filter-input w-32" oninput="updateFilters()">
+            </div>
+
+            <div class="flex-1"></div>
+            
+            <button onclick="resetAdvancedFilters()" class="text-[8px] text-rose-500 hover:text-white border border-rose-900/30 hover:bg-rose-900/40 px-3 py-1.5 rounded transition-all uppercase font-bold">
+                Resetar Filtros
+            </button>
+        </div>
+
         <!-- Header / Stats Bar -->
         <div id="statsBar" class="bg-gray-900/90 border-b border-emerald-900/30 px-4 py-1.5 flex flex-wrap items-center justify-between z-30 shadow-2xl">
             <!-- Gerado via JavaScript -->
@@ -556,65 +620,94 @@
             try {
                 const { invoke } = window.__TAURI__.core;
                 const sightings = await invoke('get_recent_sightings');
+                lastSightingsData = sightings; // Cache para filtros
                 
-                const sightingsHeatData = [];
-                const activeSightingsKeys = new Set();
-
-                sightings.forEach(s => {
-                    const cam = activeCameras.find(c => c.id == s.camera_id || c.nome == s.camera_id);
-                    if (cam && cam.lat && cam.long) {
-                        const key = `${s.id}-${s.captured_at}`;
-                        activeSightingsKeys.add(key);
-
-                        const isHighRisk = (s.threat_score || 0) >= 8.0;
-                        
-                        if (!activeSightingMarkers[key]) {
-                            const color = isHighRisk ? '#ff0000' : '#10b981';
-                            const pulseClass = isHighRisk ? 'fbi-pulse fbi-pulse-high' : 'fbi-pulse';
-                            
-                            const icon = L.divIcon({
-                                className: pulseClass,
-                                html: `<div class="w-2.5 h-2.5 rounded-full ${isHighRisk ? 'bg-rose-500' : 'bg-emerald-400'} border border-white/40"></div>`,
-                                iconSize: [12, 12],
-                                iconAnchor: [6, 6]
-                            });
-
-                            const marker = L.marker([cam.lat, cam.long], { icon: icon }).addTo(tauriMap);
-
-                            marker.bindPopup(`
-                                <div class="text-[10px] space-y-1 font-mono">
-                                    <div class="font-bold flex justify-between border-b border-white/5 pb-1">
-                                        <span class="${isHighRisk ? 'text-rose-500' : 'text-emerald-500'}">🚨 ${s.name}</span>
-                                        <span>${s.threat_score.toFixed(1)}</span>
-                                    </div>
-                                    <div class="text-[8px] text-gray-500">CÂMERA: ${cam.nome}</div>
-                                    <div class="text-[8px] text-gray-400">HORA: ${s.captured_at}</div>
-                                    <button onclick="switchToAIStream('${cam.id}')" class="w-full mt-2 bg-emerald-600/20 hover:bg-emerald-600/40 border border-emerald-500/50 py-1 text-[8px] uppercase tracking-tighter transition-all">INTERCEPTAR FEED</button>
-                                </div>
-                            `);
-                            activeSightingMarkers[key] = marker;
-
-                            // Auto-Focus em ameaças críticas
-                            if (isHighRisk) {
-                                tauriMap.flyTo([cam.lat, cam.long], 16, { duration: 1.5 });
-                                marker.openPopup();
-                            }
-                        }
-                        
-                        sightingsHeatData.push([cam.lat, cam.long, isHighRisk ? 1.0 : 0.6]);
-                    }
-                });
-
-                // Atualiza o Log Tático (Fase 13)
-                updateTacticalLog(sightings);
-
-                if (mapHeat) tauriMap.removeLayer(mapHeat);
-                mapHeat = L.heatLayer(sightingsHeatData, {radius: 35, blur: 20, maxZoom: 17}).addTo(tauriMap);
-                drawTrajectories(sightings);
+                renderTacticalView(applyAdvancedFilters(sightings));
 
             } catch (err) {
                 console.error("[MAP] Erro ao buscar avistamentos:", err);
             }
+        }
+
+        function applyAdvancedFilters(data) {
+            const minScore = parseFloat(document.getElementById('filterMinScore').value);
+            const category = document.getElementById('filterCategory').value;
+            const cityQuery = document.getElementById('filterCity').value.toLowerCase();
+
+            return data.filter(s => {
+                const cam = activeCameras.find(c => c.id == s.camera_id || c.nome == s.camera_id);
+                
+                // 1. Filtro Score
+                if ((s.threat_score || 0) < minScore) return false;
+                
+                // 2. Filtro Categoria
+                if (category !== 'ALL') {
+                    // Mapeamento simples de tags/detalhes p/ categoria (Fase 15)
+                    const details = (s.details || "").toUpperCase();
+                    if (category === 'AMEAÇA ARMADA' && !details.includes('ARMA')) return false;
+                    if (category === 'EMERGÊNCIA MÉDICA' && !details.includes('CAÍDA')) return false;
+                }
+
+                // 3. Filtro Cidade
+                if (cityQuery) {
+                    const city = (cam ? cam.local : "").toLowerCase();
+                    if (!city.includes(cityQuery)) return false;
+                }
+
+                return true;
+            });
+        }
+
+        function renderTacticalView(sightings) {
+            const sightingsHeatData = [];
+            const activeSightingsKeys = new Set();
+            
+            // Limpa markers existentes para re-renderizar conforme o filtro
+            Object.keys(activeSightingMarkers).forEach(key => {
+                tauriMap.removeLayer(activeSightingMarkers[key]);
+            });
+            activeSightingMarkers = {};
+
+            sightings.forEach(s => {
+                const cam = activeCameras.find(c => c.id == s.camera_id || c.nome == s.camera_id);
+                if (cam && cam.lat && cam.long) {
+                    const key = `${s.id}-${s.captured_at}`;
+                    activeSightingsKeys.add(key);
+
+                    const isHighRisk = (s.threat_score || 0) >= 8.0;
+                    const color = isHighRisk ? '#ff0000' : '#10b981';
+                    const pulseClass = isHighRisk ? 'fbi-pulse fbi-pulse-high' : 'fbi-pulse';
+                    
+                    const icon = L.divIcon({
+                        className: pulseClass,
+                        html: `<div class="w-2.5 h-2.5 rounded-full ${isHighRisk ? 'bg-rose-500' : 'bg-emerald-400'} border border-white/40"></div>`,
+                        iconSize: [12, 12],
+                        iconAnchor: [6, 6]
+                    });
+
+                    const marker = L.marker([cam.lat, cam.long], { icon: icon }).addTo(tauriMap);
+
+                    marker.bindPopup(`
+                        <div class="text-[10px] space-y-1 font-mono">
+                            <div class="font-bold flex justify-between border-b border-white/5 pb-1">
+                                <span class="${isHighRisk ? 'text-rose-500' : 'text-emerald-500'}">🚨 ${s.name}</span>
+                                <span>${s.threat_score.toFixed(1)}</span>
+                            </div>
+                            <div class="text-[8px] text-gray-500">CÂMERA: ${cam.nome}</div>
+                            <div class="text-[8px] text-gray-400">HORA: ${s.captured_at}</div>
+                            <button onclick="switchToAIStream('${cam.id}')" class="w-full mt-2 bg-emerald-600/20 hover:bg-emerald-600/40 border border-emerald-500/50 py-1 text-[8px] uppercase tracking-tighter transition-all">INTERCEPTAR FEED</button>
+                        </div>
+                    `);
+                    activeSightingMarkers[key] = marker;
+                    sightingsHeatData.push([cam.lat, cam.long, isHighRisk ? 1.0 : 0.6]);
+                }
+            });
+
+            updateTacticalLog(sightings);
+
+            if (mapHeat) tauriMap.removeLayer(mapHeat);
+            mapHeat = L.heatLayer(sightingsHeatData, {radius: 35, blur: 20, maxZoom: 17}).addTo(tauriMap);
+            drawTrajectories(sightings);
         }
 
         let mapPolylines = [];
@@ -1445,6 +1538,29 @@
             // Força o tipo para webrtc para carregar o player correto
             cam.tipo = 'webrtc';
             updateUI();
+        }
+
+        // === CONTROLADORES DE FILTRO (Fase 15) ===
+        function toggleFilters() {
+            document.getElementById('advancedFilters').classList.toggle('active');
+        }
+
+        function updateFilters() {
+            const minScore = document.getElementById('filterMinScore').value;
+            document.getElementById('minScoreLabel').innerText = minScore;
+            
+            // Re-renderiza a visão tática se houver dados em cache
+            if (lastSightingsData.length > 0 && isMapView && tauriMap) {
+                renderTacticalView(applyAdvancedFilters(lastSightingsData));
+            }
+        }
+
+        function resetAdvancedFilters() {
+            document.getElementById('filterMinScore').value = 0;
+            document.getElementById('minScoreLabel').innerText = '0';
+            document.getElementById('filterCategory').value = 'ALL';
+            document.getElementById('filterCity').value = '';
+            updateFilters();
         }
 
         // === SYSTEM HEALTH (Fase 20) ===
