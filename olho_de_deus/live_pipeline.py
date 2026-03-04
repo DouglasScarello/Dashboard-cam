@@ -107,7 +107,7 @@ class LivePipeline:
         
         ev_id = str(uuid_pkg.uuid4())
         try:
-            register_evidence(self.db, ev_id, uid, file_hash, str(file_path))
+            register_evidence(self.db, ev_id, uid, file_hash, str(file_path), camera_id=self.camera_id)
         except Exception as e:
             log.error(f"Falha ao registrar evidência pericial: {e}")
 

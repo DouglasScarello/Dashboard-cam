@@ -7,6 +7,12 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- hls.js para streams HLS/m3u8 nativos -->
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest/dist/hls.min.js"></script>
+    
+    <!-- Leaflet para o Mapa Tático (Fase 13) -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://leaflet.github.io/Leaflet.heat/dist/leaflet-heat.js"></script>
+
     <style>
         /* Ajustes finos para a barra de rolagem (Estética FBI/Dark) */
         ::-webkit-scrollbar { width: 8px; }
@@ -105,6 +111,21 @@
         .animate-fade-in {
             animation: fadeIn 0.5s ease-out forwards;
         }
+
+        #tacticalMap {
+            width: 100%;
+            height: 100%;
+            background: #0b0e14;
+        }
+
+        /* Estilo Dark para o Leaflet */
+        .leaflet-container { background: #0b111a; }
+        .leaflet-popup-content-wrapper, .leaflet-popup-tip {
+            background: #1f2937;
+            color: #10B981;
+            border: 1px solid #374151;
+            font-family: monospace;
+        }
     </style>
 </head>
 <body class="bg-gray-900 text-gray-200 h-screen flex flex-col font-mono overflow-hidden cursor-default select-none">
@@ -135,6 +156,10 @@
         </div>
 
         <div id="cameraGrid" class="flex-1 overflow-y-auto p-1 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-1 bg-black">
+        </div>
+
+        <div id="mapContainer" class="flex-1 hidden">
+            <div id="tacticalMap"></div>
         </div>
     </main>
 
@@ -277,16 +302,15 @@
     </div>
 
     <script>
-        const cameraGrid = document.getElementById('cameraGrid');
-        const searchInput = document.getElementById('searchInput');
-        const fullscreenModal = document.getElementById('fullscreenModal');
-        const modalTitle = document.getElementById('modalTitle');
-        const modalContent = document.getElementById('modalContent');
-        const addCameraModal = document.getElementById('addCameraModal');
-        const editCameraModal = document.getElementById('editCameraModal');
         const bulkImportModal = document.getElementById('bulkImportModal');
+        const cameraGridDiv = document.getElementById('cameraGrid');
+        const mapContainerDiv = document.getElementById('mapContainer');
 
         let currentSector = 'ALL';
+        let tauriMap = null;
+        let mapMarkers = [];
+        let mapHeat = null;
+        let isMapView = false;
 
         // === SISTEMA DE VERSIONAMENTO DO DATASET ===
         const OSS_DATASET_VERSION = '18.0'; // Automação & Persistência Local
@@ -373,9 +397,203 @@
             
             const bulkBtn = document.createElement('button');
             bulkBtn.onclick = openBulkModal;
-            bulkBtn.className = "bg-blue-900 hover:bg-blue-800 text-blue-100 px-4 py-1 rounded text-xs font-bold uppercase tracking-widest border border-blue-700 transition-all font-mono";
+            bulkBtn.className = "bg-blue-900 hover:bg-blue-800 text-blue-100 px-4 py-1 rounded text-xs font-bold uppercase tracking-widest border border-blue-700 transition-all font-mono mr-2";
             bulkBtn.innerText = 'IMPORTAÇÃO BULK';
             bar.appendChild(bulkBtn);
+
+            const mapBtn = document.createElement('button');
+            mapBtn.onclick = toggleView;
+            mapBtn.className = `px-4 py-1 rounded text-xs font-bold uppercase tracking-widest border transition-all font-mono ${isMapView ? 'bg-red-950 text-red-400 border-red-800' : 'bg-emerald-950 text-emerald-400 border-emerald-800 hover:bg-emerald-800'}`;
+            mapBtn.innerText = isMapView ? 'VOLTAR AO GRID' : '🗺️ MAPA TÁTICO';
+            bar.appendChild(mapBtn);
+        }
+
+        function toggleView() {
+            isMapView = !isMapView;
+            if (isMapView) {
+                cameraGridDiv.classList.add('hidden');
+                mapContainerDiv.classList.remove('hidden');
+                initTauriMap();
+            } else {
+                cameraGridDiv.classList.remove('hidden');
+                mapContainerDiv.classList.add('hidden');
+            }
+            updateUI();
+        }
+
+        function initTauriMap() {
+            if (tauriMap) return;
+            
+            // Inicializa mapa (Center: Brasil)
+            tauriMap = L.map('tacticalMap', { zoomControl: false }).setView([-15.78, -47.92], 4);
+            
+            // Tile Layer Dark (CartoDB)
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; Olho de Deus Intelligence'
+            }).addTo(tauriMap);
+
+            L.control.zoom({ position: 'bottomright' }).addTo(tauriMap);
+
+            updateMapMarkers();
+            
+            // Inicia Polling de Avistamentos (Fase 13)
+            setInterval(updateSightings, 5000);
+            updateSightings();
+        }
+
+        let sightingMarkers = [];
+
+        async function updateSightings() {
+            if (!tauriMap || !isMapView) return;
+
+            try {
+                const { invoke } = window.__TAURI__.core;
+                const sightings = await invoke('get_recent_sightings');
+                
+                // Limpa sightings antigos
+                sightingMarkers.forEach(m => tauriMap.removeLayer(m));
+                sightingMarkers = [];
+
+                const sightingsHeatData = [];
+                sightings.forEach(s => {
+                    // Busca a câmera correspondente para pegar lat/long
+                    const cam = activeCameras.find(c => c.id == s.camera_id || c.nome == s.camera_id);
+                    if (cam && cam.lat && cam.long) {
+                        const isHighRisk = s.threat_score >= 8.0;
+                        const color = isHighRisk ? '#ff0000' : '#ff9900';
+                        
+                        const marker = L.circleMarker([cam.lat, cam.long], {
+                            radius: isHighRisk ? 10 : 7,
+                            fillColor: color,
+                            color: "#fff",
+                            weight: 2,
+                            opacity: 1,
+                            fillOpacity: 0.9,
+                            className: isHighRisk ? 'fbi-alert' : ''
+                        }).addTo(tauriMap);
+
+                        marker.bindPopup(`
+                            <div style="font-family: monospace; font-size: 10px;">
+                                <b style="color: ${color}">🚨 AVISTAMENTO: ${s.name}</b><br>
+                                SCORE: ${s.threat_score.toFixed(1)}/10.0<br>
+                                DATA: ${s.captured_at}<br>
+                                LOCAL: ${cam.nome}<br>
+                                <hr style="margin: 5px 0; border: 0.5px solid #333;">
+                                <button onclick="openFullscreen('${cam.id}')" style="background: #ef4444; color: white; border: none; padding: 2px 5px; cursor: pointer; width: 100%; font-weight: bold;">INTERCEPTAR FEED</button>
+                            </div>
+                        `);
+                        sightingMarkers.push(marker);
+                        
+                        // Alimenta dados do heatmap: [lat, long, intensidade]
+                        // Alvos de alto risco geram mais "calor"
+                        sightingsHeatData.push([cam.lat, cam.long, isHighRisk ? 1.0 : 0.6]);
+                    }
+                });
+
+                // Atualiza Heatmap Tático
+                if (mapHeat) tauriMap.removeLayer(mapHeat);
+                mapHeat = L.heatLayer(sightingsHeatData, {radius: 35, blur: 20, maxZoom: 17}).addTo(tauriMap);
+
+                // --- TRAJETÓRIAS (Fase 13: Deduplicação Global) ---
+                drawTrajectories(sightings);
+
+            } catch (err) {
+                console.error("[MAP] Erro ao buscar avistamentos:", err);
+            }
+        }
+
+        let mapPolylines = [];
+        function drawTrajectories(sightings) {
+            // Limpa trajetórias anteriores
+            mapPolylines.forEach(p => tauriMap.removeLayer(p));
+            mapPolylines = [];
+
+            // Agrupa avistamentos por alvo (UID) ordenados por tempo
+            const groups = {};
+            sightings.forEach(s => {
+                if (!groups[s.individual_id]) groups[s.individual_id] = [];
+                groups[s.individual_id].push(s);
+            });
+
+            Object.keys(groups).forEach(uid => {
+                const targetSightings = groups[uid].sort((a,b) => new Date(a.captured_at) - new Date(b.captured_at));
+                
+                const pathCoords = targetSightings.map(s => {
+                    const cam = activeCameras.find(c => c.id == s.camera_id || c.nome == s.camera_id);
+                    return cam && cam.lat && cam.long ? [cam.lat, cam.long] : null;
+                }).filter(c => c !== null);
+
+                if (pathCoords.length > 1) {
+                    const polyline = L.polyline(pathCoords, {
+                        color: stringToColor(uid),
+                        weight: 3,
+                        opacity: 0.6,
+                        dashArray: '5, 10'
+                    }).addTo(tauriMap);
+                    mapPolylines.push(polyline);
+                }
+            });
+        }
+
+        function stringToColor(str) {
+            let hash = 0;
+            for (let i = 0; i < str.length; i++) {
+                hash = str.charCodeAt(i) + ((hash << 5) - hash);
+            }
+            let color = '#';
+            for (let i = 0; i < 3; i++) {
+                let value = (hash >> (i * 8)) & 0xFF;
+                color += ('00' + value.toString(16)).substr(-2);
+            }
+            return color;
+        }
+
+        function updateMapMarkers() {
+            if (!tauriMap) return;
+
+            // Limpa markers anteriores
+            mapMarkers.forEach(m => tauriMap.removeLayer(m));
+            mapMarkers = [];
+            
+            const heatData = [];
+            const filtered = filterCurrentSet(activeCameras);
+
+            filtered.forEach(cam => {
+                if (cam.lat && cam.long) {
+                    const color = cam.status === 'OFFLINE' ? '#ef4444' : '#10B981';
+                    const marker = L.circleMarker([cam.lat, cam.long], {
+                        radius: 6,
+                        fillColor: color,
+                        color: "#000",
+                        weight: 1,
+                        opacity: 1,
+                        fillOpacity: 0.8
+                    }).addTo(tauriMap);
+
+                    marker.bindPopup(`
+                        <div style="font-size: 10px;">
+                            <b style="color: ${color}">${cam.nome}</b><br>
+                            ${cam.local}<br>
+                            <button onclick="openFullscreen(${cam.id})" style="margin-top: 5px; background: #10B981; color: white; border: none; padding: 2px 5px; cursor: pointer; width: 100%;">LIVE FEED</button>
+                        </div>
+                    `);
+                    mapMarkers.push(marker);
+                    
+                    // Dados para o heatmap (simulado usando status)
+                    if (cam.status !== 'OFFLINE') {
+                        heatData.push([cam.lat, cam.long, 0.5]);
+                    }
+                }
+            });
+
+            if (mapHeat) tauriMap.removeLayer(mapHeat);
+            mapHeat = L.heatLayer(heatData, {radius: 25, blur: 15, maxZoom: 17}).addTo(tauriMap);
+            
+            // Auto-ajuste de bounds se houver markers
+            if (mapMarkers.length > 0) {
+                const group = new L.featureGroup(mapMarkers);
+                tauriMap.fitBounds(group.getBounds().pad(0.1));
+            }
         }
 
         function createFilterBtn(text, onClick, isActive = false) {

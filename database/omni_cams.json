@@ -41,7 +41,9 @@
         "tipo": "youtube",
         "status": "AO VIVO",
         "id": 1003,
-        "res": "1920x1080"
+        "res": "1920x1080",
+        "lat": -27.5841,
+        "long": -48.5492
     },
     {
         "nome": "CÂMERA AO VIVO BR-101 KM 210 - SENTIDO SUL",
@@ -63,7 +65,9 @@
         "tipo": "youtube",
         "status": "AO VIVO",
         "id": 1005,
-        "res": "1280x720"
+        "res": "1280x720",
+        "lat": -27.5867,
+        "long": -48.5445
     },
     {
         "nome": "CÂMERA AO VIVO FLORIANÓPOLIS - PRAIA DOS INGLESES - BEACH HOUSE BISTRO&LOUNGE",

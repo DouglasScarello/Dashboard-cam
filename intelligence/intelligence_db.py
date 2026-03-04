@@ -148,6 +148,7 @@ CREATE TABLE IF NOT EXISTS individual_images (
 CREATE TABLE IF NOT EXISTS evidence (
     id              TEXT PRIMARY KEY,
     individual_id   TEXT NOT NULL REFERENCES individuals(id),
+    camera_id       TEXT, -- ID da câmera de origem (Fase 13)
     file_hash       TEXT NOT NULL,
     file_path       TEXT NOT NULL,
     captured_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -352,7 +353,7 @@ def get_all_embeddings_for_index(db: DB) -> List[Dict]:
 # FASE 16 — CADEIA DE CUSTÓDIA (SHA-256)
 # ─────────────────────────────────────────────────────────────────
 
-def register_evidence(db: DB, evidence_id: str, individual_id: str, file_hash: str, file_path: str):
+def register_evidence(db: DB, evidence_id: str, individual_id: str, file_hash: str, file_path: str, camera_id: str = None):
     """
     Registra uma evidência (foto/frame) na Cadeia de Custódia.
     Design Append-Only: Rejeita se o ID já existir.
@@ -362,8 +363,8 @@ def register_evidence(db: DB, evidence_id: str, individual_id: str, file_hash: s
     if cur.fetchone():
         raise PermissionError(f"Violação de Imutabilidade: Evidência {evidence_id} já existe.")
 
-    q = "INSERT INTO evidence (id, individual_id, file_hash, file_path) VALUES (?, ?, ?, ?)"
-    db.execute(q, (evidence_id, individual_id, file_hash, file_path))
+    q = "INSERT INTO evidence (id, individual_id, camera_id, file_hash, file_path) VALUES (?, ?, ?, ?, ?)"
+    db.execute(q, (evidence_id, individual_id, camera_id, file_hash, file_path))
     db.commit()
 
 
