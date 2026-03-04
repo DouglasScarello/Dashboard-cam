@@ -411,6 +411,38 @@ def get_threat_score(db: DB, individual_id: str) -> Optional[Dict]:
     return None
 
 
+def get_full_individual_dossier(db: DB, individual_id: str) -> Optional[Dict]:
+    """
+    Agrega todos os dados de um indivíduo para exportação forense (Fase 18).
+    Consolida: Dados Pessoais, Crimes, Threat Score e Evidências.
+    """
+    # 1. Dados Básicos
+    q_basic = "SELECT * FROM individuals WHERE id = ?"
+    cur = db.execute(q_basic, (individual_id,))
+    row = cur.fetchone()
+    if not row: return None
+    
+    dossier = dict(row)
+    
+    # 2. Crimes e Categorias
+    q_crimes = "SELECT crime, severity FROM crimes WHERE individual_id = ?"
+    cur = db.execute(q_crimes, (individual_id,))
+    dossier["crimes_list"] = [dict(r) for r in cur.fetchall()]
+    
+    # 3. Threat Score
+    dossier["threat"] = get_threat_score(db, individual_id)
+    
+    # 4. Evidências (Cadeia de Custódia)
+    dossier["evidences"] = get_evidence(db, individual_id)
+    
+    # 5. Imagens Adicionais
+    q_imgs = "SELECT img_path, caption FROM individual_images WHERE individual_id = ?"
+    cur = db.execute(q_imgs, (individual_id,))
+    dossier["additional_images"] = [dict(r) for r in cur.fetchall()]
+    
+    return dossier
+
+
 def stats(db: DB) -> Dict:
 
     """Estatísticas gerais do banco."""

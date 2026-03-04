@@ -26,8 +26,9 @@ sys.path.insert(0, str(ROOT / "intelligence"))
 from biometric_processor import BiometricProcessor
 from youtube_stream import get_live_url
 from alert_dispatcher import dispatch_sync
-from intelligence_db import DB, init_db, register_evidence, get_threat_score
+from intelligence_db import DB, init_db, register_evidence, get_threat_score, get_full_individual_dossier
 from score_engine import ThreatScorer
+from forensic_report import generate_dossier_pdf
 
 # Logging
 log = logging.getLogger("live_pipeline")
@@ -54,7 +55,9 @@ class LivePipeline:
         
         # Diretório de evidências (Fase 16)
         self.evidence_dir = ROOT / "intelligence" / "data" / "evidence" / "matches"
+        self.report_dir = ROOT / "intelligence" / "data" / "reports"
         os.makedirs(self.evidence_dir, exist_ok=True)
+        os.makedirs(self.report_dir, exist_ok=True)
 
     def _capture_loop(self, stream_url: str):
         """Thread que mantém o buffer de frames sempre atualizado (descartando atraso)."""
@@ -124,6 +127,20 @@ class LivePipeline:
             threat_score=threat_score,
             evidence_path=str(file_path)
         )
+
+        # 5. Gerar Dossiê Forense PDF (Fase 18) — Em Thread separada para não travar o vídeo
+        def generate_async():
+            try:
+                dossier = get_full_individual_dossier(self.db, uid)
+                if dossier:
+                    pdf_filename = f"dossier_{uid}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+                    pdf_path = str(self.report_dir / pdf_filename)
+                    generate_dossier_pdf(dossier, pdf_path)
+                    log.info(f"📄 Dossiê PDF gerado: {pdf_path}")
+            except Exception as ex:
+                log.error(f"Erro ao gerar dossiê PDF: {ex}")
+
+        threading.Thread(target=generate_async, daemon=True).start()
 
 
     def run(self):
