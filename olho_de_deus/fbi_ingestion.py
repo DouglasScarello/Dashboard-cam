@@ -95,7 +95,7 @@ class FBIIngestor(BaseIngestor):
             p_url = imgs[0].get("original") or imgs[0].get("large") or imgs[0].get("thumb")
             if p_url:
                 img_dest = os.path.join(self.output_dir, f"{uid}.jpg")
-                await self.download_image(session, p_url, img_dest)
+                await self.download_image(session, p_url, img_dest, individual_id=uid)
                 normalized["img_url"] = p_url
                 normalized["img_path"] = f"data/images/fbi/{uid}.jpg"
 

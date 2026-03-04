@@ -102,13 +102,21 @@ class BNMPIngestor(BaseIngestor):
                 s = requests.Session()
                 r = s.get(photo_url, timeout=15, stream=True)
                 if r.status_code == 200 and not os.path.exists(img_dest):
+                    import hashlib
+                    hasher = hashlib.sha256()
                     with open(img_dest, "wb") as f:
-                        for chunk in r.iter_content(8192):
+                        for chunk in r.iter_content(16384):
+                            hasher.update(chunk)
                             f.write(chunk)
+                    
+                    file_hash = hasher.hexdigest()
+                    self._register_custody_sync(uid, file_hash, img_dest)
+
                     normalized["img_url"]  = photo_url
                     normalized["img_path"] = f"data/images/bnmp/{uid}.jpg"
-            except Exception:
-                pass
+            except Exception as e:
+                self.logger.warning(f"[BNMP] Falha download {photo_url}: {e}")
+
 
         self.save(normalized)
 

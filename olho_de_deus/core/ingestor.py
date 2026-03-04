@@ -13,6 +13,8 @@ import asyncio
 import logging
 import aiohttp
 import aiofiles
+import hashlib
+import uuid
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Dict, List, Optional, Any
@@ -112,24 +114,78 @@ class BaseIngestor(ABC):
         reraise=False,
     )
     async def download_image(
-        self, session: aiohttp.ClientSession, url: str, dest: str
+        self, session: aiohttp.ClientSession, url: str, dest: str,
+        individual_id: Optional[str] = None
     ) -> bool:
-        """Download assíncrono de imagem com retry. Pula se já existe."""
+        """
+        Download assíncrono de imagem com cálculo de SHA-256 'no voo'.
+        Se 'individual_id' for fornecido, registra automaticamente na Cadeia de Custódia.
+        """
+        hasher = hashlib.sha256()
+        
+        # Se já existe, apenas calculamos o hash para registro/verificação
         if os.path.exists(dest):
-            return True
+            try:
+                async with aiofiles.open(dest, "rb") as f:
+                    while chunk := await f.read(65536):
+                        hasher.update(chunk)
+                file_hash = hasher.hexdigest()
+                if individual_id:
+                    self._register_custody(individual_id, file_hash, dest)
+                return True
+            except Exception:
+                return False
+
         try:
             os.makedirs(os.path.dirname(dest), exist_ok=True)
-            async with session.get(url, timeout=aiohttp.ClientTimeout(total=30)) as resp:
+            async with session.get(url, timeout=aiohttp.ClientTimeout(total=45)) as resp:
                 if resp.status == 200:
                     async with aiofiles.open(dest, "wb") as f:
-                        async for chunk in resp.content.iter_chunked(8192):
+                        async for chunk in resp.content.iter_chunked(16384):
+                            hasher.update(chunk)
                             await f.write(chunk)
+                    
+                    file_hash = hasher.hexdigest()
+                    if individual_id:
+                        self._register_custody(individual_id, file_hash, dest)
                     return True
         except Exception as e:
             self.logger.warning(f"[{self.source_name}] Falha download {url}: {e}")
         return False
 
+    def _register_custody(self, individual_id: str, file_hash: str, file_path: str):
+        """Helper interno para registro na Cadeia de Custódia."""
+        from intelligence_db import register_evidence
+        try:
+            # Usar um ID de evidência derivado ou aleatório
+            # Para rastreabilidade, podemos usar UUID v4
+            ev_id = str(uuid.uuid4())
+            register_evidence(self.db, ev_id, individual_id, file_hash, file_path)
+            self.logger.debug(f"[custódia] Evidência registrada: {ev_id[:8]}")
+        except Exception as e:
+            # Se for violação de imutabilidade (ID repetido), o dispatch cuidará de gritar
+            if "Violação de Imutabilidade" in str(e):
+                from alert_dispatcher import dispatch_sync
+                dispatch_sync("INTEGRITY_VIOLATION", 
+                    evidence_id="DuplicateID", 
+                    expected_hash="N/A", 
+                    actual_hash=file_hash,
+                    detected_at=datetime.now().isoformat()
+                )
+            self.logger.error(f"[custódia] Falha ao registrar evidência: {e}")
+
+    def _register_custody_sync(self, individual_id: str, file_hash: str, file_path: str):
+        """Versão síncrona do registro de custódia (para uso em executores)."""
+        from intelligence_db import register_evidence
+        try:
+            ev_id = str(uuid.uuid4())
+            register_evidence(self.db, ev_id, individual_id, file_hash, file_path)
+            self.logger.debug(f"[custódia-sync] Evidência registrada: {ev_id[:8]}")
+        except Exception as e:
+            self.logger.error(f"[custódia-sync] Falha ao registrar evidência: {e}")
+
     # ─── Playwright helper (bloqueia em executor para não travar o loop) ─────
+
 
     async def run_playwright_sync(self, func, *args):
         """

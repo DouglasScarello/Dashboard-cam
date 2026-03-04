@@ -144,6 +144,15 @@ CREATE TABLE IF NOT EXISTS individual_images (
     caption         TEXT,
     is_primary      INTEGER DEFAULT 0
 );
+
+CREATE TABLE IF NOT EXISTS evidence (
+    id              TEXT PRIMARY KEY,
+    individual_id   TEXT NOT NULL REFERENCES individuals(id),
+    file_hash       TEXT NOT NULL,
+    file_path       TEXT NOT NULL,
+    captured_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 """
 
 def init_db():
@@ -332,7 +341,42 @@ def get_all_embeddings_for_index(db: DB) -> List[Dict]:
     return [dict(r) for r in cur.fetchall()]
 
 
+# ─────────────────────────────────────────────────────────────────
+# FASE 16 — CADEIA DE CUSTÓDIA (SHA-256)
+# ─────────────────────────────────────────────────────────────────
+
+def register_evidence(db: DB, evidence_id: str, individual_id: str, file_hash: str, file_path: str):
+    """
+    Registra uma evidência (foto/frame) na Cadeia de Custódia.
+    Design Append-Only: Rejeita se o ID já existir.
+    """
+    # Verificar se já existe (Proteção de Imutabilidade)
+    cur = db.execute("SELECT 1 FROM evidence WHERE id = ?", (evidence_id,))
+    if cur.fetchone():
+        raise PermissionError(f"Violação de Imutabilidade: Evidência {evidence_id} já existe.")
+
+    q = "INSERT INTO evidence (id, individual_id, file_hash, file_path) VALUES (?, ?, ?, ?)"
+    db.execute(q, (evidence_id, individual_id, file_hash, file_path))
+    db.commit()
+
+
+def get_evidence(db: DB, individual_id: str) -> List[Dict]:
+    """Retorna todas as evidências de um indivíduo."""
+    cur = db.execute(
+        "SELECT * FROM evidence WHERE individual_id = ? ORDER BY captured_at DESC",
+        (individual_id,)
+    )
+    return [dict(r) for r in cur.fetchall()]
+
+
+def get_all_evidence_hashes(db: DB) -> List[Dict]:
+    """Retorna todos os hashes de evidência para auditoria global."""
+    cur = db.execute("SELECT id, individual_id, file_hash, file_path FROM evidence")
+    return [dict(r) for r in cur.fetchall()]
+
+
 def stats(db: DB) -> Dict:
+
     """Estatísticas gerais do banco."""
     def count(q):
         return db.execute(q).fetchone()[0]

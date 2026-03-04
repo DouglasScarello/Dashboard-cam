@@ -43,12 +43,44 @@ class USLocalIngestor(BaseIngestor):
             data = await self.get_json(session, MARSHALS_API)
             items = data if isinstance(data, list) else data.get("items", data.get("wanted", []))
             self.logger.info(f"[USLocal/Marshals] {len(items)} registros")
-            for item in items:
-                self._process_marshal_item(item)
+            
+            tasks = [self._process_marshal_item(session, item) for item in items]
+            await asyncio.gather(*tasks)
+
         except Exception as e:
             # Marshals API pode não estar pública — fallback para Phoenix Open Data CKAN
             self.logger.warning(f"[USLocal/Marshals] {e} — pode exigir autenticação")
             await self._fetch_phoenix_fallback(session)
+
+    async def _process_marshal_item(self, session: aiohttp.ClientSession, item: Dict):
+        """Processa um registro individual do US Marshals Service."""
+        uid = f"US_MARSHAL_{item.get('id', 'UNK')}"
+        normalized = {
+            "id":       uid,
+            "name":     f"{item.get('first_name', '')} {item.get('last_name', '')}".strip().upper() or "UNKNOWN",
+            "category": "wanted",
+            "source":   "US Marshals",
+            "description": item.get("description", ""),
+            "sex":      item.get("sex"),
+            "height_cm": self._parse_num(item.get("height")),
+            "weight_kg": self._parse_num(item.get("weight")),
+        }
+
+        photo_url = item.get("photo_url")
+        if photo_url:
+            img_dest = os.path.join(self.output_dir, f"{uid}.jpg")
+            await self.download_image(session, photo_url, img_dest, individual_id=uid)
+            normalized["img_url"] = photo_url
+            normalized["img_path"] = f"data/images/us_local/{uid}.jpg"
+
+        self.save(normalized)
+
+    def _parse_num(self, val) -> Optional[float]:
+        try:
+            return float(val)
+        except (ValueError, TypeError):
+            return None
+
 
     async def _fetch_phoenix_fallback(self, session: aiohttp.ClientSession):
         """Phoenix Open Data (CKAN) — cold cases / wanted persons."""
