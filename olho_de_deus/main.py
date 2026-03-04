@@ -60,9 +60,14 @@ class VideoMonitor:
         self.youtube_id = youtube_id
         self.cap = self._init_capture()
         self.biometric_processor = BiometricProcessor()
-        self.window_name = "Olho de Deus - OSS"
+        self.window_name = "Olho de Deus - OSS v2.1-ULTRA"
         cv2.namedWindow(self.window_name, cv2.WINDOW_NORMAL)
         cv2.resizeWindow(self.window_name, 1280, 720)
+        
+        # Estado do HUD
+        self.last_match = None
+        self.event_log = [] # List of strings
+        self.max_events = 5
 
     def _init_capture(self):
         cap = cv2.VideoCapture(self.source)
@@ -139,42 +144,59 @@ class VideoMonitor:
                     x1, y1, x2, y2 = res["box"]
                     match = res["match"]
                     
-                    # Definir cor baseado no risco (Verde = Neutro, Amarelo = Baixo Risco, Vermelho = Match FBI)
-                    color = (0, 255, 0) # Verde padrão
-                    label = "DESCONHECIDO"
+                    # Lógica de Cores por Confiança (L2 Distance: Menor é melhor)
+                    # Threshold padrão é 0.7. Score < 0.45 é Alerta Máximo.
+                    color = (255, 200, 0) # Cyan: Scanning/Detected
+                    label = "SCANNING..."
                     
                     if match:
-                        color = (0, 0, 255) # Vermelho (Match)
-                        label = f"ALERTA: {match['title']}"
-                        # Overlay de metadados do Match
-                        cv2.rectangle(display_frame, (x1, y2 + 5), (x1 + 300, y2 + 45), (0, 0, 0), -1)
-                        cv2.putText(display_frame, label, (x1 + 5, y2 + 30), 
-                                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+                        confidence = max(0, 1.0 - match['score'])
+                        if confidence > 0.85:
+                            color = (0, 0, 255) # Red: ALERT
+                            label = f"MATCH: {match['title'].upper()}"
+                            # Atualizar painel lateral apenas com matches relevantes
+                            self.last_match = match
+                            self._add_event(f"ALERT: {match['title']}")
+                        elif confidence > 0.60:
+                            color = (0, 255, 255) # Yellow: SUSPECT
+                            label = f"SUSPECT: {match['title'].upper()}"
+                        
+                        # Pin tático acima da cabeça
+                        cv2.rectangle(display_frame, (x1, y1 - 25), (x1 + 180, y1), (0, 0, 0), -1)
+                        cv2.putText(display_frame, label, (x1 + 5, y1 - 10), 
+                                    cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
 
-                    # Bounding Box Estilizada (Canto)
-                    length = 20
-                    thickness = 2
-                    # Top-Left
-                    cv2.line(display_frame, (x1, y1), (x1 + length, y1), color, thickness)
-                    cv2.line(display_frame, (x1, y1), (x1, y1 + length), color, thickness)
-                    # Top-Right
-                    cv2.line(display_frame, (x1 + (x2-x1), y1), (x1 + (x2-x1) - length, y1), color, thickness)
-                    cv2.line(display_frame, (x1 + (x2-x1), y1), (x1 + (x2-x1), y1 + length), color, thickness)
-                    # Bottom-Left
-                    cv2.line(display_frame, (x1, y1 + (y2-y1)), (x1 + length, y1 + (y2-y1)), color, thickness)
-                    cv2.line(display_frame, (x1, y1 + (y2-y1)), (x1, y1 + (y2-y1) - length), color, thickness)
-                    # Bottom-Right
-                    cv2.line(display_frame, (x1 + (x2-x1), y1 + (y2-y1)), (x1 + (x2-x1) - length, y1 + (y2-y1)), color, thickness)
-                    cv2.line(display_frame, (x1 + (x2-x1), y1 + (y2-y1)), (x1 + (x2-x1), y1 + (y2-y1) - length), color, thickness)
+                    # --- CORNER BOXES (Military Style) ---
+                    l, t = 18, 1 # line length, thickness
+                    # TL
+                    cv2.line(display_frame, (x1, y1), (x1 + l, y1), color, t)
+                    cv2.line(display_frame, (x1, y1), (x1, y1 + l), color, t)
+                    # TR
+                    cv2.line(display_frame, (x2, y1), (x2 - l, y1), color, t)
+                    cv2.line(display_frame, (x2, y1), (x2, y1 + l), color, t)
+                    # BL
+                    cv2.line(display_frame, (x1, y2), (x1 + l, y2), color, t)
+                    cv2.line(display_frame, (x1, y2), (x1, y2 - l), color, t)
+                    # BR
+                    cv2.line(display_frame, (x2, y2), (x2 - l, y2), color, t)
+                    cv2.line(display_frame, (x2, y2), (x2, y2 - l), color, t)
 
-                # Barra de Status Superior (Estilo FBI/OSS)
-                cv2.rectangle(display_frame, (0, 0), (w, 40), (0, 0, 0), -1)
-                monitor_label = self.youtube_id if self.youtube_id else "LOCAL"
-                status_text = f"OSS v0.2-BIO | STATUS: ATIVO | ALVO: {monitor_label}"
-                cv2.putText(display_frame, status_text, (10, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+                # --- PAINEL LATERAL (INTELIGÊNCIA) ---
+                self._draw_lateral_panel(display_frame)
                 
-                # Health Indicator
-                cv2.circle(display_frame, (w - 20, 20), 8, (0, 255, 0), -1)
+                # --- FEED DE EVENTOS (CANTO INFERIOR ESQUERDO) ---
+                self._draw_event_log(display_frame)
+
+                # --- BARRA DE STATUS TÉCNICO (RODAPÉ) ---
+                footer_h = 30
+                cv2.rectangle(display_frame, (0, h - footer_h), (w, h), (10, 10, 10), -1)
+                
+                ts = time.strftime("%Y-%m-%d %H:%M:%S")
+                monitor_label = self.youtube_id if self.youtube_id else "LOCAL_FEED"
+                status_text = f"OSS v2.1-BIO | {ts} | ALVO: {monitor_label} | DB: {len(self.biometric_processor.metadata)}"
+                
+                cv2.putText(display_frame, status_text, (15, h - 10), 
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.4, (180, 180, 180), 1)
 
                 cv2.imshow(self.window_name, display_frame)
                 
@@ -193,6 +215,59 @@ class VideoMonitor:
             if self.cap:
                 self.cap.release()
             cv2.destroyAllWindows()
+
+    def _add_event(self, text: str):
+        if not self.event_log or self.event_log[0] != text:
+            self.event_log.insert(0, text)
+            self.event_log = self.event_log[:self.max_events]
+
+    def _draw_lateral_panel(self, df):
+        """Desenha o painel lateral com metadados do último match."""
+        if not self.last_match:
+            return
+            
+        h, w = df.shape[:2]
+        panel_w = 280
+        x0 = w - panel_w
+        
+        # Fundo do painel
+        overlay = df.copy()
+        cv2.rectangle(overlay, (x0, 0), (w, h), (15, 15, 15), -1)
+        cv2.addWeighted(overlay, 0.8, df, 0.2, 0, df)
+        cv2.rectangle(df, (x0, 0), (w, h), (50, 50, 50), 1)
+        
+        # Header
+        cv2.putText(df, "INTEL DOSSIER", (x0 + 20, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
+        cv2.line(df, (x0 + 20, 45), (w - 20, 45), (100, 100, 100), 1)
+        
+        # Dados
+        y_pos = 85
+        m = self.last_match
+        data_lines = [
+            ("NAME", m['title'].upper()),
+            ("UID", m['uid'][:8] + "..."),
+            ("STATUS", "MOST WANTED"),
+            ("BIOMETRY", "VERIFIED"),
+            ("PROBABILITY", f"{max(0, 1.0 - m['score']):.2%}")
+        ]
+        
+        for label, val in data_lines:
+            cv2.putText(df, label, (x0 + 20, y_pos), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (120, 120, 120), 1)
+            cv2.putText(df, str(val), (x0 + 20, y_pos + 18), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+            y_pos += 45
+            
+        # Footer do painel
+        if int(time.time()) % 2 == 0:
+            cv2.putText(df, ">> MONITORING ACTIVE <<", (x0 + 40, h - 50), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 255, 0), 1)
+
+    def _draw_event_log(self, df):
+        """Exibe o log de eventos no canto inferior esquerdo."""
+        h, w = df.shape[:2]
+        y0 = h - 60
+        for i, event in enumerate(self.event_log):
+            y = y0 - (i * 20)
+            color = (0, 0, 255) if "ALERT" in event else (180, 180, 180)
+            cv2.putText(df, f"> {event}", (20, y), cv2.FONT_HERSHEY_SIMPLEX, 0.4, color, 1)
 
     def play_forensic(self, step: float = 2.0):
         """

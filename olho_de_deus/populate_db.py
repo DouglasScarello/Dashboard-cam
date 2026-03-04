@@ -24,12 +24,13 @@ import requests
 import faiss
 import numpy as np
 import logging
+import sys
 from tqdm import tqdm
 from typing import Optional
 from datetime import datetime
 
-logging.getLogger("deepface").setLevel(logging.ERROR)
-os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
+# Injetar o caminho da pasta intelligence para encontrar o intelligence_db
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "intelligence")))
 
 from intelligence_db import (
     init_db, get_connection,

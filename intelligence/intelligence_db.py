@@ -17,7 +17,9 @@ load_dotenv()
 
 # Configurações
 DB_TYPE = os.getenv("DB_TYPE", "sqlite") # 'sqlite' ou 'postgres'
-DB_FILE = os.getenv("DB_FILE", "intelligence/data/intelligence.db")
+# Usar caminho absoluto para evitar bases fantasmas em subdiretórios
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DB_FILE = os.getenv("DB_FILE", os.path.join(BASE_DIR, "intelligence", "data", "intelligence.db"))
 
 PG_HOST = os.getenv("DB_HOST", "localhost")
 PG_NAME = os.getenv("DB_NAME", "intelligence")

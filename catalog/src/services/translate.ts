@@ -45,6 +45,7 @@ export async function translateText(
         });
 
         if (translated) {
+            console.log(`[TRANSLATE] Sucesso: "${trimmed.substring(0, 20)}..." -> "${translated.substring(0, 20)}..."`);
             translationCache.set(cacheKey, translated);
             return translated;
         }

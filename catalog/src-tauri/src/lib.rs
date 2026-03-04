@@ -100,6 +100,10 @@ struct Stats {
 #[derive(Serialize, Deserialize)]
 struct SourceCount { source: String, count: i64 }
 
+struct TranslateState {
+    client: reqwest::Client,
+}
+
 // ─── Comandos ─────────────────────────────────────────────────────────────────
 
 #[tauri::command]
@@ -313,9 +317,13 @@ fn get_image_base64(img_path: String) -> Result<String, String> {
     Ok(format!("data:image/jpeg;base64,{}", B64.encode(&bytes)))
 }
 #[tauri::command]
-fn translate_text(q: String, source: String, target: String) -> Result<String, String> {
-    let client = reqwest::blocking::Client::new();
-    let res = client
+async fn translate_text(
+    q: String,
+    source: String,
+    target: String,
+    state: tauri::State<'_, TranslateState>,
+) -> Result<String, String> {
+    let res = state.client
         .post("http://localhost:5000/translate")
         .json(&serde_json::json!({
             "q": q,
@@ -325,13 +333,14 @@ fn translate_text(q: String, source: String, target: String) -> Result<String, S
             "api_key": ""
         }))
         .send()
+        .await
         .map_err(|e| format!("Erro na requisição: {}", e))?;
 
     if !res.status().is_success() {
         return Err(format!("LibreTranslate retornou erro: {}", res.status()));
     }
 
-    let json: serde_json::Value = res.json().map_err(|e| format!("Erro ao ler JSON: {}", e))?;
+    let json: serde_json::Value = res.json().await.map_err(|e| format!("Erro ao ler JSON: {}", e))?;
     let translated = json["translatedText"]
         .as_str()
         .ok_or_else(|| "translatedText não encontrado no JSON".to_string())?;
@@ -343,6 +352,7 @@ fn translate_text(q: String, source: String, target: String) -> Result<String, S
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .manage(TranslateState { client: reqwest::Client::new() })
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             search_individuals,

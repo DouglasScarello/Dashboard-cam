@@ -12,6 +12,7 @@ import os
 import time
 from ultralytics import YOLO
 from deepface import DeepFace
+from pathlib import Path
 from typing import List, Dict, Optional, Tuple
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
@@ -52,8 +53,8 @@ class TrackedFace:
 class BiometricProcessor:
     def __init__(self,
                  model_path: str = "yolov8n-face.pt",
-                 index_path: str = "data/vector_db.faiss",
-                 metadata_path: str = "data/vector_metadata.json",
+                 index_path: Optional[str] = None,
+                 metadata_path: Optional[str] = None,
                  iou_threshold: float = 0.4,
                  match_threshold: float = 0.7,
                  max_missed_frames: int = 15):
@@ -61,6 +62,11 @@ class BiometricProcessor:
         self.iou_threshold = iou_threshold
         self.match_threshold = match_threshold
         self.max_missed_frames = max_missed_frames
+
+        # Paths dinâmicos (Busca na estrutura do projeto)
+        root = Path(__file__).parent.parent.resolve()
+        idx_p = index_path or str(root / "intelligence" / "data" / "vector_db.faiss")
+        meta_p = metadata_path or str(root / "intelligence" / "data" / "vector_metadata.json")
 
         # REID: dicionário de faces ativamente rastreadas {track_id: TrackedFace}
         self.tracked_faces: Dict[int, TrackedFace] = {}
@@ -78,13 +84,13 @@ class BiometricProcessor:
         # Base vetorial FAISS
         self.index = None
         self.metadata = []
-        if os.path.exists(index_path) and os.path.exists(metadata_path):
-            self.index = faiss.read_index(index_path)
-            with open(metadata_path, 'r', encoding='utf-8') as f:
+        if os.path.exists(idx_p) and os.path.exists(meta_p):
+            self.index = faiss.read_index(idx_p)
+            with open(meta_p, 'r', encoding='utf-8') as f:
                 self.metadata = json.load(f)
-            print(f"[biometria] Base carregada: {len(self.metadata)} indivíduos.")
+            print(f"[🛰️] Biometria Ativa: {len(self.metadata)} alvos indexados.")
         else:
-            print("[warning] Base vetorial não encontrada. Execute fbi_ingestion.py primeiro.")
+            print(f"[warning] Base vetorial não encontrada em {idx_p}. Rodar extract_embeddings.py.")
 
     def process_frame(self, frame: np.ndarray) -> List[Dict]:
         """

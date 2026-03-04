@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { useTranslation } from 'react-i18next';
-import { translateBlock } from './services/translate';
+import { translateBlock, translateArray, translateLocations } from './services/translate';
 import { Search, Info, Download, X, User, ChevronDown, Fingerprint, MapPin, Briefcase, Globe } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { clsx, type ClassValue } from 'clsx';
@@ -419,6 +419,8 @@ function DossierModal({ detail, onClose }: { detail: IndividualDetail, onClose: 
 
     // Traduz texto livre quando o idioma muda
     useEffect(() => {
+        let mounted = true;
+
         if (currentLang === 'pt') {
             setTranslatedDesc(null);
             setTranslatedReward(null);
@@ -429,38 +431,61 @@ function DossierModal({ detail, onClose }: { detail: IndividualDetail, onClose: 
             return;
         }
 
-        // Traduz descrição
-        if (detail.description) {
-            translateBlock(detail.description, 'pt', currentLang).then(r => {
-                if (r !== detail.description) setTranslatedDesc(r);
-            });
-        }
-        // Traduz recompensa
-        if (detail.reward) {
-            translateBlock(detail.reward, 'pt', currentLang).then(r => {
-                if (r !== detail.reward) setTranslatedReward(r);
-            });
-        }
-        // Traduz data de nascimento (pode ter texto descritivo)
-        if (detail.birth_date && /[a-záàâãéèêíïóôõúç]/i.test(detail.birth_date)) {
-            translateBlock(detail.birth_date, 'pt', currentLang).then(r => {
-                if (r !== detail.birth_date) setTranslatedBirth(r);
-            });
-        }
-        // Traduz Apelidos (Array)
-        const aliases = parseJSON(detail.aliases);
-        if (aliases.length > 0) {
-            import('./services/translate').then(m => m.translateArray(aliases, 'pt', currentLang)).then(setTranslatedAliases);
-        }
-        // Traduz Crimes (Array)
-        if (detail.crimes.length > 0) {
-            import('./services/translate').then(m => m.translateArray(detail.crimes, 'pt', currentLang)).then(setTranslatedCrimes);
-        }
-        // Traduz Locais (Objetos)
-        if (detail.locations.length > 0) {
-            import('./services/translate').then(m => m.translateLocations(detail.locations, 'pt', currentLang)).then(setTranslatedLocations);
-        }
-    }, [currentLang, detail]);
+        const runTranslations = async () => {
+            console.log(`[TRANSLATE] Iniciando tradução global para: ${currentLang}`);
+
+            const tasks: Promise<any>[] = [];
+
+            // Descrição
+            if (detail.description) {
+                tasks.push(translateBlock(detail.description, 'pt', currentLang).then(r => {
+                    if (mounted && r !== detail.description) setTranslatedDesc(r);
+                }));
+            }
+            // Recompensa
+            if (detail.reward) {
+                tasks.push(translateBlock(detail.reward, 'pt', currentLang).then(r => {
+                    if (mounted && r !== detail.reward) setTranslatedReward(r);
+                }));
+            }
+            // Data de nascimento
+            if (detail.birth_date && /[a-záàâãéèêíïóôõúç]/i.test(detail.birth_date)) {
+                tasks.push(translateBlock(detail.birth_date, 'pt', currentLang).then(r => {
+                    if (mounted && r !== detail.birth_date) setTranslatedBirth(r);
+                }));
+            }
+            // Apelidos
+            const aliases = parseJSON(detail.aliases);
+            if (aliases.length > 0) {
+                tasks.push(translateArray(aliases, 'pt', currentLang).then(r => {
+                    if (mounted) setTranslatedAliases(r);
+                }));
+            }
+            // Crimes
+            if (detail.crimes?.length > 0) {
+                tasks.push(translateArray(detail.crimes, 'pt', currentLang).then(r => {
+                    if (mounted) setTranslatedCrimes(r);
+                }));
+            }
+            // Locais
+            if (detail.locations?.length > 0) {
+                tasks.push(translateLocations(detail.locations, 'pt', currentLang).then(r => {
+                    if (mounted) setTranslatedLocations(r);
+                }));
+            }
+
+            try {
+                await Promise.allSettled(tasks);
+                console.log(`[TRANSLATE] Tradução concluída para: ${currentLang}`);
+            } catch (err) {
+                console.error("[TRANSLATE] Erro crritico no lote de tradução:", err);
+            }
+        };
+
+        runTranslations();
+
+        return () => { mounted = false; };
+    }, [currentLang, detail.id, detail.description, detail.reward, detail.birth_date, detail.aliases, detail.crimes, detail.locations]);
 
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-8 bg-black/80 backdrop-blur-sm overflow-hidden">
