@@ -16,9 +16,11 @@ dist/
 **/dist/
 .DS_Store
 
-# Tauri
+# Tauri / Rust build artifacts
 **/src-tauri/target/
 **/src-tauri/binaries/
+target/
+**/target/
 
 # Local binaries/downloads
 Miniconda3-latest-Linux-x86_64.sh
