@@ -30,6 +30,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "intelligence"))
 
 from intelligence_db import DB, init_db, stats as db_stats
+from alert_dispatcher import dispatch
 
 # ─── Logging ─────────────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -80,10 +81,18 @@ async def run_ingestor(
         result = await ingestor.run(session, limit=limit, limit_pages=max(1, limit // 20))
         elapsed = time.monotonic() - t0
         log.info(f"[{name.upper()}] ✓ Concluído em {elapsed:.1f}s — {ingestor.report()}")
+        # Alerta se houve erros significativos
+        if result.get("errors", 0) >= 3:
+            await dispatch(
+                "INGESTOR_RETRY_EXHAUSTED",
+                source=name, attempts=result.get("errors", 0),
+                last_error="Múltiplos erros — ver log para detalhes"
+            )
         return {"source": name, "elapsed": elapsed, **result}
     except Exception as e:
         elapsed = time.monotonic() - t0
         log.error(f"[{name.upper()}] ✗ Falha crítica em {elapsed:.1f}s: {e}")
+        await dispatch("INGESTION_FAILED", source=name, error=str(e))
         return {"source": name, "elapsed": elapsed, "loaded": 0, "errors": 1}
     finally:
         ingestor.close()
@@ -110,6 +119,9 @@ async def pipeline(
     print(f"  Paralelismo     : asyncio.gather (todos simultâneos)\n")
 
     t_start = time.monotonic()
+
+    # Sinaliza sistema online
+    await dispatch("SYSTEM_ONLINE", mode=f"Sync {', '.join(active.keys())}")
 
     # ─── Disparo paralelo ─────────────────────────────────────────────────────
     connector = aiohttp.TCPConnector(limit=20, ssl=False)
@@ -163,6 +175,7 @@ async def pipeline(
     print("═" * 65)
 
     # ─── Extração de embeddings ───────────────────────────────────────────────
+    embed_stats = {"processed": 0, "total_indexed": 0}
     if not no_embed and total_loaded > 0:
         print("\n  🧬 Iniciando Delta Embedding Updater [Fase 14]...")
         try:
@@ -176,7 +189,16 @@ async def pipeline(
         except Exception as e:
             log.error(f"Erro no delta_embedder: {e}. Tente manualmente: python extract_embeddings.py")
 
-    print("\n  ✅ Pipeline Fase 10+14 concluído.\n")
+    # ─── Alerta de conclusão ──────────────────────────────────────────────────
+    await dispatch(
+        "INGESTION_COMPLETE",
+        total_loaded=total_loaded,
+        embed_processed=embed_stats.get("processed", 0),
+        embed_total=embed_stats.get("total_indexed", 0),
+        elapsed=t_total,
+    )
+
+    print("\n  ✅ Pipeline Fase 10+14+21 concluído.\n")
 
 
 def main():

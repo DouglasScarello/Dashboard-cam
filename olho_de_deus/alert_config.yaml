@@ -1,0 +1,128 @@
+# alert_config.yaml — Olho de Deus [Fase 21]
+# Roteamento de eventos para canais de notificação.
+# Preencha os tokens/credenciais reais antes de usar.
+# Ghost Protocol: todas as chamadas são feitas localmente (sem serviços externos de broker).
+
+# ─── Canais disponíveis ───────────────────────────────────────────────────────
+channels:
+  telegram:
+    enabled: true
+    bot_token: ""          # Ex: "123456789:AAxxxxxx" — obter via @BotFather
+    chat_id: ""            # Ex: "-1001234567890" — obter via @userinfobot
+    parse_mode: "Markdown" # "Markdown" ou "HTML"
+
+  webhook:
+    enabled: false
+    url: ""                # Ex: "https://hooks.example.com/ingest"
+    method: "POST"         # POST ou PUT
+    headers:
+      Content-Type: "application/json"
+      X-Api-Key: ""        # Token opcional
+
+  email:
+    enabled: false
+    smtp_host: "smtp.gmail.com"
+    smtp_port: 587
+    use_tls: true
+    username: ""           # Ex: "seu@email.com"
+    password: ""           # App password (não a senha da conta)
+    from_addr: ""
+    to_addrs:
+      - ""                 # destinatários
+
+  pushover:
+    enabled: false
+    app_token: ""          # Ex: "azGDORePK8gMaC0QOYAMyEEuzJnyUi"
+    user_key: ""           # Ex: "uQiRzpo4DXghDmr9QzzfQu"
+
+# ─── Rate limiting (evitar spam) ─────────────────────────────────────────────
+rate_limit:
+  max_per_minute: 10       # Máx. alertas por minuto por canal
+  cooldown_seconds: 5     # Cooldown mínimo entre alertas do mesmo tipo
+
+# ─── Roteamento por tipo de evento ───────────────────────────────────────────
+# severity: DEBUG | INFO | WARNING | ERROR | CRITICAL
+# channels: lista dos canais acima
+routing:
+  - event: "INGESTION_SUCCESS"
+    severity: INFO
+    channels: [telegram]
+    template: |
+      ✅ *Ingestão Concluída*
+      📦 Fonte: `{source}`
+      📊 Carregados: *{loaded}*
+      ⚠️ Erros: `{errors}`
+      ⏱ Tempo: `{elapsed:.1f}s`
+
+  - event: "INGESTION_FAILED"
+    severity: ERROR
+    channels: [telegram, pushover]
+    template: |
+      ❌ *Falha na Ingestão*
+      📦 Fonte: `{source}`
+      💥 Erro: `{error}`
+
+  - event: "INGESTION_COMPLETE"
+    severity: INFO
+    channels: [telegram]
+    template: |
+      🛰️ *Pipeline Global Concluído*
+      📊 Total carregados: *{total_loaded}*
+      🧬 Embeddings: +{embed_processed} novos ({embed_total} no FAISS)
+      ⏱ Tempo total: `{elapsed:.1f}s`
+
+  - event: "EMBEDDING_DELTA_DONE"
+    severity: INFO
+    channels: [telegram]
+    template: |
+      🧬 *Delta Embedding Concluído*
+      ✅ Processados: *{processed}*
+      ⚠️ Sem imagem: `{skipped}`
+      ✗ Erros: `{errors}`
+      📦 Total FAISS: `{total_indexed}`
+
+  - event: "MATCH_DETECTED"
+    severity: CRITICAL
+    channels: [telegram, webhook, pushover]
+    template: |
+      🚨 *ALVO IDENTIFICADO*
+      👤 Nome: *{name}*
+      🔑 UID: `{uid}`
+      📷 Câmera: `{camera_id}`
+      📊 Confiança: *{confidence:.1%}*
+      ⚠️ Score de Ameaça: `{threat_score}/10`
+
+  - event: "INTEGRITY_VIOLATION"
+    severity: CRITICAL
+    channels: [telegram, pushover]
+    template: |
+      🔴 *VIOLAÇÃO DE INTEGRIDADE DETECTADA*
+      🗂 Evidência: `{evidence_id}`
+      💥 Hash esperado: `{expected_hash}`
+      💥 Hash encontrado: `{actual_hash}`
+      🕐 Detectado em: `{detected_at}`
+
+  - event: "INGESTOR_RETRY_EXHAUSTED"
+    severity: WARNING
+    channels: [telegram]
+    template: |
+      ⚠️ *Ingestor Esgotou Tentativas*
+      📦 Fonte: `{source}`
+      🔄 Tentativas: `{attempts}`
+      💥 Último erro: `{last_error}`
+
+  - event: "SYSTEM_ONLINE"
+    severity: INFO
+    channels: [telegram]
+    template: |
+      🟢 *Olho de Deus — Online*
+      🕐 `{timestamp}`
+      🖥️ Modo: `{mode}`
+
+  - event: "SYSTEM_ERROR"
+    severity: ERROR
+    channels: [telegram, pushover]
+    template: |
+      🔴 *Erro Crítico do Sistema*
+      💥 `{error}`
+      📍 Módulo: `{module}`
