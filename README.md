@@ -9,8 +9,9 @@
 ```
 Dashboard/
 ├── 🌐 catalog/            → Módulo 1: Intelligence Catalog (Tauri V2 + React + i18n Neural)
-├── 👁️  olho_de_deus/       → Módulo 2: Motor de análise facial (YOLOv8 + ArcFace + FAISS)
-├── 📊 intelligence/       → Módulo 3: Banco de dados unificado (SQLite / PostgreSQL + pgvector)
+├── 👁️  olho_de_deus/       → Módulo 2: Motor de análise facial e comportamento (YOLOv8 + OpenVINO)
+├── 🛰️  Dashboard Cam FBI/  → Módulo 3: Central de Comando Tático (Mapa, Heatmap, Telemetria)
+├── 📊 intelligence/       → Módulo 4: Banco de dados unificado (PostgreSQL + pgvector)
 └── 📹 [Vigilancia/]       → Sistema tático de CFTV (anti-sabotagem, Telegram, biometria local)
 ```
 
@@ -47,11 +48,18 @@ Motor de visão computacional com player forense interativo e rastreamento biom�
 
 | Componente | Descrição |
 |---|---|
-| YOLOv8n | Detecção de faces em tempo real (CPU-optimized) |
+| YOLOv8n-pose | Detecção de anomalias (quedas/comportamento) |
+| YOLOv8n-weapon| Detecção de armas com lógica HOI (Human-Object Interaction) |
 | ArcFace 512-d | Extração de características biométricas únicas |
+| OpenVINO | Aceleração por hardware para Ryzen 7 (Static Shapes) |
 | FAISS | Busca vetorial de alta velocidade (16k+ embeddings) |
 | REID / IoU | Rastreamento persistente entre frames |
 | Player Forense | Seek bar interativo, modo passo-a-passo |
+
+### 🛡️ Prevenção Tática Ativa (Fase 30.1)
+- **Detecção de Armas:** Lógica profissional que confere a distância entre o pulso da pessoa e a arma detectada.
+- **Níveis de Alerta:** Escala tática de 1 a 10 para triagem de ameaças.
+- **Dossiê Criptografado (Fase 22):** Geração de relatórios periciais protegidos por **AES-256** em modo EAX.
 
 ### 🌍 Camada de Ingestão Global (Fase 9)
 
@@ -79,9 +87,21 @@ poetry run python extract_embeddings.py
 # Verificar integridade do banco
 poetry run python verify_intel.py
 
-# Stream YouTube em modo forense
-TF_CPP_MIN_LOG_LEVEL=3 poetry run python main.py --id YOUTUBE_ID --forensic --step 10
+# Stream YouTube em modo forense com IA ativa
+TF_CPP_MIN_LOG_LEVEL=3 poetry run python main.py --id YOUTUBE_ID --forensic
 ```
+
+---
+
+## 🛰️ Módulo 3 — Central de Comando Tático (`Dashboard Cam FBI/`)
+
+Visualização em tempo real de múltiplas fontes com inteligência geográfica integrada.
+
+- **Mapa Tático (Fase 13):** Integração Leaflet.js com marcadores pulsantes e heatmap de risco.
+- **Auto-Focus:** O mapa centraliza automaticamente em ameaças com Score > 8.0.
+- **Tactical Log:** Registro cronológico lateral de todos os avistamentos detectados.
+- **Filtros de Busca (Fase 15):** Filtragem instantânea por Score, Categoria e Localização sobre 60k+ registros.
+- **System Health (Fase 20):** Telemetria via Rust (CPU/RAM/Temp) integrada ao dashboard para monitoramento de hardware.
 
 ---
 
@@ -157,11 +177,13 @@ npm run tauri dev
 
 | Fase | Descrição |
 |---|---|
-| **Fase 9** | Camada de ingestão global (+7 ingestores), proxy Rust async, `Promise.allSettled` no i18n, fix de DB path absoluto |
-| **Fase 8** | Cobertura i18n global (PT/EN/RU), tradução neural local via Rust Proxy, refinamentos de UI |
-| **Fase 7** | Overhaul arquitetural: Docker, PostgreSQL, migração React/Vite |
-| **Fase 6** | Dossiê forense completo (galeria multi-face, traços físicos, aliases) |
-| **Fase 5** | Intelligence Catalog — Premium Dark UI, suporte multi-face |
-| **Fase 4** | Modularização em 3 módulos independentes |
-| **Fase 3** | Integração FBI API + Motor de Trânsito SC |
-| **Fase 1-2** | Video Wall Militar, Motion Trail Engine |
+| **Fase 30-31** | **Prevenção Ativa:** Detecção HOI de armas, Aceleração OpenVINO, Cache Redis, WebRTC Low-Latency |
+| **Fase 22** | **Hardening:** Criptografia AES-256 de dossiês periciais (.locked files) |
+| **Fase 20** | **System Health:** Telemetria de hardware via Rust (sysinfo) integrada ao HUD |
+| **Fase 15** | **Busca Avançada:** Filtros multicritério instantâneos no dashboard |
+| **Fase 13** | **Geo-Intelligence:** Mapa tático, Heatmap de risco, Pulse Markers e Tactical Log |
+| **Fase 12** | **Threat Scoring:** Motor de pontuação de risco automatizado |
+| **Fase 9** | Camada de ingestão global (+7 ingestores), proxy Rust async, `Promise.allSettled` no i18n |
+| **Fase 8** | Cobertura i18n global (PT/EN/RU), tradução neural local via Rust Proxy |
+| **Fase 5-7** | Overhaul arquitetural, Intelligence Catalog, Dossiê forense completo |
+| **Fase 1-4** | Video Wall, Motion Trail, Modularização e FBI API |
