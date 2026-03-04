@@ -5,11 +5,39 @@ from datetime import datetime
 from fpdf import FPDF, XPos, YPos
 from pathlib import Path
 import logging
+import hashlib
+from Crypto.Cipher import AES
+from Crypto.Random import get_random_bytes
+from dotenv import load_dotenv
 
 # Garantir que o root do projeto está no path para os helpers de intelligence
 sys.path.append(str(Path(__file__).parent.parent.resolve()))
 
 log = logging.getLogger("forensic_report")
+
+# Carregar configurações de segurança
+load_dotenv(ROOT / ".env")
+ENCRYPTION_KEY = os.getenv("DOSSIIE_ENCRYPTION_KEY", "ghost_default_secure_key_32bytes")
+
+def _encrypt_file(file_path: str, password: str):
+    """Encripta um arquivo usando AES-256 (EAX mode para integridade)."""
+    # Derivar chave de 32 bytes da senha
+    key = hashlib.sha256(password.encode()).digest()
+    
+    with open(file_path, 'rb') as f:
+        data = f.read()
+
+    nonce = get_random_bytes(16)
+    cipher = AES.new(key, AES.MODE_EAX, nonce=nonce)
+    ciphertext, tag = cipher.encrypt_and_digest(data)
+
+    locked_path = file_path + ".locked"
+    with open(locked_path, 'wb') as f:
+        for x in [nonce, tag, ciphertext]:
+            f.write(x)
+    
+    log.info(f"🛡️ Arquivo criptografado com sucesso: {locked_path}")
+    return locked_path
 
 def _sanitize_text(text: str) -> str:
     """Remove caracteres não compatíveis com latin-1 (emojis, símbolos especiais)."""
@@ -151,6 +179,16 @@ def generate_dossier_pdf(dossier: dict, output_path: str):
     # Salvar
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     pdf.output(output_path)
+    
+    # Hardening (Fase 22): Encriptação Automática
+    if ENCRYPTION_KEY:
+        try:
+            _encrypt_file(output_path, ENCRYPTION_KEY)
+            # Opcional: remover o PDF original não criptografado por segurança
+            # os.remove(output_path) 
+        except Exception as e:
+            log.error(f"Falha no Hardening de Criptografia: {e}")
+
     return output_path
 
 if __name__ == "__main__":
