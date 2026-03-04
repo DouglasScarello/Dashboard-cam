@@ -137,6 +137,53 @@
             50% { text-shadow: 0 0 5px #EF4444; }
             100% { text-shadow: 0 0 0px #EF4444; }
         }
+
+        /* Efeito de Pulso Tático FBI */
+        .fbi-pulse {
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 0 0 rgba(16, 185, 129, 0.4);
+            animation: fbi-pulse-anim 2s infinite;
+        }
+        .fbi-pulse-high {
+            box-shadow: 0 0 10px rgba(239, 68, 68, 0.8) !important;
+            animation: fbi-pulse-crit 1s infinite !important;
+        }
+
+        @keyframes fbi-pulse-anim {
+            0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); }
+            70% { box-shadow: 0 0 0 15px rgba(16, 185, 129, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+        }
+        @keyframes fbi-pulse-crit {
+            0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+            70% { box-shadow: 0 0 0 20px rgba(239, 68, 68, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+
+        /* Tactical Log Lateral */
+        #tacticalLog {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            width: 220px;
+            max-height: calc(100% - 140px);
+            background: rgba(11, 17, 26, 0.9);
+            border: 1px solid rgba(16, 185, 129, 0.2);
+            backdrop-filter: blur(10px);
+            z-index: 400; /* Acima do Leaflet */
+            border-radius: 4px;
+            overflow: hidden;
+            display: flex;
+            flex-col: column;
+        }
+        .log-entry {
+            padding: 6px 10px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            font-size: 8px;
+            transition: all 0.2s;
+        }
+        .log-entry:hover { background: rgba(16, 185, 129, 0.05); }
     </style>
 </head>
 <body class="bg-gray-900 text-gray-200 h-screen flex flex-col font-mono overflow-hidden cursor-default select-none">
@@ -169,8 +216,20 @@
         <div id="cameraGrid" class="flex-1 overflow-y-auto p-1 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-1 bg-black">
         </div>
 
-        <div id="mapContainer" class="flex-1 hidden">
+        <div id="mapContainer" class="flex-1 hidden relative">
             <div id="tacticalMap"></div>
+            
+            <!-- Tactical Log Panel (Fase 13 Refinement) -->
+            <div id="tacticalLog" class="flex flex-col">
+                <div class="p-2 border-b border-white/5 bg-black/40 flex justify-between items-center">
+                    <span class="text-[8px] font-bold text-emerald-500 tracking-widest uppercase">Tactical Events</span>
+                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                </div>
+                <div id="logContent" class="overflow-y-auto flex-1 custom-scrollbar">
+                    <!-- Eventos inseridos via JS -->
+                    <div class="p-4 text-center text-gray-600 text-[8px]">Aguardando detecção...</div>
+                </div>
+            </div>
         </div>
     </main>
 
@@ -498,51 +557,59 @@
                 const { invoke } = window.__TAURI__.core;
                 const sightings = await invoke('get_recent_sightings');
                 
-                // Limpa sightings antigos
-                sightingMarkers.forEach(m => tauriMap.removeLayer(m));
-                sightingMarkers = [];
-
                 const sightingsHeatData = [];
+                const activeSightingsKeys = new Set();
+
                 sightings.forEach(s => {
-                    // Busca a câmera correspondente para pegar lat/long
                     const cam = activeCameras.find(c => c.id == s.camera_id || c.nome == s.camera_id);
                     if (cam && cam.lat && cam.long) {
-                        const isHighRisk = s.threat_score >= 8.0;
-                        const color = isHighRisk ? '#ff0000' : '#ff9900';
-                        
-                        const marker = L.circleMarker([cam.lat, cam.long], {
-                            radius: isHighRisk ? 10 : 7,
-                            fillColor: color,
-                            color: "#fff",
-                            weight: 2,
-                            opacity: 1,
-                            fillOpacity: 0.9,
-                            className: isHighRisk ? 'fbi-alert' : ''
-                        }).addTo(tauriMap);
+                        const key = `${s.id}-${s.captured_at}`;
+                        activeSightingsKeys.add(key);
 
-                        marker.bindPopup(`
-                            <div style="font-family: monospace; font-size: 10px;">
-                                <b style="color: ${color}">🚨 AVISTAMENTO: ${s.name}</b><br>
-                                SCORE: ${s.threat_score.toFixed(1)}/10.0<br>
-                                DATA: ${s.captured_at}<br>
-                                LOCAL: ${cam.nome}<br>
-                                <hr style="margin: 5px 0; border: 0.5px solid #333;">
-                                <button onclick="openFullscreen('${cam.id}')" style="background: #ef4444; color: white; border: none; padding: 2px 5px; cursor: pointer; width: 100%; font-weight: bold;">INTERCEPTAR FEED</button>
-                            </div>
-                        `);
-                        sightingMarkers.push(marker);
+                        const isHighRisk = (s.threat_score || 0) >= 8.0;
                         
-                        // Alimenta dados do heatmap: [lat, long, intensidade]
-                        // Alvos de alto risco geram mais "calor"
+                        if (!activeSightingMarkers[key]) {
+                            const color = isHighRisk ? '#ff0000' : '#10b981';
+                            const pulseClass = isHighRisk ? 'fbi-pulse fbi-pulse-high' : 'fbi-pulse';
+                            
+                            const icon = L.divIcon({
+                                className: pulseClass,
+                                html: `<div class="w-2.5 h-2.5 rounded-full ${isHighRisk ? 'bg-rose-500' : 'bg-emerald-400'} border border-white/40"></div>`,
+                                iconSize: [12, 12],
+                                iconAnchor: [6, 6]
+                            });
+
+                            const marker = L.marker([cam.lat, cam.long], { icon: icon }).addTo(tauriMap);
+
+                            marker.bindPopup(`
+                                <div class="text-[10px] space-y-1 font-mono">
+                                    <div class="font-bold flex justify-between border-b border-white/5 pb-1">
+                                        <span class="${isHighRisk ? 'text-rose-500' : 'text-emerald-500'}">🚨 ${s.name}</span>
+                                        <span>${s.threat_score.toFixed(1)}</span>
+                                    </div>
+                                    <div class="text-[8px] text-gray-500">CÂMERA: ${cam.nome}</div>
+                                    <div class="text-[8px] text-gray-400">HORA: ${s.captured_at}</div>
+                                    <button onclick="switchToAIStream('${cam.id}')" class="w-full mt-2 bg-emerald-600/20 hover:bg-emerald-600/40 border border-emerald-500/50 py-1 text-[8px] uppercase tracking-tighter transition-all">INTERCEPTAR FEED</button>
+                                </div>
+                            `);
+                            activeSightingMarkers[key] = marker;
+
+                            // Auto-Focus em ameaças críticas
+                            if (isHighRisk) {
+                                tauriMap.flyTo([cam.lat, cam.long], 16, { duration: 1.5 });
+                                marker.openPopup();
+                            }
+                        }
+                        
                         sightingsHeatData.push([cam.lat, cam.long, isHighRisk ? 1.0 : 0.6]);
                     }
                 });
 
-                // Atualiza Heatmap Tático
+                // Atualiza o Log Tático (Fase 13)
+                updateTacticalLog(sightings);
+
                 if (mapHeat) tauriMap.removeLayer(mapHeat);
                 mapHeat = L.heatLayer(sightingsHeatData, {radius: 35, blur: 20, maxZoom: 17}).addTo(tauriMap);
-
-                // --- TRAJETÓRIAS (Fase 13: Deduplicação Global) ---
                 drawTrajectories(sightings);
 
             } catch (err) {
@@ -1421,6 +1488,39 @@
         // Inicia polling de saúde
         setInterval(updateSystemStats, 2000);
         updateSystemStats();
+
+        // === TACTICAL LOG (Fase 13) ===
+        function updateTacticalLog(sightings) {
+            const logContent = document.getElementById('logContent');
+            if (!logContent) return;
+
+            const sorted = [...sightings].sort((a,b) => b.captured_at.localeCompare(a.captured_at)).slice(0, 15);
+            if (sorted.length === 0) return;
+
+            logContent.innerHTML = sorted.map(s => {
+                const isHigh = (s.threat_score || 0) >= 8.0;
+                return `
+                    <div class="log-entry cursor-pointer" onclick="zoomToMarker('${s.id}-${s.captured_at}')">
+                        <div class="flex justify-between items-start">
+                            <span class="${isHigh ? 'text-rose-500' : 'text-emerald-400'} font-bold">${s.name}</span>
+                            <span class="text-[7px] text-gray-500">${s.captured_at.split(' ')[1]}</span>
+                        </div>
+                        <div class="flex justify-between mt-0.5">
+                            <span class="text-gray-600 uppercase">CAM: ${s.camera_id}</span>
+                            <span class="text-gray-600">SCORE: ${s.threat_score}</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function zoomToMarker(key) {
+            const marker = activeSightingMarkers[key];
+            if (marker && tacticalMap) {
+                tacticalMap.flyTo(marker.getLatLng(), 18, { duration: 1 });
+                marker.openPopup();
+            }
+        }
 
         // Renderiza tudo ao iniciar a página
         loadCameras();
