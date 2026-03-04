@@ -108,23 +108,34 @@
             to { opacity: 1; transform: translateY(0); }
         }
 
-        .animate-fade-in {
-            animation: fadeIn 0.5s ease-out forwards;
+        /* HUD de Telemetria (Fase 20) */
+        #systemHUD {
+            position: fixed;
+            bottom: 10px;
+            right: 10px;
+            width: 200px;
+            background: rgba(11, 17, 26, 0.85);
+            border: 1px solid rgba(16, 185, 129, 0.2);
+            backdrop-filter: blur(8px);
+            padding: 8px;
+            border-radius: 4px;
+            z-index: 40;
+            font-size: 9px;
+            transition: all 0.3s ease;
         }
+        #systemHUD:hover { border-color: #10B981; background: rgba(11, 17, 26, 0.95); }
+        .hud-row { display: flex; justify-content: space-between; margin-bottom: 4px; }
+        .hud-bar-bg { width: 100%; height: 3px; background: #111827; border-radius: 2px; overflow: hidden; margin-top: 2px; }
+        .hud-bar-fill { height: 100%; transition: width 0.5s ease; }
+        
+        .temp-ok { color: #10B981; }
+        .temp-warn { color: #F59E0B; }
+        .temp-crit { color: #EF4444; animation: pulse-red 1s infinite; }
 
-        #tacticalMap {
-            width: 100%;
-            height: 100%;
-            background: #0b0e14;
-        }
-
-        /* Estilo Dark para o Leaflet */
-        .leaflet-container { background: #0b111a; }
-        .leaflet-popup-content-wrapper, .leaflet-popup-tip {
-            background: #1f2937;
-            color: #10B981;
-            border: 1px solid #374151;
-            font-family: monospace;
+        @keyframes pulse-red {
+            0% { text-shadow: 0 0 0px #EF4444; }
+            50% { text-shadow: 0 0 5px #EF4444; }
+            100% { text-shadow: 0 0 0px #EF4444; }
         }
     </style>
 </head>
@@ -150,8 +161,8 @@
     </header>
 
     <main class="flex-1 overflow-hidden flex flex-col">
-        <!-- Barra de Setores / Filtros (Dinamizada para Hierarquia) -->
-        <div id="filterBar" class="bg-gray-900 border-b border-gray-800 p-2 overflow-x-auto whitespace-nowrap flex space-x-2 items-center">
+        <!-- Header / Stats Bar -->
+        <div id="statsBar" class="bg-gray-900/90 border-b border-emerald-900/30 px-4 py-1.5 flex flex-wrap items-center justify-between z-30 shadow-2xl">
             <!-- Gerado via JavaScript -->
         </div>
 
@@ -162,6 +173,43 @@
             <div id="tacticalMap"></div>
         </div>
     </main>
+
+    <!-- System HUD (Fase 20) -->
+    <div id="systemHUD" class="font-mono">
+        <div class="flex items-center justify-between mb-2 pb-1 border-b border-white/5">
+            <span class="text-[8px] font-bold text-gray-500 uppercase tracking-widest">System Health</span>
+            <span id="hudUptime" class="text-[7px] text-gray-600">00:00:00</span>
+        </div>
+        
+        <div class="mb-2">
+            <div class="hud-row">
+                <span class="text-gray-400">CPU LOAD</span>
+                <span id="hudCpuVal" class="text-emerald-500 font-bold">0%</span>
+            </div>
+            <div class="hud-bar-bg">
+                <div id="hudCpuBar" class="hud-bar-fill bg-emerald-500" style="width: 0%"></div>
+            </div>
+            <div id="hudCoresGrid" class="grid grid-cols-8 gap-[1px] mt-1">
+                <!-- 16 micro-barras para os cores -->
+                ${Array(16).fill(0).map(() => `<div class="h-[2px] bg-emerald-900/30"></div>`).join('')}
+            </div>
+        </div>
+
+        <div class="mb-2">
+            <div class="hud-row">
+                <span class="text-gray-400">MEMORY</span>
+                <span id="hudMemVal" class="text-emerald-500 font-bold">0MB</span>
+            </div>
+            <div class="hud-bar-bg">
+                <div id="hudMemBar" class="hud-bar-fill bg-blue-500" style="width: 0%"></div>
+            </div>
+        </div>
+
+        <div class="flex justify-between items-center text-[10px]">
+            <span class="text-gray-400">THERMAL</span>
+            <span id="hudTemp" class="font-bold temp-ok">0°C</span>
+        </div>
+    </div>
 
     <div id="fullscreenModal" class="fixed inset-0 bg-black z-50 hidden flex-col">
         <!-- Header OSS -->
@@ -1331,6 +1379,48 @@
             cam.tipo = 'webrtc';
             updateUI();
         }
+
+        // === SYSTEM HEALTH (Fase 20) ===
+        async function updateSystemStats() {
+            try {
+                const { invoke } = window.__TAURI__.core;
+                const stats = await invoke('get_system_stats');
+                
+                // CPU
+                document.getElementById('hudCpuVal').innerText = `${stats.cpu_usage.toFixed(1)}%`;
+                document.getElementById('hudCpuBar').style.width = `${stats.cpu_usage}%`;
+                
+                // CPU Cores Grid
+                const coresGrid = document.getElementById('hudCoresGrid');
+                coresGrid.innerHTML = stats.cores_usage.map(usage => `
+                    <div class="h-[2px] ${usage > 80 ? 'bg-rose-500' : usage > 50 ? 'bg-yellow-500' : 'bg-emerald-500'}" 
+                         style="width: 100%; opacity: ${0.3 + (usage/140)}"></div>
+                `).join('');
+
+                // Memory
+                const memPerc = (stats.memory_used / stats.memory_total) * 100;
+                document.getElementById('hudMemVal').innerText = `${stats.memory_used}MB`;
+                document.getElementById('hudMemBar').style.width = `${memPerc}%`;
+
+                // Temperature
+                const tempEl = document.getElementById('hudTemp');
+                tempEl.innerText = `${stats.temp.toFixed(1)}°C`;
+                tempEl.className = stats.temp > 85 ? 'temp-crit' : stats.temp > 70 ? 'temp-warn' : 'temp-ok';
+                
+                // Uptime
+                const h = Math.floor(stats.uptime / 3600);
+                const m = Math.floor((stats.uptime % 3600) / 60);
+                const s = stats.uptime % 60;
+                document.getElementById('hudUptime').innerText = `${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
+
+            } catch (err) {
+                console.error("[HEALTH] Erro ao buscar telemetria:", err);
+            }
+        }
+
+        // Inicia polling de saúde
+        setInterval(updateSystemStats, 2000);
+        updateSystemStats();
 
         // Renderiza tudo ao iniciar a página
         loadCameras();

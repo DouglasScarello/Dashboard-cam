@@ -1,6 +1,17 @@
-use std::process::Command;
 use std::fs;
 use std::path::PathBuf;
+use sysinfo::{CpuExt, System, SystemExt, ComponentExt};
+
+#[derive(serde::Serialize)]
+struct SystemStats {
+    cpu_usage: f32,
+    cpu_count: usize,
+    memory_total: u64,
+    memory_used: u64,
+    temp: f32,
+    uptime: u64,
+    cores_usage: Vec<f32>,
+}
 
 #[tauri::command]
 fn get_live_id(search_term: String) -> Result<String, String> {
@@ -87,6 +98,72 @@ fn get_recent_sightings() -> Result<Vec<Sighting>, String> {
 }
 
 #[tauri::command]
+fn get_system_stats() -> SystemStats {
+    let mut sys = System::new_all();
+    sys.refresh_all();
+    
+    // Pequena pausa para o sysinfo calcular o uso da CPU corretamente na primeira vez (ou se for chamado rápido demais)
+    std::thread::sleep(std::time::Duration::from_millis(100));
+    sys.refresh_cpu();
+
+    let cpu_usage = sys.global_cpu_info().cpu_usage();
+    let cpu_count = sys.cpus().len();
+    let memory_total = sys.total_memory() / 1024 / 1024; // MB
+    let memory_used = sys.used_memory() / 1024 / 1024;   // MB
+    let uptime = sys.uptime();
+    
+    let cores_usage: Vec<f32> = sys.cpus().iter().map(|cpu| cpu.cpu_usage()).collect();
+
+    // Tenta pegar a temperatura do primeiro componente relevante (Linux)
+    let mut temp = 0.0;
+    for component in sys.components() {
+        if component.label().contains("CPU") || component.label().contains("Package") || component.label().contains("k10temp") {
+            temp = component.temperature();
+            break;
+        }
+    }
+
+    SystemStats {
+        cpu_usage,
+        cpu_count,
+        memory_total,
+        memory_used,
+        temp,
+        uptime,
+        cores_usage,
+    }
+}
+
+#[tauri::command]
+fn get_live_id(search_term: String) -> Result<String, String> {
+    use std::process::Command;
+    // Executa o yt-dlp para buscar o ID mais recente
+    // Usamos o comando que já validamos no Python
+    let search_query = format!("ytsearch1:{} live", search_term);
+    let output = Command::new("yt-dlp")
+        .args(&[
+            "--get-id",
+            "--no-warnings",
+            "--flat-playlist",
+            &search_query
+        ])
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    if output.status.success() {
+        let id = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if id.is_empty() {
+            Err("Nenhum vídeo encontrado".to_string())
+        } else {
+            Ok(id)
+        }
+    } else {
+        let err = String::from_utf8_lossy(&output.stderr);
+        Err(err.to_string())
+    }
+}
+
+#[tauri::command]
 fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
 }
@@ -95,7 +172,7 @@ fn greet(name: &str) -> String {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![greet, get_live_id, get_cameras, get_recent_sightings])
+        .invoke_handler(tauri::generate_handler![greet, get_live_id, get_cameras, get_recent_sightings, get_system_stats])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
