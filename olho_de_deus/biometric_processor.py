@@ -14,6 +14,7 @@ from ultralytics import YOLO
 from deepface import DeepFace
 from pathlib import Path
 from typing import List, Dict, Optional, Tuple
+from core.vector_cache import VectorCache
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
@@ -98,6 +99,9 @@ class BiometricProcessor:
             print(f"[🛰️] Biometria Ativa: {len(self.metadata)} alvos indexados.")
         else:
             print(f"[warning] Base vetorial não encontrada em {idx_p}. Rodar extract_embeddings.py.")
+
+        # Cache Redis (Fase 31.2)
+        self.cache = VectorCache()
 
     def process_frame(self, frame: np.ndarray) -> List[Dict]:
         """
@@ -210,21 +214,35 @@ class BiometricProcessor:
                 return None, None
 
             embedding = objs[0]["embedding"]
-            query_vec = np.array([embedding]).astype('float32')
-            distances, indices = self.index.search(query_vec, 1)
 
-            idx = indices[0][0]
-            score = float(distances[0][0])
+            # 2. MATCH VETORIAL (Ghost Search)
+            # Primeiro tentamos o Cache Redis para latência zero
+            cached_match = self.cache.get_match(embedding)
+            if cached_match:
+                match_data = cached_match
+            elif self.index is not None:
+                # Fallback para busca exaustiva no FAISS
+                D, I = self.index.search(np.array([embedding]).astype('float32'), 1)
+                score = float(D[0][0])
+                if score < self.match_threshold:
+                    match_data = self.metadata[I[0][0]]
+                    match_data['score'] = score
+                    # Salvar no cache para o próximo frame/câmera
+                    self.cache.set_match(embedding, match_data)
+                else:
+                    match_data = None
+            else:
+                match_data = None
 
-            if idx != -1 and score < self.match_threshold:
+            if match_data:
                 match = {
-                    "uid": self.metadata[idx]["uid"],
-                    "title": self.metadata[idx]["title"],
-                    "score": score
+                    "uid": match_data["uid"],
+                    "title": match_data["title"],
+                    "score": match_data["score"]
                 }
                 return embedding, match
-
-            return embedding, None
+            else:
+                return embedding, None
 
         except Exception:
             return None, None
