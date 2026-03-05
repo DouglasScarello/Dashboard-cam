@@ -1,6 +1,22 @@
 version: '3.8'
 
 services:
+  # Cache Distribuído — Fase 31.1: Redis Cache Layer
+  redis:
+    image: redis:7-alpine
+    container_name: ghost_redis
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    restart: always
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
   # Banco de Dados Profissional para Inteligência com Suporte Vetorial
   db:
     image: ankane/pgvector:v0.5.1
@@ -45,3 +61,4 @@ services:
 
 volumes:
   pgdata:
+  redisdata:
