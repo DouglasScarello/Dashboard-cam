@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """
-live_pipeline.py — Olho de Deus [Fase 11: Live Biometric Pipeline]
+live_pipeline.py — Olho de Deus [Fase 31: Live Biometric Pipeline + Redis Cache]
 
 Orquestrador de monitoramento em tempo real.
 - Captura frames de streams (YouTube/RTSP) em uma thread separada.
 - Processa biometria (YOLO + ArcFace) no frame mais recente (Buffer size 1).
 - Registra evidências forenses (SHA-256) em caso de match positivo.
-- Dispara alertas multicanal (Telegram).
+- Dispara alertas multicanal (Telegram) com debounce via Redis (Fase 31.2).
+- Streaming WebRTC via go2rtc + FFmpeg (Fase 31.3).
 """
 
 import os
@@ -31,10 +32,21 @@ from alert_dispatcher import dispatch_sync
 from intelligence_db import DB, init_db, register_evidence, get_threat_score, get_full_individual_dossier
 from score_engine import ThreatScorer
 from forensic_report import generate_dossier_pdf
+from redis_cache import RedisCache
 
-# Logging
+# Logging (Fase 17: Centralizado)
+log_dir = Path(__file__).parent / "logs"
+os.makedirs(log_dir, exist_ok=True)
+
 log = logging.getLogger("live_pipeline")
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[
+        logging.FileHandler(log_dir / "live.log", encoding="utf-8"),
+        logging.StreamHandler()
+    ]
+)
 
 class LivePipeline:
     def __init__(self, camera_id: str, source_type: str = "youtube", match_threshold: float = 0.48):
@@ -55,13 +67,22 @@ class LivePipeline:
         self.db = DB()
         self.scorer = ThreatScorer(self.db)
         
-        # Diretório de evidências (Fase 16)
         self.evidence_dir = ROOT / "intelligence" / "data" / "evidence" / "matches"
         self.report_dir = ROOT / "intelligence" / "data" / "reports"
+        self.captures_dir = ROOT / "data" / "captures" # Fase 17
+        
         os.makedirs(self.evidence_dir, exist_ok=True)
         os.makedirs(self.report_dir, exist_ok=True)
+        os.makedirs(self.captures_dir, exist_ok=True)
 
-        # Configuração de Streaming (Fase 31.3)
+        # ─── Fase 31.1: Cache Redis (com fallback gracioso) ───────────────
+        self.cache = RedisCache()
+        status = self.cache.health()
+        log.info(f"[Redis] Modo: {status['mode']} | "
+                 f"{status.get('redis_version', 'N/A')} | "
+                 f"Ping: {status.get('ping_ms', 'N/A')}ms")
+
+        # ─── Fase 31.3: Streaming WebRTC via go2rtc ───────────────────────
         self.streamer = None
         self.enable_stream = False
 
@@ -98,13 +119,25 @@ class LivePipeline:
         cap.release()
 
     def _process_match(self, frame, match, track_id):
-        """Ação tática ao detectar um alvo: Alerta + Evidência Forense."""
+        """
+        Ação tática ao detectar um alvo: Alerta + Evidência Forense.
+        [Fase 31.2] Com debounce via Redis para evitar spam de alertas.
+        """
         uid = match["uid"]
         name = match["title"]
         confidence = 1.0 - match["score"]
+
+        # ─── Fase 31.2: Debounce de Alerta via Redis ─────────────────────
+        # Se já disparamos alerta para este UID+câmera nos últimos 60s, suprimir.
+        if self.cache.alert_is_rate_limited(uid, self.camera_id):
+            log.debug(f"[Redis] Alerta SUPRIMIDO (debounce ativo): {name} @ {self.camera_id}")
+            return
         
         log.info(f"🚨 MATCH: {name} ({confidence:.1%}) na câmera {self.camera_id}")
         
+        # Registrar imediatamente no cache para bloquear alertas duplicados
+        self.cache.mark_alert_sent(uid, self.camera_id)
+
         # 1. Salvar Frame de Evidência
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
         filename = f"match_{uid}_{timestamp}.jpg"
@@ -124,12 +157,20 @@ class LivePipeline:
         except Exception as e:
             log.error(f"Falha ao registrar evidência pericial: {e}")
 
-        # 3. Obter ou Calcular Score de Ameaça (Fase 12)
-        score_data = get_threat_score(self.db, uid)
-        if score_data:
-            threat_score = score_data["score"]
+        # 3. Obter ou Calcular Score de Ameaça [Fase 31.2: Cache Redis]
+        # Primeiro tenta o cache Redis, depois o banco, depois recalcula.
+        threat_score = self.cache.get_threat_score(uid)
+        if threat_score is None:
+            score_data = get_threat_score(self.db, uid)
+            if score_data:
+                threat_score = score_data["score"]
+            else:
+                threat_score = self.scorer.calculate_individual_score(uid)
+            # Salvar no cache para próximas consultas (TTL 15min)
+            self.cache.set_threat_score(uid, threat_score)
+            log.debug(f"[Redis] Threat score calculado e cacheado: {uid} → {threat_score}")
         else:
-            threat_score = self.scorer.calculate_individual_score(uid)
+            log.debug(f"[Redis] Threat score recuperado do cache: {uid} → {threat_score}")
 
         # 4. Disparar Alerta Multicanal (Fase 21)
         dispatch_sync("MATCH_DETECTED",

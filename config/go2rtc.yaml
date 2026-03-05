@@ -5,12 +5,23 @@ rtsp:
   listen: ":8554"
 
 webrtc:
-  listen: ":8555"
-  # O host é necessário para o WebRTC funcionar corretamente em LAN/Local
+  listen: ":8555/tcp"
+  # Candidates para WebRTC funcionar em LAN/Local
+  # O go2rtc anuncia estes IPs ao browser para negociação ICE
   candidates:
-    - 127.0.0.1
-    - host.docker.internal
+    - 127.0.0.1         # loopback local
+    - stun:stun.l.google.com:19302  # STUN externo como fallback
 
 streams:
-  # O pipeline IA irá criar streams dinamicamente via API ou enviando para porta RTSP
-  # Exemplo: camera1: rtsp://localhost:8554/camera1
+  # Streams são registrados dinamicamente pelo live_pipeline.py
+  # ao enviar via RTSP para porta 8554.
+  #
+  # Exemplo: quando rodar `python live_pipeline.py --id CAM_ID --stream`
+  # o pipeline empurra frames via FFmpeg → rtsp://localhost:8554/CAM_ID
+  # e o go2rtc disponibiliza em:
+  #   - RTSP:   rtsp://localhost:8554/CAM_ID
+  #   - WebRTC: http://localhost:1984/stream.html?src=CAM_ID
+  #   - HLS:    http://localhost:1984/stream.m3u8?src=CAM_ID
+
+log:
+  level: warn

@@ -89,6 +89,10 @@ poetry run python verify_intel.py
 
 # Stream YouTube em modo forense com IA ativa
 TF_CPP_MIN_LOG_LEVEL=3 poetry run python main.py --id YOUTUBE_ID --forensic
+
+# Live pipeline com cache Redis + streaming WebRTC (Fase 31)
+poetry run python live_pipeline.py --id YOUTUBE_ID --stream
+# Visualizar em: http://localhost:1984/stream.html?src=YOUTUBE_ID
 ```
 
 ---
@@ -150,8 +154,8 @@ poetry run python intelligence_db.py search
 # 1. Tradução local (Ghost Protocol)
 docker run -d -p 5000:5000 -e LT_LOAD_ONLY=pt,en,ru libretranslate/libretranslate
 
-# 2. (Opcional) PostgreSQL via Docker
-docker compose up -d postgres
+# 2. Infraestrutura completa (Redis + PostgreSQL + go2rtc)
+docker compose up -d redis db go2rtc
 
 # 3. Popular banco de inteligência
 cd olho_de_deus
@@ -159,7 +163,11 @@ poetry install
 poetry run python run_global_intelligence.py  # todos os ingestores
 poetry run python extract_embeddings.py        # gerar vetores ArcFace
 
-# 4. Iniciar o Catálogo Visual
+# 4. Iniciar Live Pipeline com WebRTC (Fase 31)
+poetry run python live_pipeline.py --id YOUTUBE_ID --stream
+# → Acessar stream: http://localhost:1984/stream.html?src=YOUTUBE_ID
+
+# 5. Iniciar o Catálogo Visual
 cd ../catalog
 npm install
 npm run tauri dev
@@ -177,6 +185,7 @@ npm run tauri dev
 
 | Fase | Descrição |
 |---|---|
+| **Fase 31** | **Redis Cache Layer + WebRTC:** Cache de embeddings/threat scores, debounce de alertas (60s), streaming WebRTC via go2rtc |
 | **Fase 30-31** | **Prevenção Ativa:** Detecção HOI de armas, Aceleração OpenVINO, Cache Redis, WebRTC Low-Latency |
 | **Fase 22** | **Hardening:** Criptografia AES-256 de dossiês periciais (.locked files) |
 | **Fase 20** | **System Health:** Telemetria de hardware via Rust (sysinfo) integrada ao HUD |
