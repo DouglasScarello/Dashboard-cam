@@ -21,25 +21,12 @@ import os
 import sys
 import numpy as np
 
-# Aceleração de Hardware Vega (Radeon) — Fase 33-Giga
-os.environ["LIBVA_DRIVER_NAME"] = "radeonsi"
-
-# Limitar threads OpenMP e bibliotecas matemáticas (Thread Storm Prevention — Fase 32-Lab)
-os.environ["OMP_NUM_THREADS"] = "4"
-os.environ["MKL_NUM_THREADS"] = "1" # MKL 1 para IA isolada em núcleos específicos
-os.environ["OPENBLAS_NUM_THREADS"] = "1"
-os.environ["NUMEXPR_NUM_THREADS"] = "1"
-
+# psutil e multiprocessing para afinidade tática mantidos para uso futuro, se estável.
 import psutil
 import multiprocessing
+# pin_thread temporariamente desativado para diagnosticar "tela preta"
 def pin_thread(cpu_ids):
-    """AFINIDADE DE CPU: Fixa a thread atual em núcleos específicos do Ryzen."""
-    try:
-        proc = psutil.Process()
-        proc.cpu_affinity(cpu_ids)
-        log.info(f"[system] Thread associada aos núcleos: {cpu_ids}")
-    except Exception as e:
-        log.debug(f"Falha ao fixar afinidade de CPU: {e}")
+    pass
 
 # Reduzir avisos do Qt (fontes / point size) ao usar cv2.imshow em Wayland/Gnome
 if "QT_QPA_FONTDIR" not in os.environ:
@@ -143,7 +130,7 @@ class LivePipeline:
         self._last_frame_hash = 0
         self._hash_threshold = 2.0 # Sensibilidade do reator
         
-        # Display Thread Isolada: latência visual mínima
+        # Display Queue (Removido display_thread - imshow deve ser na main)
         self._display_queue = queue.Queue(maxsize=1) 
         
         self.running = False
@@ -267,6 +254,8 @@ class LivePipeline:
                     frame = cv2.resize(frame, (int(w*r), int(h*r)), interpolation=cv2.INTER_LINEAR)
 
             # Push para o FrameBus (RingBuffer)
+            if self._last_frame_hash == 0:
+                log.info(f"[DEBUG] Primeiro frame capturado com sucesso! Dimensões: {frame.shape}")
             self.frame_bus.push(frame)
         cap.release()
 
@@ -421,21 +410,6 @@ class LivePipeline:
             if sleep_time > 0:
                 time.sleep(sleep_time)
 
-    def _display_loop(self, win_name: str):
-        """Thread isolada para GUI: impede que imshow/waitKey travem o processamento."""
-        log.info("[gui] Thread de exibição iniciada.")
-        while self.running:
-            try:
-                display_frame = self._display_queue.get(timeout=1.0)
-                cv2.imshow(win_name, display_frame)
-                # Wayland Fix: bitmask para waitKey
-                if cv2.waitKey(1) & 0xFF == ord('q'):
-                    self.running = False
-                    break
-            except queue.Empty:
-                continue
-            except Exception as e:
-                log.debug(f"[gui] Erro menor: {e}")
         try: cv2.destroyAllWindows()
         except: pass
 
@@ -447,17 +421,13 @@ class LivePipeline:
             if not stream_url: return
 
         self.running = True
-        win_name = f"Olho de Deus - {self.camera_id}"
+        win_name = "Olho de Deus - Tactical"
         
         # Estabilização GUI: Evita resize e overhead de driver (Fase 32)
         cv2.namedWindow(win_name, cv2.WINDOW_NORMAL)
         cv2.resizeWindow(win_name, self.max_width, self.max_height)
         
-        # Iniciar Display Thread antes das outras
-        self.display_thread = threading.Thread(target=self._display_loop, args=(win_name,), daemon=True)
-        self.display_thread.start()
-
-        self.capture_thread = threading.Thread(target=self._capture_loop, args=(stream_url,), daemon=True)
+        self. capture_thread = threading.Thread(target=self._capture_loop, args=(stream_url,), daemon=True)
         self.capture_thread.start()
         
         self.ai_thread = threading.Thread(target=self._process_worker_loop, daemon=True)
@@ -472,7 +442,7 @@ class LivePipeline:
         )
         self._event_process.start()
 
-        log.info("🚀 Pipeline Multi-Thread de Alta Performance Ativo.")
+        log.info("🚀 Pipeline Giga-Reactor Ativo.")
         
         _last_display_frame = None
         _last_watchdog_t = time.time()
@@ -497,22 +467,21 @@ class LivePipeline:
                     self._fps = 1.0 / (now - self._fps_t0) if (now - self._fps_t0) > 0 else 0
                     self._fps_t0 = now
                     
-                    # ZERO-COPY HUD: Desenha diretamente no frame (Fase 33-Giga)
-                    # Removemos a cópia de 1.5MB por ciclo.
+                    # ZERO-COPY HUD: Desenha diretamente no frame
+                    display_frame = _last_display_frame
                     with self._results_lock:
                         results = list(self._last_results)
-                    
-                    display_frame = _last_display_frame
                     self._draw_hud(display_frame, results)
                     
-                    # Stream WebRTC (Preset Veryfast + Low Latency)
+                    # EXIBIÇÃO NA MAIN THREAD (Corrige "tela preta")
+                    cv2.imshow(win_name, display_frame)
+                    if cv2.waitKey(1) & 0xFF == ord('q'):
+                        self.running = False
+                        break
+                    
+                    # Stream WebRTC
                     if self.enable_stream and self.streamer:
                         self.streamer.push(display_frame)
-
-                    # Envia para a thread de interface (sem bloquear)
-                    if not self._display_queue.full():
-                        try: self._display_queue.put_nowait(display_frame)
-                        except: pass
 
                 # Controle de FPS do loop coordenador
                 elapsed = time.time() - loop_start
