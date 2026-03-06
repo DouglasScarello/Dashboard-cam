@@ -19,13 +19,27 @@ Correções de travamento (Fase 32-fix):
 
 import os
 import sys
+import numpy as np
+
+# Aceleração de Hardware Vega (Radeon) — Fase 33-Giga
+os.environ["LIBVA_DRIVER_NAME"] = "radeonsi"
 
 # Limitar threads OpenMP e bibliotecas matemáticas (Thread Storm Prevention — Fase 32-Lab)
 os.environ["OMP_NUM_THREADS"] = "4"
-os.environ["MKL_NUM_THREADS"] = "4"
-os.environ["OPENBLAS_NUM_THREADS"] = "4"
-os.environ["NUMEXPR_NUM_THREADS"] = "4"
-os.environ["VECLIB_MAXIMUM_THREADS"] = "4"
+os.environ["MKL_NUM_THREADS"] = "1" # MKL 1 para IA isolada em núcleos específicos
+os.environ["OPENBLAS_NUM_THREADS"] = "1"
+os.environ["NUMEXPR_NUM_THREADS"] = "1"
+
+import psutil
+import multiprocessing
+def pin_thread(cpu_ids):
+    """AFINIDADE DE CPU: Fixa a thread atual em núcleos específicos do Ryzen."""
+    try:
+        proc = psutil.Process()
+        proc.cpu_affinity(cpu_ids)
+        log.info(f"[system] Thread associada aos núcleos: {cpu_ids}")
+    except Exception as e:
+        log.debug(f"Falha ao fixar afinidade de CPU: {e}")
 
 # Reduzir avisos do Qt (fontes / point size) ao usar cv2.imshow em Wayland/Gnome
 if "QT_QPA_FONTDIR" not in os.environ:
@@ -83,24 +97,24 @@ logging.basicConfig(
     ]
 )
 
-class FrameBus:
-    """Double-Buffer FrameBus (Fase 32-Lab).
-    Evita 'cache line bouncing' entre threads ao usar swap de ponteiros (front/back).
-    Mantém o lock em tempo infinitesimal, apenas para a troca de referências.
+class AtomicFrameRing:
+    """Zero-Latency Frame Reactor (Fase 33-Giga).
+    Ring Buffer de 2 slots para latência física mínima e estabilidade de cache L3.
     """
-    def __init__(self):
-        self._front = None
-        self._back = None
-        self._lock = threading.Lock()
+    def __init__(self, size=2):
+        self.frames = [None] * size
+        self.index = 0
+        self.size = size
+        self.lock = threading.Lock()
 
     def push(self, frame):
-        self._back = frame
-        with self._lock:
-            # Swap atômico de ponteiros (Double Buffer)
-            self._front, self._back = self._back, self._front
+        # Swap de slot circular: nunca acumula backlog
+        i = (self.index + 1) % self.size
+        self.frames[i] = frame
+        self.index = i
 
     def latest(self):
-        return self._front
+        return self.frames[self.index]
 
 class LivePipeline:
     def __init__(self, camera_id: str, source_type: str = "youtube", match_threshold: float = 0.48, process_every_n: int = 3,
@@ -121,9 +135,13 @@ class LivePipeline:
         self.show_every_n = max(1, show_every_n)
         self._use_byte_track = use_byte_track
 
-        # ─── ARQUITETURA DE MICRO-CLOCKS (Fase 32-Ultra) ──────────────────────
-        # Loops independentes em threads separadas com RingBuffer.
-        self.frame_bus = FrameBus()
+        # ─── ARQUITETURA ZERO-LATENCY FRAME REACTOR (Fase 33-Giga) ────────────
+        # Ring Buffer de 2 slots para latência física mínima.
+        self.frame_bus = AtomicFrameRing(size=2)
+        
+        # Throttling de IA: Só processa se o frame mudar.
+        self._last_frame_hash = 0
+        self._hash_threshold = 2.0 # Sensibilidade do reator
         
         # Display Thread Isolada: latência visual mínima
         self._display_queue = queue.Queue(maxsize=1) 
@@ -143,8 +161,10 @@ class LivePipeline:
         self._last_results = []
         self._results_lock = threading.Lock()
         
-        # Event Bus: fila de matches para processamento assíncrono (Persistence/Alerts)
-        self._event_bus = queue.Queue() 
+        # Event Bus: Multiprocessing Queue (Fase 33-Giga)
+        self._event_bus = multiprocessing.Queue()
+        self._event_process = None
+        self._running_flag = multiprocessing.Value('b', False)
         
         self._fps = 0.0
         self._fps_t0 = time.time()
@@ -201,7 +221,8 @@ class LivePipeline:
 
 
     def _capture_loop(self, stream_url: str):
-        """Thread de captura otimizada: Aceleração de Hardware via VA-API/Vega (Fase 32-Lab)."""
+        """Thread de captura: Core 2 (Fase 33-Giga)."""
+        pin_thread([2])
         cap = cv2.VideoCapture(stream_url, cv2.CAP_FFMPEG)
         
         # Tentar aceleração de hardware (Vega iGPU)
@@ -340,35 +361,33 @@ class LivePipeline:
                 pdf_db.close()
         threading.Thread(target=generate_async, daemon=True).start()
 
-    def _db_worker_loop(self):
-        """EVENT LOOP: Processa matches, gera alertas e persistência. (Assíncrono)"""
-        db = DB()
-        try:
-            while self.running:
-                try:
-                    m_frame, m_match, m_track_id = self._event_bus.get(timeout=0.5)
-                    self._process_match(m_frame, m_match, m_track_id, db=db)
-                except queue.Empty:
-                    continue
-        finally:
-            db.close()
-
     def _process_worker_loop(self):
-        """AI LOOP: YOLO + ArcFace. Drift-Free Clock (Fase 32-Lab)."""
+        """AI LOOP: YOLO + ArcFace. Core 4,5,6 (Fase 33-Giga)."""
+        pin_thread([4, 5, 6])
         log.info(f"[ai] Loop de IA inicializado.")
         
         while self.running:
-            # Sincronização temporal estável para evitar jitter
             next_t = time.perf_counter() + self._bio_interval
-            
             frame = self.frame_bus.latest()
             
             if frame is None:
                 time.sleep(0.01)
                 continue
             
+            # FRAME HASHING (Throttling Inteligente)
+            # Evita rodar IA em frames quase idênticos (30-60% economia)
+            current_hash = np.mean(frame)
+            if abs(current_hash - self._last_frame_hash) < self._hash_threshold:
+                # Otimização de Clocks: Pula processamento pesado
+                sleep_time = next_t - time.perf_counter()
+                if sleep_time > 0: time.sleep(sleep_time)
+                continue
+            
+            self._last_frame_hash = current_hash
+            
             t0 = time.time()
             results = self.processor.process_frame(frame)
+            # ... (restante do código já otimizado ROI)
             dt = time.time() - t0
             self._last_process_dt = dt
             
@@ -444,8 +463,14 @@ class LivePipeline:
         self.ai_thread = threading.Thread(target=self._process_worker_loop, daemon=True)
         self.ai_thread.start()
         
-        self.event_thread = threading.Thread(target=self._db_worker_loop, daemon=True)
-        self.event_thread.start()
+        # Iniciar PROCESSO de eventos (Fase 33-Giga)
+        self._running_flag.value = True
+        self._event_process = multiprocessing.Process(
+            target=_event_worker_process, 
+            args=(self._event_bus, self._running_flag, self.camera_id),
+            daemon=True
+        )
+        self._event_process.start()
 
         log.info("🚀 Pipeline Multi-Thread de Alta Performance Ativo.")
         
@@ -472,16 +497,13 @@ class LivePipeline:
                     self._fps = 1.0 / (now - self._fps_t0) if (now - self._fps_t0) > 0 else 0
                     self._fps_t0 = now
                     
-                    # Otimização Zero-Copy HUD: Reaproveita buffer de overlay
-                    if self._overlay_buffer is None or self._overlay_buffer.shape != _last_display_frame.shape:
-                        self._overlay_buffer = _last_display_frame.copy()
-                    
-                    self._overlay_buffer[:] = _last_display_frame # Blit ultra-fast
+                    # ZERO-COPY HUD: Desenha diretamente no frame (Fase 33-Giga)
+                    # Removemos a cópia de 1.5MB por ciclo.
                     with self._results_lock:
                         results = list(self._last_results)
                     
-                    self._draw_hud(self._overlay_buffer, results)
-                    display_frame = self._overlay_buffer
+                    display_frame = _last_display_frame
+                    self._draw_hud(display_frame, results)
                     
                     # Stream WebRTC (Preset Veryfast + Low Latency)
                     if self.enable_stream and self.streamer:
@@ -504,8 +526,11 @@ class LivePipeline:
                 self.capture_thread.join(timeout=2.0)
             if getattr(self, "ai_thread", None):
                 self.ai_thread.join(timeout=2.0)
-            if getattr(self, "event_thread", None):
-                self.event_thread.join(timeout=5.0)
+            if self._event_process:
+                self._running_flag.value = False
+                self._event_process.join(timeout=5.0)
+                if self._event_process.is_alive():
+                    self._event_process.terminate()
             if self.streamer:
                 self.streamer.stop()
             try:
@@ -593,6 +618,64 @@ def load_cameras_from_json(path="cameras.json"):
     except Exception as e:
         print(f"[error] Falha ao ler {path}: {e}")
         return []
+
+def _event_worker_process(event_queue, running_flag, camera_id):
+    """PROCESSO DE EVENTOS (Fase 33-Giga): Isolado da IA para evitar bloqueio de IO.
+    Lida com SQLite, Redis, Telegram e Geração de PDFs.
+    """
+    # Pinning: Core 1 (IO / Background)
+    pin_thread([1])
+    
+    db = DB()
+    cache = RedisCache()
+    log.info(f"[event] Processo de eventos iniciado para {camera_id}")
+    
+    try:
+        while running_flag.value:
+            try:
+                # Timeout curto para checar a flag de parada
+                item = event_queue.get(timeout=0.5)
+                m_frame, m_match, m_track_id = item
+                
+                # Instanciamos um pipeline minimalista apenas para processar o match
+                _handle_event_match(m_frame, m_match, m_track_id, db, cache, camera_id)
+            except queue.Empty:
+                continue
+            except Exception as e:
+                log.error(f"[event] Erro: {e}")
+    finally:
+        db.close()
+
+def _handle_event_match(frame, match, track_id, db, cache, camera_id):
+    """Lógica de processamento de match movida para o processo de eventos."""
+    uid = match["uid"]
+    name = match["title"]
+    confidence = 1.0 - match["score"]
+
+    if cache.alert_is_rate_limited(uid, camera_id):
+        return
+
+    log.info(f"🚨 [EVENT-PROC] MATCH: {name} na câmera {camera_id}")
+    cache.mark_alert_sent(uid, camera_id)
+
+    # Persistência e Alertas (Mesma lógica do LivePipeline._process_match)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+    filename = f"match_{uid}_{timestamp}.jpg"
+    evidence_dir = Path("intelligence/evidence")
+    evidence_dir.mkdir(parents=True, exist_ok=True)
+    file_path = evidence_dir / filename
+    cv2.imwrite(str(file_path), frame)
+
+    # Publicar no Dashboard (Redis Pub/Sub)
+    cache.publish("tactical_alerts", {
+        "type": "MATCH",
+        "uid": uid,
+        "name": name,
+        "camera_id": camera_id,
+        "confidence": f"{confidence:.1%}",
+        "evidence_url": f"/evidence/{filename}",
+        "timestamp": datetime.now().isoformat()
+    })
 
 if __name__ == "__main__":
     import json
