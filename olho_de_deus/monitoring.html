@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Olho de Deus — Tactical Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=JetBrains+Mono&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0a0a0c;
+            --panel: rgba(20, 20, 25, 0.8);
+            --accent: #00ff9d;
+            --danger: #ff3e3e;
+            --text: #e0e0e0;
+            --glass: rgba(255, 255, 255, 0.05);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'Inter', sans-serif;
+            overflow-x: hidden;
+            background-image: radial-gradient(circle at 50% 50%, #1a1a2e 0%, #0a0a0c 100%);
+            min-height: 100vh;
+        }
+
+        header {
+            padding: 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--glass);
+            backdrop-filter: blur(10px);
+            position: sticky;
+            top: 0;
+            z-index: 1004;
+        }
+
+        h1 {
+            font-weight: 800;
+            letter-spacing: -1px;
+            background: linear-gradient(90deg, #fff, var(--accent));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-size: 1.5rem;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            background: var(--accent);
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+            box-shadow: 0 0 10px var(--accent);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.4; }
+            100% { opacity: 1; }
+        }
+
+        main {
+            display: grid;
+            grid-template-columns: 1fr 350px;
+            gap: 2rem;
+            padding: 2rem;
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+
+        .alert-feed {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .card {
+            background: var(--panel);
+            border: 1px solid var(--glass);
+            border-radius: 12px;
+            padding: 1.5rem;
+            backdrop-filter: blur(10px);
+            transition: transform 0.3s ease, border-color 0.3s ease;
+            animation: slideIn 0.5s cubic-bezier(0.23, 1, 0.32, 1);
+        }
+
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .card:hover {
+            border-color: var(--accent);
+            transform: scale(1.01);
+        }
+
+        .card.match {
+            border-left: 4px solid var(--danger);
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+        }
+
+        .timestamp {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            color: #888;
+        }
+
+        .name {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--danger);
+            margin-bottom: 0.25rem;
+        }
+
+        .meta {
+            font-size: 0.9rem;
+            color: #aaa;
+            display: flex;
+            gap: 1rem;
+        }
+
+        .threat-badge {
+            background: rgba(255, 62, 62, 0.2);
+            color: var(--danger);
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 800;
+        }
+
+        .sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .stats-panel {
+            background: var(--panel);
+            border-radius: 12px;
+            padding: 1.5rem;
+            border: 1px solid var(--glass);
+        }
+
+        .stat-item {
+            margin-bottom: 1rem;
+        }
+
+        .stat-label { font-size: 0.8rem; color: #888; text-transform: uppercase; }
+        .stat-value { font-size: 1.5rem; font-weight: 700; color: #fff; }
+
+        .empty-state {
+            text-align: center;
+            padding: 4rem;
+            color: #555;
+            font-style: italic;
+        }
+
+        /* Micro-interação para novos itens */
+        .new-indicator {
+            background: var(--accent);
+            color: #000;
+            font-size: 0.6rem;
+            font-weight: 900;
+            padding: 2px 6px;
+            border-radius: 10px;
+            margin-left: 10px;
+            vertical-align: middle;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div>
+            <h1>OLHO DE DEUS <span style="font-weight: 300; font-size: 0.8rem; letter-spacing: 2px; margin-left:10px;">TACTICAL OSINT</span></h1>
+        </div>
+        <div id="connection-status">
+            <span class="status-dot"></span>
+            <span style="font-size: 0.8rem; font-weight: 600;">SISTEMA ATIVO</span>
+        </div>
+    </header>
+
+    <main>
+        <section class="alert-feed" id="feed">
+            <div class="empty-state">Aguardando telemetria operacional...</div>
+        </section>
+
+        <aside class="sidebar">
+            <div class="stats-panel">
+                <div class="stat-item">
+                    <div class="stat-label">Alertas Hoje</div>
+                    <div class="stat-value" id="stats-alerts">0</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Threat Level</div>
+                    <div class="stat-value" style="color: var(--danger);">HIGH</div>
+                </div>
+            </div>
+
+            <div class="stats-panel">
+                <h3 style="font-size: 0.9rem; margin-bottom: 1rem; color: var(--accent);">LOG RECENTE</h3>
+                <div id="mini-log" style="font-family: 'JetBrains Mono'; font-size: 0.7rem; color: #666; line-height: 1.5;">
+                    [SYSTEM] Inicializando socket...<br>
+                    [DB] Conectado ao intelligence.db
+                </div>
+            </div>
+        </aside>
+    </main>
+
+    <script>
+        const feed = document.getElementById('feed');
+        const statsAlerts = document.getElementById('stats-alerts');
+        const miniLog = document.getElementById('mini-log');
+        let alertCount = 0;
+
+        function addLog(msg) {
+            const time = new Date().toLocaleTimeString();
+            miniLog.innerHTML = `[${time}] ${msg}<br>${miniLog.innerHTML}`;
+        }
+
+        function createAlertCard(data) {
+            const card = document.createElement('div');
+            card.className = 'card match';
+            
+            const time = new Date(data.timestamp || Date.now()).toLocaleTimeString();
+            
+            card.innerHTML = `
+                <div class="card-header">
+                    <span class="timestamp">${time} • CÂMERA: ${data.camera_id}</span>
+                    <span class="threat-badge">STREATH SCORE: ${data.threat_score || '9.2'}</span>
+                </div>
+                <div class="name">${data.name} <span class="new-indicator">NOVO</span></div>
+                <div class="meta">
+                    <span>ID: ${data.uid.substring(0,8)}</span>
+                    <span>CONFIANÇA: ${data.confidence}</span>
+                </div>
+            `;
+            return card;
+        }
+
+        // Conectar ao stream de eventos
+        const eventSource = new EventSource('http://localhost:8000/events');
+
+        eventSource.onopen = () => {
+            addLog("Conexão tática estabelecida.");
+            document.querySelector('.status-dot').style.background = '#00ff9d';
+        };
+
+        eventSource.onerror = (e) => {
+            console.error("Erro SSE:", e);
+            addLog("⚠️ Erro de conexão. Tentando reconectar...");
+            document.querySelector('.status-dot').style.background = '#ff3e3e';
+        };
+
+        eventSource.addEventListener('match', (e) => {
+            const data = JSON.parse(e.data);
+            console.log("Match recebido:", data);
+            
+            // Remover empty state se for o primeiro
+            if (alertCount === 0) feed.innerHTML = '';
+            
+            alertCount++;
+            statsAlerts.innerText = alertCount;
+            addLog(`🚨 Match detectado: ${data.name}`);
+
+            const card = createAlertCard(data);
+            feed.prepend(card);
+
+            // Limitar feed a 20 itens
+            if (feed.children.length > 20) {
+                feed.removeChild(feed.lastChild);
+            }
+        });
+
+        // Ping para manter log ativo
+        eventSource.addEventListener('ping', (e) => {
+            console.log("Ping recebido");
+        });
+
+        addLog("Aguardando telemetria...");
+    </script>
+</body>
+</html>
