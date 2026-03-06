@@ -18,6 +18,27 @@ from core.vector_cache import VectorCache
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
+# ─── Confidence score (Etapa 1: calibração → probabilidade → classificação) ───
+# Distância L2 → probabilidade; thresholds para HIGH/MEDIUM/LOW (calibrar com match_logs depois)
+# k menor = probabilidade decai mais devagar (d=0.25 pode virar MEDIUM/HIGH)
+PROB_K = 1.2  # probability = exp(-distance * k)
+CONFIDENCE_HIGH_PROB = 0.85
+CONFIDENCE_MEDIUM_PROB = 0.60
+
+
+def _distance_to_probability(distance: float) -> float:
+    """Calibração: distância L2 → probabilidade (0–1). Modelo inicial: exp(-d*k)."""
+    return float(np.exp(-distance * PROB_K))
+
+
+def _probability_to_confidence(probability: float) -> str:
+    """Classificação: probabilidade → HIGH / MEDIUM / LOW."""
+    if probability >= CONFIDENCE_HIGH_PROB:
+        return "HIGH"
+    if probability >= CONFIDENCE_MEDIUM_PROB:
+        return "MEDIUM"
+    return "LOW"
+
 
 def _iou(box_a: Tuple, box_b: Tuple) -> float:
     """Calcula Intersection over Union entre dois bounding boxes."""
@@ -58,11 +79,15 @@ class BiometricProcessor:
                  metadata_path: Optional[str] = None,
                  iou_threshold: float = 0.4,
                  match_threshold: float = 0.7,
-                 max_missed_frames: int = 15):
+                 max_missed_frames: int = 15,
+                 use_byte_track: bool = False,
+                 track_cache_ttl_sec: float = 30.0):
 
         self.iou_threshold = iou_threshold
         self.match_threshold = match_threshold
         self.max_missed_frames = max_missed_frames
+        self.use_byte_track = use_byte_track
+        self.track_cache_ttl_sec = track_cache_ttl_sec
 
         # Paths dinâmicos (Busca na estrutura do projeto)
         root = Path(__file__).parent.parent.resolve()
@@ -107,11 +132,87 @@ class BiometricProcessor:
         """
         Detecta faces, aplica REID para não reprocessar o mesmo rosto,
         e retorna resultados para o HUD tático.
+        Com use_byte_track=True: ByteTrack entre YOLO e ArcFace (IDs estáveis; ArcFace só em tracks novos).
         """
+        if self.use_byte_track and self.detector:
+            return self._process_frame_bytetrack(frame)
+        return self._process_frame_iou(frame)
+
+    def _process_frame_bytetrack(self, frame: np.ndarray) -> List[Dict]:
+        """YOLO + ByteTrack (IDs estáveis) → ArcFace apenas para track_id novo. Reduz CPU e melhora tracking."""
+        results = []
+        h, w = frame.shape[:2]
+        scale = 1.0
+        if w > 640:
+            scale = 640 / w
+            small = cv2.resize(frame, (0, 0), fx=scale, fy=scale)
+        else:
+            small = frame
+
+        try:
+            # ByteTrack mantém estado entre frames (persist=True)
+            detections = self.detector.track(
+                small, persist=True, verbose=False, imgsz=320,
+                tracker="bytetrack.yaml"
+            )[0]
+        except Exception:
+            # Fallback: modelo OpenVINO ou build sem tracker → usar pipeline IoU
+            return self._process_frame_iou(frame)
+
+        now = time.time()
+        # Expirar cache: ByteTrack reutiliza IDs; não reusar match de pessoa que sumiu há > TTL
+        self.tracked_faces = {
+            tid: t for tid, t in self.tracked_faces.items()
+            if (now - t.last_seen) <= self.track_cache_ttl_sec
+        }
+
+        if detections.boxes is None or len(detections.boxes) == 0:
+            return results
+
+        for i, box in enumerate(detections.boxes):
+            x1, y1, x2, y2 = map(lambda v: int(v / scale), box.xyxy[0])
+            conf = float(box.conf[0])
+            tid = None
+            if hasattr(box, "id") and box.id is not None:
+                try:
+                    tid = int(box.id.item()) if hasattr(box.id, "item") else int(box.id)
+                except (ValueError, TypeError):
+                    pass
+            if tid is None:
+                tid = -1 - i  # temporário para esta detecção sem id
+
+            face_img = frame[max(0, y1):min(h, y2), max(0, x1):min(w, x2)]
+            if face_img.size == 0:
+                continue
+
+            if tid in self.tracked_faces:
+                track = self.tracked_faces[tid]
+                track.update((x1, y1, x2, y2))
+                results.append({
+                    "box": track.box,
+                    "conf": conf,
+                    "track_id": tid,
+                    "match": track.match
+                })
+            else:
+                embedding, match = self._identify(face_img)
+                new_track = TrackedFace((x1, y1, x2, y2), embedding, match)
+                new_track.track_id = tid  # sobrescrever para usar id do ByteTrack
+                self.tracked_faces[tid] = new_track
+                results.append({
+                    "box": (x1, y1, x2, y2),
+                    "conf": conf,
+                    "track_id": tid,
+                    "match": match
+                })
+
+        return results
+
+    def _process_frame_iou(self, frame: np.ndarray) -> List[Dict]:
+        """Pipeline original: YOLO → associação por IoU → ArcFace só para faces novas."""
         results = []
         h, w = frame.shape[:2]
 
-        # --- DETECÇÃO ---
         scale = 1.0
         if w > 640:
             scale = 640 / w
@@ -169,12 +270,12 @@ class BiometricProcessor:
                         "match": track.match
                     })
 
-        # --- Novas faces não associadas — processar biometria ---
+        # --- Novas faces não associadas — processar biometria (ArcFace só aqui; tracks reutilizam match) ---
         for i, (x1, y1, x2, y2, conf) in enumerate(detected_boxes):
             if i in assigned_boxes:
                 continue
 
-            # Nova face detectada → extrair embedding e buscar match
+            # Nova face detectada → extrair embedding e buscar match (detectar → rastrear → reconhecer raramente)
             face_img = frame[max(0, y1):min(h, y2), max(0, x1):min(w, x2)]
             if face_img.size == 0:
                 continue
@@ -220,14 +321,22 @@ class BiometricProcessor:
             cached_match = self.cache.get_match(embedding)
             if cached_match:
                 match_data = cached_match
+                # Garantir campos de confidence (cache antigo pode não ter)
+                if "match_probability" not in match_data and "score" in match_data:
+                    match_data["match_probability"] = _distance_to_probability(match_data["score"])
+                    match_data["identity_confidence"] = _probability_to_confidence(match_data["match_probability"])
             elif self.index is not None:
-                # Fallback para busca exaustiva no FAISS
+                # Busca (FAISS) → calibração → probabilidade → classificação
                 D, I = self.index.search(np.array([embedding]).astype('float32'), 1)
-                score = float(D[0][0])
-                if score < self.match_threshold:
-                    match_data = self.metadata[I[0][0]]
-                    match_data['score'] = score
-                    # Salvar no cache para o próximo frame/câmera
+                distance = float(D[0][0])
+                probability = _distance_to_probability(distance)
+                confidence = _probability_to_confidence(probability)
+
+                if distance < self.match_threshold:
+                    match_data = self.metadata[I[0][0]].copy()
+                    match_data["score"] = distance
+                    match_data["match_probability"] = probability
+                    match_data["identity_confidence"] = confidence
                     self.cache.set_match(embedding, match_data)
                 else:
                     match_data = None
@@ -238,7 +347,9 @@ class BiometricProcessor:
                 match = {
                     "uid": match_data["uid"],
                     "title": match_data["title"],
-                    "score": match_data["score"]
+                    "score": match_data["score"],
+                    "match_probability": match_data.get("match_probability"),
+                    "identity_confidence": match_data.get("identity_confidence"),
                 }
                 return embedding, match
             else:
