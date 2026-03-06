@@ -59,7 +59,7 @@ class RedisCache:
                 password=password,
                 socket_connect_timeout=2,
                 socket_timeout=2,
-                decode_responses=True,
+                decode_responses=False,
             )
             client.ping()
             self._client = client
@@ -179,6 +179,31 @@ class RedisCache:
         return self._set(f"alert:{uid}:{camera_id}", "1", TTL_ALERT_DEBOUNCE)
 
     # ─────────────────────────────────────────────────────────────────────────
+    # API Pública — Pub/Sub (Fase 32)
+    # ─────────────────────────────────────────────────────────────────────────
+
+    def publish(self, channel: str, message: Any) -> bool:
+        """Publica uma mensagem em um canal Redis."""
+        if self._degraded or not self._client:
+            return False
+        try:
+            payload = json.dumps(message) if not isinstance(message, str) else message
+            self._client.publish(channel, payload)
+            return True
+        except Exception as e:
+            log.debug(f"[RedisCache] publish({channel}) falhou: {e}")
+            return False
+
+    def get_pubsub(self):
+        """Retorna um objeto pubsub do Redis para assinatura."""
+        if self._degraded or not self._client:
+            return None
+        try:
+            return self._client.pubsub()
+        except Exception:
+            return None
+
+    # ─────────────────────────────────────────────────────────────────────────
     # API Pública — Diagnóstico
     # ─────────────────────────────────────────────────────────────────────────
 
@@ -198,13 +223,20 @@ class RedisCache:
             self._client.ping()
             ping_ms = round((time.perf_counter() - t0) * 1000, 2)
             info = self._client.info("server")
+            
+            # Helper para extrair de dict binário
+            def bget(d, key, default="?"):
+                k = key.encode() if isinstance(key, str) else key
+                val = d.get(k, default)
+                return val.decode() if isinstance(val, bytes) else val
+
             return {
                 "mode": "active",
                 "connected": True,
                 "ping_ms": ping_ms,
-                "redis_version": info.get("redis_version", "?"),
-                "uptime_seconds": info.get("uptime_in_seconds", 0),
-                "used_memory_human": info.get("used_memory_human", "?"),
+                "redis_version": bget(info, "redis_version"),
+                "uptime_seconds": bget(info, "uptime_in_seconds", 0),
+                "used_memory_human": bget(info, "used_memory_human"),
             }
         except Exception as e:
             return {"mode": "error", "connected": False, "error": str(e)}
