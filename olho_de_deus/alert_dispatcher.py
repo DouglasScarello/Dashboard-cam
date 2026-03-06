@@ -31,8 +31,37 @@ from email.mime.multipart import MIMEMultipart
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from datetime import datetime
+import os
+import base64
+from dotenv import load_dotenv
+
+# ─── Ghost Proxy / Network Stealth (Fase 24) ─────────────────────────────────
+try:
+    from aiohttp_socks import ProxyConnector
+    HAS_SOCKS = True
+except ImportError:
+    HAS_SOCKS = False
+    ProxyConnector = None  # type: ignore
+
+try:
+    from Crypto.Cipher import AES
+    from Crypto.Random import get_random_bytes
+    HAS_CRYPTO = True
+except ImportError:
+    HAS_CRYPTO = False
+
+load_dotenv()
 
 log = logging.getLogger("alert_dispatcher")
+# Auditoria de Alertas (Fase 17)
+audit_log = logging.getLogger("alert_audit")
+_audit_path = Path(__file__).parent / "logs" / "audit.log"
+os.makedirs(_audit_path.parent, exist_ok=True)
+if not audit_log.handlers:
+    ah = logging.FileHandler(_audit_path, encoding="utf-8")
+    ah.setFormatter(logging.Formatter("%(asctime)s | %(message)s"))
+    audit_log.addHandler(ah)
+    audit_log.setLevel(logging.INFO)
 
 # ─── Config ──────────────────────────────────────────────────────────────────
 _CONFIG_PATH = Path(__file__).parent / "alert_config.yaml"
@@ -50,6 +79,31 @@ def _load_config() -> Dict:
         with open(_CONFIG_PATH, "r", encoding="utf-8") as f:
             _config = yaml.safe_load(f)
     return _config
+
+
+# ─── Ghost Connector (Fase 24) ────────────────────────────────────────────────
+
+def _build_connector() -> aiohttp.BaseConnector:
+    """
+    Retorna um ProxyConnector SOCKS5 se GHOST_PROXY_URL estiver definida,
+    ou um TCPConnector padrão caso contrário.
+
+    Configurar no .env:
+        GHOST_PROXY_URL=socks5://127.0.0.1:9050   # Tor local
+        GHOST_PROXY_URL=socks5://user:pass@proxy:1080
+    """
+    proxy_url = os.getenv("GHOST_PROXY_URL", "").strip()
+    if proxy_url and HAS_SOCKS:
+        try:
+            connector = ProxyConnector.from_url(proxy_url, ssl=True)
+            log.info(f"[NetStealth] Tráfego roteado via proxy: {proxy_url.split('@')[-1]}")
+            return connector
+        except Exception as e:
+            log.error(f"[NetStealth] Falha ao criar ProxyConnector: {e} — usando conexão direta.")
+    elif proxy_url and not HAS_SOCKS:
+        log.warning("[NetStealth] GHOST_PROXY_URL definida mas aiohttp-socks não instalado. "
+                    "Execute: poetry add aiohttp-socks")
+    return aiohttp.TCPConnector(ssl=True)
 
 
 # ─── Rate limiting ────────────────────────────────────────────────────────────
@@ -96,6 +150,31 @@ def _render(template: str, **kwargs) -> str:
         return prefix + rendered
     except KeyError as e:
         return prefix + template + f"\n[template key missing: {e}]"
+
+
+# ─── Criptografia E2E (Fase 25) ───────────────────────────────────────────────
+
+def _maybe_encrypt(message: str) -> str:
+    """Cifra a mensagem se GHOST_MASTER_KEY estiver definida e HAS_CRYPTO for True."""
+    key_str = os.getenv("GHOST_MASTER_KEY")
+    enabled = os.getenv("GHOST_ENCRYPTION_ENABLED", "false").lower() == "true"
+    
+    if not key_str or not enabled or not HAS_CRYPTO:
+        return message
+
+    try:
+        # Garantir 32 bytes para AES-256
+        key = key_str.encode("utf-8")[:32].ljust(32, b"\0")
+        cipher = AES.new(key, AES.MODE_EAX)
+        ciphertext, tag = cipher.encrypt_and_digest(message.encode("utf-8"))
+        
+        # Payload comprimido: nonce (16) + tag (16) + ciphertext
+        blob = cipher.nonce + tag + ciphertext
+        encoded = base64.b64encode(blob).decode("utf-8")
+        return f"[GHOST_V1]{encoded}"
+    except Exception as e:
+        log.error(f"[Crypto] Erro na cifragem: {e}")
+        return f"[CRYPTO_ERROR] {message}"
 
 
 # ─── Canais ───────────────────────────────────────────────────────────────────
@@ -264,7 +343,10 @@ async def dispatch(event_type: str, **kwargs) -> None:
     target_ch = route.get("channels", [])
     message   = _render(template, event_type=event_type, **kwargs)
 
-    connector = aiohttp.TCPConnector(ssl=True)
+    # Aplicar Criptografia E2E se configurado (Fase 25)
+    message = _maybe_encrypt(message)
+
+    connector = _build_connector()
     async with aiohttp.ClientSession(connector=connector) as session:
         tasks = []
         for ch_name in target_ch:
@@ -307,6 +389,10 @@ async def dispatch(event_type: str, **kwargs) -> None:
                 _dedup_tracker[uid] = entry
 
             results = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            # Registrar na Auditoria (Fase 17)
+            audit_log.info(f"EVENT: {event_type} | CHANNELS: {', '.join(target_ch)} | STATUS: {'SUCCESS' if all(r is True for r in results) else 'PARTIAL_FAILURE'}")
+            
             failed = sum(1 for r in results if isinstance(r, Exception) or r is False)
             if failed:
                 log.warning(f"[dispatch] {failed}/{len(tasks)} canais falharam para {event_type}")

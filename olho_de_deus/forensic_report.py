@@ -11,7 +11,8 @@ from Crypto.Random import get_random_bytes
 from dotenv import load_dotenv
 
 # Garantir que o root do projeto está no path para os helpers de intelligence
-sys.path.append(str(Path(__file__).parent.parent.resolve()))
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.append(str(ROOT))
 
 log = logging.getLogger("forensic_report")
 

@@ -139,28 +139,26 @@ class BiometricProcessor:
         return self._process_frame_iou(frame)
 
     def _process_frame_bytetrack(self, frame: np.ndarray) -> List[Dict]:
-        """YOLO + ByteTrack (IDs estáveis) → ArcFace apenas para track_id novo. Reduz CPU e melhora tracking."""
+        """YOLO + ByteTrack (IDs estáveis) → ArcFace apenas para track_id novo."""
         results = []
         h, w = frame.shape[:2]
-        scale = 1.0
-        if w > 640:
-            scale = 640 / w
-            small = cv2.resize(frame, (0, 0), fx=scale, fy=scale)
-        else:
-            small = frame
+        
+        # Otimização OpenVINO: Forçar 320x320
+        scale_x = w / 320.0
+        scale_y = h / 320.0
+        small_static = cv2.resize(frame, (320, 320))
 
         try:
-            # ByteTrack mantém estado entre frames (persist=True)
+            # TUNING FASE 33-STABLE: conf=0.5, iou=0.45, classes=[0] (pessoa)
             detections = self.detector.track(
-                small, persist=True, verbose=False, imgsz=320,
+                small_static, persist=True, verbose=False,
+                conf=0.5, iou=0.45, classes=[0],
                 tracker="bytetrack.yaml"
             )[0]
         except Exception:
-            # Fallback: modelo OpenVINO ou build sem tracker → usar pipeline IoU
             return self._process_frame_iou(frame)
 
         now = time.time()
-        # Expirar cache: ByteTrack reutiliza IDs; não reusar match de pessoa que sumiu há > TTL
         self.tracked_faces = {
             tid: t for tid, t in self.tracked_faces.items()
             if (now - t.last_seen) <= self.track_cache_ttl_sec
@@ -170,7 +168,13 @@ class BiometricProcessor:
             return results
 
         for i, box in enumerate(detections.boxes):
-            x1, y1, x2, y2 = map(lambda v: int(v / scale), box.xyxy[0])
+            # Escala X/Y independente para compensar o crunch 320x320
+            x1_raw, y1_raw, x2_raw, y2_raw = box.xyxy[0].cpu().numpy()
+            x1 = int(x1_raw * scale_x)
+            y1 = int(y1_raw * scale_y)
+            x2 = int(x2_raw * scale_x)
+            y2 = int(y2_raw * scale_y)
+            
             conf = float(box.conf[0])
             tid = None
             if hasattr(box, "id") and box.id is not None:
@@ -179,7 +183,7 @@ class BiometricProcessor:
                 except (ValueError, TypeError):
                     pass
             if tid is None:
-                tid = -1 - i  # temporário para esta detecção sem id
+                tid = -1 - i
 
             face_img = frame[max(0, y1):min(h, y2), max(0, x1):min(w, x2)]
             if face_img.size == 0:
@@ -197,7 +201,7 @@ class BiometricProcessor:
             else:
                 embedding, match = self._identify(face_img)
                 new_track = TrackedFace((x1, y1, x2, y2), embedding, match)
-                new_track.track_id = tid  # sobrescrever para usar id do ByteTrack
+                new_track.track_id = tid
                 self.tracked_faces[tid] = new_track
                 results.append({
                     "box": (x1, y1, x2, y2),
@@ -223,7 +227,10 @@ class BiometricProcessor:
         if not self.detector:
             return results
 
-        detections = self.detector(small, verbose=False, imgsz=320)[0]
+        # Forçar redimensionamento para 320x320
+        small_static = cv2.resize(small, (320, 320))
+        # TUNING FASE 33-STABLE: conf=0.5, iou=0.45, classes=[0]
+        detections = self.detector(small_static, verbose=False, conf=0.5, iou=0.45, classes=[0])[0]
         detected_boxes = []
         for box in detections.boxes:
             x1, y1, x2, y2 = map(lambda v: int(v / scale), box.xyxy[0])

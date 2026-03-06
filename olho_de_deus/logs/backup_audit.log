@@ -1,0 +1,20 @@
+2026-03-04 18:38:39,778 [BACKUP] Prioridade de I/O ajustada para Idle (ionice -c 3)
+2026-03-04 18:38:39,778 [BACKUP] Nenhum dispositivo externo detectado. Usando destino local.
+2026-03-04 18:38:39,778 [BACKUP] === INICIANDO SNAPSHOT [20260304_183839] ===
+2026-03-04 18:38:39,789 [BACKUP] Fonte: /home/douglasdsr/Documentos/Projects/FBI/Dashboard/intelligence/data (158.3MB)
+2026-03-04 18:38:39,789 [BACKUP] Destino: /home/douglasdsr/ghost_backups/snapshot_20260304_183839.ghost
+2026-03-04 18:38:39,789 [BACKUP] [DRY-RUN] Simulando backup sem mover dados.
+2026-03-04 18:39:09,699 [BACKUP] Prioridade de I/O ajustada para Idle (ionice -c 3)
+2026-03-04 18:39:09,699 [BACKUP] Nenhum dispositivo externo detectado. Usando destino local.
+2026-03-04 18:39:09,699 [BACKUP] === INICIANDO SNAPSHOT [20260304_183909] ===
+2026-03-04 18:39:09,711 [BACKUP] Fonte: /home/douglasdsr/Documentos/Projects/FBI/Dashboard/intelligence/data (158.3MB)
+2026-03-04 18:39:09,711 [BACKUP] Destino: /home/douglasdsr/ghost_backups/snapshot_20260304_183909.ghost
+2026-03-04 18:39:09,711 [BACKUP] Compactando dados...
+2026-03-04 18:39:16,037 [BACKUP] Compactado: 97.2MB
+2026-03-04 18:39:16,037 [BACKUP] Cifrando snapshot com AES-256-EAX...
+2026-03-04 18:39:16,792 [BACKUP] ✓ Snapshot concluído: snapshot_20260304_183909.ghost
+2026-03-04 18:39:16,792 [BACKUP]   SHA-256: e36fe02954d2af07...abc75c74
+2026-03-04 18:39:16,792 [BACKUP]   Tamanho final: 97.2MB
+2026-03-04 18:39:16,792 [BACKUP] =================================================
+2026-03-04 18:39:26,443 [BACKUP] Verificando: snapshot_20260304_183909.ghost
+2026-03-04 18:39:26,597 [BACKUP] ✓ INTEGRIDADE CONFIRMADA: SHA-256 corresponde.
