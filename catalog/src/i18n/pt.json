@@ -15,6 +15,20 @@
         "missing": "Desaparecidos",
         "biometrics": "Biometria"
     },
+    "nav": {
+        "catalog": "Catálogo",
+        "cameras": "Câmeras"
+    },
+    "cameras": {
+        "title": "Grade de Câmeras ao Vivo",
+        "online_suffix": "câmeras online",
+        "fetch_error": "Falha ao carregar câmeras",
+        "no_cameras": "Nenhuma câmera cadastrada.",
+        "no_stream": "Transmissão ao vivo indisponível para esta câmera.",
+        "hls_unsupported": "Este navegador não consegue reproduzir a transmissão ao vivo.",
+        "alert_weapon": "⚠ ARMA",
+        "alert_fall": "⚠ QUEDA"
+    },
     "filters": {
         "all": "TODOS",
         "wanted": "PROCURADOS",

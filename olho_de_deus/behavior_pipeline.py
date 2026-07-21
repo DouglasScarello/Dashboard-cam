@@ -51,14 +51,14 @@ class BehaviorPipeline:
         else:
             self.pose_model = YOLO("yolov8n-pose.pt")
         
-        # Modelo de Armas (OpenVINO fallback)
-        ov_weapon = str(ROOT / "olho_de_deus" / "yolov8n_openvino_model")
-        if os.path.exists(ov_weapon):
-            self.weapon_model = YOLO(ov_weapon, task="detect")
-        else:
-            self.weapon_model = YOLO("yolov8n.pt")
-        
-        self.weapon_classes = [0] # Stub
+        # Modelo de Armas — Threat-Detection-YOLOv8n (Subh775, MIT)
+        # Classes reais: 0=Gun, 1=explosion, 2=grenade, 3=knife
+        weapon_weights = str(ROOT / "olho_de_deus" / "models" / "weapon_yolov8n.pt")
+        self.weapon_model = YOLO(weapon_weights)
+
+        # Classes empunháveis (checar proximidade com o pulso via pose)
+        self.HANDHELD_CLASSES = {0, 3}   # Gun, knife
+        self.AREA_HAZARD_CLASSES = {1, 2}  # explosion, grenade — perigo de área, não depende de estar "na mão"
         
         # Estado para detecção de queda
         self.fall_counter = 0
@@ -117,19 +117,22 @@ class BehaviorPipeline:
         Detecta armas e objetos perigosos com lógica de intersecção (Fase 30.1).
         Verifica se a arma está em contato/empunhada por uma pessoa.
         """
-        # 1. Detecção (Utilizando o modelo já carregado/OpenVINO)
+        # 1. Detecção
         results = self.weapon_model(frame, verbose=False, imgsz=320, conf=0.5)[0]
         person_results = self.pose_model(frame, verbose=False, imgsz=320, conf=0.5)[0]
 
-        weapon_boxes = []
+        handheld_boxes = []
+        hazard_boxes = []
         person_results_list = []
 
-        # 2. Mapeamento de classes (Stub: no modelo real, classes como 0:gun, 1:knife)
-        # Usando classes de exemplo do COCO para teste: 0 (person), 67 (cell phone) -> stub de arma
+        # 2. Mapeamento de classes reais (Threat-Detection-YOLOv8n)
+        # 0=Gun, 1=explosion, 2=grenade, 3=knife
         for box in results.boxes:
             cls = int(box.cls[0])
-            if cls in [67, 73]: # Stub: Objetos que podem ser armas (phone, laptop/book stub)
-                weapon_boxes.append(box)
+            if cls in self.HANDHELD_CLASSES:
+                handheld_boxes.append(box)
+            elif cls in self.AREA_HAZARD_CLASSES:
+                hazard_boxes.append(box)
 
         # 3. Análise de Pessoas (Pose)
         for i, kpts in enumerate(person_results.keypoints.data):
@@ -142,7 +145,14 @@ class BehaviorPipeline:
         alert_level = 0
         active_threat_details = ""
 
-        for w_obj in weapon_boxes:
+        # 3b. Perigo de área (explosão/granada): não depende de estar "na mão" — alerta crítico direto
+        if hazard_boxes:
+            label = self.weapon_model.names[int(hazard_boxes[0].cls[0])]
+            alert_level = 10
+            active_threat_details = f"Risco de área detectado: {label}"
+
+        for w_obj in handheld_boxes:
+            w_label = self.weapon_model.names[int(w_obj.cls[0])]
             w_box_xyxy = w_obj.xyxy[0].cpu().numpy()
             w_center = [(w_box_xyxy[0] + w_box_xyxy[2]) / 2, (w_box_xyxy[1] + w_box_xyxy[3]) / 2]
             w_size = max(w_box_xyxy[2] - w_box_xyxy[0], w_box_xyxy[3] - w_box_xyxy[1])
@@ -169,7 +179,7 @@ class BehaviorPipeline:
                             
                             if dist < S:
                                 alert_level = 10 # AMEAÇA ATIVA: ARMA EMPUNHADA
-                                active_threat_details = f"Arma detectada a {dist:.1f}px do pulso (Limiar: {S:.1f}px)"
+                                active_threat_details = f"{w_label} empunhado(a) a {dist:.1f}px do pulso (Limiar: {S:.1f}px)"
                                 break
                 if alert_level == 10: break
             if alert_level == 10: break

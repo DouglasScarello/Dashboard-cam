@@ -15,6 +15,20 @@
         "missing": "Missing",
         "biometrics": "Biometrics"
     },
+    "nav": {
+        "catalog": "Catalog",
+        "cameras": "Cameras"
+    },
+    "cameras": {
+        "title": "Live Camera Grid",
+        "online_suffix": "cameras online",
+        "fetch_error": "Failed to load cameras",
+        "no_cameras": "No cameras registered.",
+        "no_stream": "Live stream unavailable for this camera.",
+        "hls_unsupported": "This browser cannot play the live stream.",
+        "alert_weapon": "⚠ WEAPON",
+        "alert_fall": "⚠ FALL"
+    },
     "filters": {
         "all": "ALL",
         "wanted": "WANTED",
