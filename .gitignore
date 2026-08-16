@@ -53,3 +53,4 @@ olho_de_deus/data/
 .pdm-python
 .python-version
 forense_*.jpg
+.env
