@@ -21,6 +21,7 @@
 ### 📊 Histórico Contínuo de Mutações Recentes
 | Timestamp (ISO 8601) | Tipo | Módulo / Arquivos Afetados | Resumo Técnico da Alteração | Agente / Autor |
 | :--- | :--- | :--- | :--- | :--- |
+| `2026-08-20T20:25:00-03:00` | `[CONSULT]` | `catalog/src-tauri/Cargo.toml`, `PROJECT_MAP.md`, `README.md` | Incorporação da Consultoria Arquitetural C4ISR: IPC de alta performance (Custom URIs, Channels), otimizações de compilação Cargo (LTO, strip, codegen-units=1), despacho heterogêneo de Edge AI (TensorRT, OpenVINO, NCNN), Tiering Híbrido de BDs (Milvus/Qdrant/Memgraph/ArcadeDB) e postura Zero Trust FIPS 140-3. | Antigravity AI |
 | `2026-08-20T19:35:00-03:00` | `[ARCH]` | `intelligence/spatial_engine.py`, `olho_de_deus/forensic_core.py`, `PROJECT_MAP.md` | Integração da arquitetura de Visão Computacional (Sub-center ArcFace, YOLOv8 + EasyOCR), DGGS Uber H3 com h3-pg v4.x (Generated Columns GiST), Ledger Imutável via Árvores de Merkle e assinaturas digitais PAdES-LTA com pyHanko. | Antigravity AI |
 | `2026-08-20T19:17:00-03:00` | `[AUDIT]` | `RELATORIO_AUDITORIA_GERAL.md`, `Layout.tsx`, `i18n/*.json`, `api_server.py` | Auditoria técnica simultânea com 10 subagentes especializados, validação de todos os subsistemas (WebRTC, Shaders WebGL, IA Forense 4x, UX Pan/Zoom, Dual-DB H3, Áudio Procedural) e emissão de laudo executivo consolidado. | Antigravity AI |
 | `2026-08-20T19:12:00-03:00` | `[FORENSIC]` | `catalog/src/components/player/hooks/useWebGLVideoFilters.ts`, `config/go2rtc.yaml` | Aplicação da pesquisa técnica de CFTV Forense: implementação dos Shaders GLSL de convolução Unsharp Mask 3x3 (matriz [-1 -1 -1; -1 +9 -1; -1 -1 -1]), ajuste fotométrico vetorial de brilho/contraste, arquitetura híbrida de snapshot PNG 1:1 e remuxing puro go2rtc (#video=copy#audio=opus). | Antigravity AI |
@@ -234,7 +235,49 @@ Para transformar transmissões severamente degradadas de **480p ($854\times480$)
 
 ---
 
-## 7. Instruções para Desenvolvimento e Execução
+## 7. Diretrizes da Consultoria Arquitetural C4ISR (Tauri v2, Edge AI & Zero Trust)
+
+### A. IPC de Ultra Performance no Tauri v2 & Streaming Binário
+- **Gargalo Superado**: A serialização JSON/Base64 convencional introduz até 200ms de latência em payloads de 3MB e bloqueios na UI do React.
+- **Custom URI Protocols**: Uso de `register_asynchronous_uri_scheme_protocol` (ex: `olhodeus://stream/sensor-alfa`) para entrega de bytes brutos direto para `<canvas>` e WebGL, obtendo **ganho de velocidade de 175x**.
+- **Tauri Channels (`tauri::ipc::Channel`)**: Barramento de push em tempo real para telemetria, detecções YOLOv8 e bounding boxes, eliminando *polling* do frontend.
+- **Tuning de WebSockets (`tauri-plugin-websocket`)**: `maxMessageSize = 64 MiB` (evitando OOM), `writeBufferSize = 128 KiB` para envio sem fragmentação TCP.
+
+### B. Otimização de Binários & Compilação Cargo (Hardware Restrito / Edge)
+- **Perfil de Release em `Cargo.toml`**:
+  ```toml
+  [profile.release]
+  codegen-units = 1
+  lto = "fat"
+  opt-level = 3
+  strip = true
+  panic = "abort"
+  ```
+- **Expurgação de Código Morto**: Diretiva `removeUnusedCommands` no `tauri.conf.json` combinada com as ACLs de Capabilities.
+
+### C. Despacho Heterogêneo de Edge AI (Hardware-Aware)
+- **NVIDIA GPU (Centros C2 / Viaturas)**: Compilação via **TensorRT** com fusão de camadas e quantização FP16/INT8.
+- **Intel x86 (Laptops / Thin Clients)**: Inferência vetorizada via **OpenVINO** explorando instruções AVX-512 e iGPU Xe.
+- **ARM SBCs / Drones / Dispositivos Móveis**: Execução leve via **NCNN** com aceleração ARM NEON e NPUs (inferência sub-30ms).
+- **Orquestrador Unificado**: **ONNX Runtime** como fallback agnóstico de arquitetura.
+
+### D. Tiering Híbrido de Bases de Dados (OSINT & Grafos)
+- **Bases Vetoriais**:
+  - **Milvus**: Centro de Comando Principal (bilhões de vetores, HNSW, multi-tenancy, aceleração GPU).
+  - **Qdrant**: Nós Regionais (Rust nativo, filtragem payload + vetores).
+  - **pgvector**: Borda Tática Local / Dispositivos Individuais (ACID relacional).
+- **Bases de Grafos (Redes Complexas de Ameaças)**:
+  - **Memgraph**: Interceptação em Tempo Real (In-Memory C++, consultas sub-milissegundo OpenCypher, 120x mais rápido).
+  - **Neo4j Enterprise / ArcadeDB**: Data Lake de Inteligência Fria e macro-análise forense em disco (licença Apache 2.0 sem restrições BSL).
+
+### E. Doutrina Militar Zero Trust (ZTA) & FIPS 140-3
+- **Capabilities Baseadas em Menor Privilégio**: Manifestos JSON estritos em `src-tauri/capabilities/`.
+- **Isolation Pattern**: Iframe em sandbox criptografada via **AES-GCM** com rotação estocástica de chaves em cada inicialização do aplicativo contra ataques de Supply Chain e RCE.
+- **NIST SP 800-76 & FIPS 140-3**: Assinaturas digitais de templates biométricos e compilação com `rustls-tls` sobre bibliotecas criptográficas homologadas (BoringSSL FIPS / PKCS#11).
+
+---
+
+## 8. Instruções para Desenvolvimento e Execução
 
 ### Executando o Ambiente Completo:
 ```bash
