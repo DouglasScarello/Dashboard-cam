@@ -119,5 +119,18 @@
         "waiter or food service worker": "Waiter or Food Service Worker",
         "it worker": "IT Worker",
         "landscaper": "Landscaper"
+    },
+    "alerts": {
+        "title": "C4ISR Alert Center",
+        "empty": "No biometric alerts recorded.",
+        "unknown_target": "Unknown Target",
+        "camera_label": "Camera",
+        "new_match": "NEW BIOMETRIC MATCH",
+        "view_camera": "View Camera",
+        "status": {
+            "connected": "Connected",
+            "connecting": "Connecting...",
+            "disconnected": "Disconnected"
+        }
     }
 }

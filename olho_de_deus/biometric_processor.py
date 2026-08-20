@@ -227,13 +227,19 @@ class BiometricProcessor:
         if not self.detector:
             return results
 
-        # Forçar redimensionamento para 320x320
-        small_static = cv2.resize(small, (320, 320))
+        # Forçar redimensionamento para 320x320 com cálculo correto de escala X e Y
+        small_static = cv2.resize(frame, (320, 320))
+        scale_x = w / 320.0
+        scale_y = h / 320.0
         # TUNING FASE 33-STABLE: conf=0.5, iou=0.45, classes=[0]
         detections = self.detector(small_static, verbose=False, conf=0.5, iou=0.45, classes=[0])[0]
         detected_boxes = []
         for box in detections.boxes:
-            x1, y1, x2, y2 = map(lambda v: int(v / scale), box.xyxy[0])
+            bx = box.xyxy[0].cpu().numpy() if hasattr(box.xyxy[0], "cpu") else box.xyxy[0]
+            x1 = int(bx[0] * scale_x)
+            y1 = int(bx[1] * scale_y)
+            x2 = int(bx[2] * scale_x)
+            y2 = int(bx[3] * scale_y)
             conf = float(box.conf[0])
             detected_boxes.append((x1, y1, x2, y2, conf))
 
@@ -282,8 +288,12 @@ class BiometricProcessor:
             if i in assigned_boxes:
                 continue
 
-            # Nova face detectada → extrair embedding e buscar match (detectar → rastrear → reconhecer raramente)
-            face_img = frame[max(0, y1):min(h, y2), max(0, x1):min(w, x2)]
+            # Recorte da região da face (terço superior da silhueta da pessoa)
+            bh = max(1, y2 - y1)
+            face_y2 = y1 + int(bh * 0.35)
+            face_img = frame[max(0, y1):min(h, face_y2), max(0, x1):min(w, x2)]
+            if face_img.size == 0:
+                face_img = frame[max(0, y1):min(h, y2), max(0, x1):min(w, x2)]
             if face_img.size == 0:
                 continue
 

@@ -7,10 +7,12 @@ services:
     container_name: ghost_redis
     command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - redisdata:/data
     restart: always
+    security_opt:
+      - no-new-privileges:true
     healthcheck:
       test: [ "CMD", "redis-cli", "ping" ]
       interval: 10s
@@ -22,14 +24,16 @@ services:
     image: ankane/pgvector:v0.5.1
     container_name: intelligence_db_pg
     environment:
-      POSTGRES_DB: intelligence
-      POSTGRES_USER: ghost
-      POSTGRES_PASSWORD: protocol
+      POSTGRES_DB: ${DB_NAME:-intelligence}
+      POSTGRES_USER: ${DB_USER:-ghost}
+      POSTGRES_PASSWORD: ${DB_PASS:-protocol}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     restart: always
+    security_opt:
+      - no-new-privileges:true
 
   # Motor de Inteligência e Ingestão (Olho de Deus)
   intelligence:
@@ -37,27 +41,35 @@ services:
     container_name: intelligence_engine
     depends_on:
       - db
+      - redis
     environment:
       - DB_HOST=db
-      - DB_NAME=intelligence
-      - DB_USER=ghost
-      - DB_PASS=protocol
+      - DB_NAME=${DB_NAME:-intelligence}
+      - DB_USER=${DB_USER:-ghost}
+      - DB_PASS=${DB_PASS:-protocol}
     volumes:
       - ./intelligence/data:/app/intelligence/data
       - ./olho_de_deus:/app/olho_de_deus
-    # Por padrão, apenas mantém o container vivo ou executa o main se necessário
     command: [ "tail", "-f", "/dev/null" ]
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
 
   # Servidor de Streaming Zero Latency (Fase 31.3)
   go2rtc:
-    image: alexxit/go2rtc
+    image: alexxit/go2rtc:latest
     container_name: go2rtc_streamer
-    network_mode: host # Recomendado para WebRTC/UDP simplificado em ambiente local
-    privileged: true
+    privileged: false
+    ports:
+      - "127.0.0.1:1984:1984"
+      - "8554:8554"
+      - "8555:8555/tcp"
+      - "8555:8555/udp"
     volumes:
-      - ./config/go2rtc.yaml:/config/go2rtc.yaml
+      - ./config/go2rtc.yaml:/config/go2rtc.yaml:ro
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
 
 volumes:
   pgdata:

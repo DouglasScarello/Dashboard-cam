@@ -8,9 +8,10 @@ use base64::{Engine as _, engine::general_purpose::STANDARD as B64};
 
 fn db_path() -> PathBuf {
     let candidates = [
-        "/home/douglasdsr/Documentos/Projects/FBI/Dashboard/intelligence/data/intelligence.db",
-        "../../intelligence/data/intelligence.db",
         "../intelligence/data/intelligence.db",
+        "../../intelligence/data/intelligence.db",
+        "/home/douglasdsr/dashboard-cam/intelligence/data/intelligence.db",
+        "/home/douglasdsr/Documentos/Projects/FBI/Dashboard/intelligence/data/intelligence.db",
         "data/intelligence.db",
     ];
     for c in &candidates {
@@ -20,7 +21,7 @@ fn db_path() -> PathBuf {
             return p; 
         }
     }
-    let fallback = PathBuf::from("/home/douglasdsr/Documentos/Projects/FBI/Dashboard/intelligence/data/intelligence.db");
+    let fallback = PathBuf::from("../intelligence/data/intelligence.db");
     println!("[CATALOG] Banco não encontrado nos candidatos, tentando fallback: {:?}", fallback);
     fallback
 }
@@ -303,19 +304,57 @@ fn get_stats() -> Result<Stats, String> {
 
 #[tauri::command]
 fn get_image_base64(img_path: String) -> Result<String, String> {
-    // Resolve caminho relativo para absoluto baseado na localização do banco
-    let base_dir = PathBuf::from("/home/douglasdsr/Documentos/Projects/FBI/Dashboard/intelligence/");
-    let mut abs_path = base_dir;
-    abs_path.push(img_path);
-    
-    if !abs_path.exists() {
-        println!("[CATALOG] Imagem não encontrada: {:?}", abs_path);
-        return Err(format!("Imagem inexistente: {:?}", abs_path));
+    let db_p = db_path();
+    let data_dir = db_p.parent().unwrap_or(&PathBuf::from("."));
+    let base_dir = data_dir.parent().unwrap_or(data_dir);
+    let canonical_base = std::fs::canonicalize(base_dir).map_err(|e| e.to_string())?;
+
+    let clean_path = img_path.trim_start_matches('/').trim_start_matches('\\');
+    let target = canonical_base.join(clean_path);
+
+    let canonical_target = match std::fs::canonicalize(&target) {
+        Ok(p) => p,
+        Err(_) => return Err(format!("Imagem inexistente: {:?}", target)),
+    };
+
+    if !canonical_target.starts_with(&canonical_base) {
+        return Err("Acesso negado: Tentativa de Directory Traversal detectada.".into());
     }
 
-    let bytes = std::fs::read(&abs_path).map_err(|e| e.to_string())?;
+    let bytes = std::fs::read(&canonical_target).map_err(|e| e.to_string())?;
     Ok(format!("data:image/jpeg;base64,{}", B64.encode(&bytes)))
 }
+
+#[tauri::command]
+fn export_csv() -> Result<String, String> {
+    let conn = open_db().map_err(|e| e.to_string())?;
+    let mut stmt = conn.prepare(
+        "SELECT id, name, category, source, nationalities, reward, ingested_at FROM individuals ORDER BY id LIMIT 5000"
+    ).map_err(|e| e.to_string())?;
+
+    let mut csv_data = String::from("id,name,category,source,nationalities,reward,ingested_at\n");
+    let rows = stmt.query_map([], |row| {
+        Ok(format!(
+            "\"{}\",\"{}\",\"{}\",\"{}\",\"{}\",\"{}\",\"{}\"",
+            row.get::<_, String>(0).unwrap_or_default().replace('"', "\"\""),
+            row.get::<_, String>(1).unwrap_or_default().replace('"', "\"\""),
+            row.get::<_, String>(2).unwrap_or_default().replace('"', "\"\""),
+            row.get::<_, String>(3).unwrap_or_default().replace('"', "\"\""),
+            row.get::<_, Option<String>>(4).unwrap_or_default().unwrap_or_default().replace('"', "\"\""),
+            row.get::<_, Option<String>>(5).unwrap_or_default().unwrap_or_default().replace('"', "\"\""),
+            row.get::<_, Option<String>>(6).unwrap_or_default().unwrap_or_default().replace('"', "\"\""),
+        ))
+    }).map_err(|e| e.to_string())?;
+
+    for row in rows {
+        if let Ok(line) = row {
+            csv_data.push_str(&line);
+            csv_data.push('\n');
+        }
+    }
+    Ok(csv_data)
+}
+
 #[tauri::command]
 async fn translate_text(
     q: String,
@@ -359,6 +398,7 @@ pub fn run() {
             get_individual,
             get_stats,
             get_image_base64,
+            export_csv,
             translate_text,
         ])
         .run(tauri::generate_context!())

@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "postgres-vector": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-postgres", "postgresql://ghost:protocol@127.0.0.1:5432/intelligence"],
+      "description": "Acesso direto à base PostgreSQL pgvector do Olho de Deus para consultas de inteligência e biometria."
+    },
+    "forensics-fs": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/home/douglasdsr/dashboard-cam/intelligence/data"],
+      "description": "Servidor de arquivos seguro para inspeção de evidências táticas, snapshots biométricos e dossiês periciais."
+    }
+  }
+}

@@ -223,7 +223,12 @@
 
         function addLog(msg) {
             const time = new Date().toLocaleTimeString();
-            miniLog.innerHTML = `[${time}] ${msg}<br>${miniLog.innerHTML}`;
+            const logEntry = document.createElement('div');
+            logEntry.textContent = `[${time}] ${msg}`;
+            miniLog.prepend(logEntry);
+            while (miniLog.children.length > 50) {
+                miniLog.removeChild(miniLog.lastChild);
+            }
         }
 
         function createAlertCard(data) {
@@ -231,18 +236,46 @@
             card.className = 'card match';
             
             const time = new Date(data.timestamp || Date.now()).toLocaleTimeString();
+            const cameraId = String(data.camera_id || 'UNKNOWN');
+            const score = String(data.threat_score || '9.2');
+            const name = String(data.name || 'Alvo Não Identificado');
+            const uid = String(data.uid || '').substring(0, 8);
+            const conf = String(data.confidence || 'N/A');
+
+            const header = document.createElement('div');
+            header.className = 'card-header';
             
-            card.innerHTML = `
-                <div class="card-header">
-                    <span class="timestamp">${time} • CÂMERA: ${data.camera_id}</span>
-                    <span class="threat-badge">STREATH SCORE: ${data.threat_score || '9.2'}</span>
-                </div>
-                <div class="name">${data.name} <span class="new-indicator">NOVO</span></div>
-                <div class="meta">
-                    <span>ID: ${data.uid.substring(0,8)}</span>
-                    <span>CONFIANÇA: ${data.confidence}</span>
-                </div>
-            `;
+            const tsSpan = document.createElement('span');
+            tsSpan.className = 'timestamp';
+            tsSpan.textContent = `${time} • CÂMERA: ${cameraId}`;
+
+            const threatSpan = document.createElement('span');
+            threatSpan.className = 'threat-badge';
+            threatSpan.textContent = `THREAT SCORE: ${score}`;
+
+            header.appendChild(tsSpan);
+            header.appendChild(threatSpan);
+
+            const nameDiv = document.createElement('div');
+            nameDiv.className = 'name';
+            nameDiv.textContent = name + ' ';
+            const newInd = document.createElement('span');
+            newInd.className = 'new-indicator';
+            newInd.textContent = 'NOVO';
+            nameDiv.appendChild(newInd);
+
+            const metaDiv = document.createElement('div');
+            metaDiv.className = 'meta';
+            const idSpan = document.createElement('span');
+            idSpan.textContent = `ID: ${uid}`;
+            const confSpan = document.createElement('span');
+            confSpan.textContent = `CONFIANÇA: ${conf}`;
+            metaDiv.appendChild(idSpan);
+            metaDiv.appendChild(confSpan);
+
+            card.appendChild(header);
+            card.appendChild(nameDiv);
+            card.appendChild(metaDiv);
             return card;
         }
 

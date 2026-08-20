@@ -95,13 +95,15 @@ class AtomicFrameRing:
         self.lock = threading.Lock()
 
     def push(self, frame):
-        # Swap de slot circular: nunca acumula backlog
-        i = (self.index + 1) % self.size
-        self.frames[i] = frame
-        self.index = i
+        with self.lock:
+            # Swap de slot circular protegido: thread-safe sem race condition
+            i = (self.index + 1) % self.size
+            self.frames[i] = frame
+            self.index = i
 
     def latest(self):
-        return self.frames[self.index]
+        with self.lock:
+            return self.frames[self.index]
 
 class LivePipeline:
     def __init__(self, camera_id: str, source_type: str = "youtube", match_threshold: float = 0.48, process_every_n: int = 3,
@@ -467,8 +469,8 @@ class LivePipeline:
                     self._fps = 1.0 / (now - self._fps_t0) if (now - self._fps_t0) > 0 else 0
                     self._fps_t0 = now
                     
-                    # ZERO-COPY HUD: Desenha diretamente no frame
-                    display_frame = _last_display_frame
+                    # HUD ISOLADO: Cópia para visualização sem contaminar o frame de IA
+                    display_frame = _last_display_frame.copy()
                     with self._results_lock:
                         results = list(self._last_results)
                     self._draw_hud(display_frame, results)

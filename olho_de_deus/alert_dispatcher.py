@@ -77,7 +77,9 @@ def _load_config() -> Dict:
             log.warning(f"alert_config.yaml não encontrado em {_CONFIG_PATH}")
             return {}
         with open(_CONFIG_PATH, "r", encoding="utf-8") as f:
-            _config = yaml.safe_load(f)
+            raw_content = f.read()
+            expanded_content = os.path.expandvars(raw_content)
+            _config = yaml.safe_load(expanded_content)
     return _config
 
 
@@ -156,6 +158,7 @@ def _render(template: str, **kwargs) -> str:
 
 def _maybe_encrypt(message: str) -> str:
     """Cifra a mensagem se GHOST_MASTER_KEY estiver definida e HAS_CRYPTO for True."""
+    import hashlib
     key_str = os.getenv("GHOST_MASTER_KEY")
     enabled = os.getenv("GHOST_ENCRYPTION_ENABLED", "false").lower() == "true"
     
@@ -163,8 +166,8 @@ def _maybe_encrypt(message: str) -> str:
         return message
 
     try:
-        # Garantir 32 bytes para AES-256
-        key = key_str.encode("utf-8")[:32].ljust(32, b"\0")
+        # Derivação determinística e segura de 32 bytes para AES-256
+        key = hashlib.sha256(key_str.encode("utf-8")).digest()
         cipher = AES.new(key, AES.MODE_EAX)
         ciphertext, tag = cipher.encrypt_and_digest(message.encode("utf-8"))
         
@@ -343,6 +346,24 @@ async def dispatch(event_type: str, **kwargs) -> None:
     target_ch = route.get("channels", [])
     message   = _render(template, event_type=event_type, **kwargs)
 
+    # Lógica de Deduplicação / Agrupamento Espacial (Fase 31) - Antes da Cifragem
+    uid = kwargs.get("uid")
+    if event_type == "MATCH_DETECTED" and uid:
+        now = time.time()
+        entry = _dedup_tracker.get(uid, {"last_seen": 0, "cameras": set()})
+        
+        # Se visto recentemente em outra câmera, podemos enriquecer o alerta
+        if now - entry["last_seen"] < 600: # 10 minutos
+            entry["cameras"].add(kwargs.get("camera_id", "UNK"))
+            if len(entry["cameras"]) > 1:
+                message = f"🗺️ **MOVIMENTAÇÃO SUSPEITA: {kwargs.get('name', 'ALVO')}**\n"
+                message += f"Detectado em {len(entry['cameras'])} locais (Última: {kwargs.get('camera_id')})\n"
+                message += f"Histórico Recente: {', '.join(entry['cameras'])}"
+        
+        entry["last_seen"] = now
+        entry["cameras"].add(kwargs.get("camera_id", "UNK"))
+        _dedup_tracker[uid] = entry
+
     # Aplicar Criptografia E2E se configurado (Fase 25)
     message = _maybe_encrypt(message)
 
@@ -370,24 +391,6 @@ async def dispatch(event_type: str, **kwargs) -> None:
                 tasks.append(_send_pushover(ch_cfg, event_type, message, severity, session))
 
         if tasks:
-            # Lógica de Deduplicação / Agrupamento Espacial (Fase 31)
-            uid = kwargs.get("uid")
-            if event_type == "MATCH_DETECTED" and uid:
-                now = time.time()
-                entry = _dedup_tracker.get(uid, {"last_seen": 0, "cameras": set()})
-                
-                # Se visto recentemente em outra câmera, podemos transformar o alerta
-                if now - entry["last_seen"] < 600: # 10 minutos
-                    entry["cameras"].add(kwargs.get("camera_id", "UNK"))
-                    if len(entry["cameras"]) > 1:
-                        message = f"🗺️ **MOVIMENTAÇÃO SUSPEITA: {kwargs.get('name', 'ALVO')}**\n"
-                        message += f"Detectado em {len(entry['cameras'])} locais (Última: {kwargs.get('camera_id')})\n"
-                        message += f"Histórico Recente: {', '.join(entry['cameras'])}"
-                
-                entry["last_seen"] = now
-                entry["cameras"].add(kwargs.get("camera_id", "UNK"))
-                _dedup_tracker[uid] = entry
-
             results = await asyncio.gather(*tasks, return_exceptions=True)
             
             # Registrar na Auditoria (Fase 17)

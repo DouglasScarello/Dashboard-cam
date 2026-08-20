@@ -44,17 +44,16 @@ class BehaviorPipeline:
         # Carregar Modelos (OpenVINO Otimizado — Ryzen 7)
         log.info("Carregando motores de análise (OpenVINO Acceleration)...")
         
-        # Pose (Quedas)
-        ov_pose = str(ROOT / "olho_de_deus" / "yolov8n-pose_openvino_model")
-        if os.path.exists(ov_pose):
-            self.pose_model = YOLO(ov_pose, task="pose")
-        else:
-            self.pose_model = YOLO("yolov8n-pose.pt")
+        # Pose (Quedas) — PyTorch Nativo
+        self.pose_model = YOLO("yolov8n-pose.pt")
         
         # Modelo de Armas — Threat-Detection-YOLOv8n (Subh775, MIT)
         # Classes reais: 0=Gun, 1=explosion, 2=grenade, 3=knife
         weapon_weights = str(ROOT / "olho_de_deus" / "models" / "weapon_yolov8n.pt")
-        self.weapon_model = YOLO(weapon_weights)
+        if os.path.exists(weapon_weights):
+            self.weapon_model = YOLO(weapon_weights)
+        else:
+            self.weapon_model = YOLO("yolov8n.pt")
 
         # Classes empunháveis (checar proximidade com o pulso via pose)
         self.HANDHELD_CLASSES = {0, 3}   # Gun, knife
@@ -112,14 +111,15 @@ class BehaviorPipeline:
             
         return len(current_potential_falls) > 0
 
-    def _analyze_weapons(self, frame):
+    def _analyze_weapons(self, frame, person_results=None):
         """
         Detecta armas e objetos perigosos com lógica de intersecção (Fase 30.1).
         Verifica se a arma está em contato/empunhada por uma pessoa.
         """
         # 1. Detecção
         results = self.weapon_model(frame, verbose=False, imgsz=320, conf=0.5)[0]
-        person_results = self.pose_model(frame, verbose=False, imgsz=320, conf=0.5)[0]
+        if person_results is None:
+            person_results = self.pose_model(frame, verbose=False, imgsz=320, conf=0.5)[0]
 
         handheld_boxes = []
         hazard_boxes = []

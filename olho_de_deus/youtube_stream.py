@@ -39,11 +39,14 @@ def get_live_url(
     cookies_file = cookies_file or os.environ.get("YT_DLP_COOKIES_FILE")
 
     log.info(f"Extraindo stream para ID: {video_id}")
+    
+    # Estratégia 1: player_client android,web,ios,tv (Bypass 429 e Bot-check)
     cmd = [
         "yt-dlp",
         "-g",
         "--no-warnings",
-        "-f", "best[ext=mp4]/best",
+        "--extractor-args", "youtube:player_client=android,web,ios,tv",
+        "-f", "best[protocol=m3u8_native]/best[ext=mp4]/best",
     ]
     if cookies_browser:
         cmd.extend(["--cookies-from-browser", cookies_browser])
@@ -52,12 +55,29 @@ def get_live_url(
     cmd.append(f"https://www.youtube.com/watch?v={video_id}")
 
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
-        if result.returncode != 0:
-            log.error(f"Falha no yt-dlp: {result.stderr}")
-            return None
-        url = result.stdout.strip()
-        return url
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=12)
+        if result.returncode == 0 and result.stdout.strip():
+            # Pode retornar múltiplas linhas (vídeo + áudio); pegar a primeira m3u8
+            lines = [l.strip() for l in result.stdout.strip().split("\n") if l.strip()]
+            m3u8_urls = [l for l in lines if ".m3u8" in l]
+            return m3u8_urls[0] if m3u8_urls else lines[0]
+            
+        # Estratégia 2: Fallback com cookies do Chrome/Brave se disponível
+        for browser in ["chrome", "brave"]:
+            cmd_browser = [
+                "yt-dlp",
+                "-g",
+                "--no-warnings",
+                "--cookies-from-browser", browser,
+                f"https://www.youtube.com/watch?v={video_id}"
+            ]
+            res_b = subprocess.run(cmd_browser, capture_output=True, text=True, timeout=10)
+            if res_b.returncode == 0 and res_b.stdout.strip():
+                lines = [l.strip() for l in res_b.stdout.strip().split("\n") if l.strip()]
+                return lines[0]
+                
+        log.error(f"Falha no yt-dlp para {video_id}: {result.stderr}")
+        return None
     except Exception as e:
         log.error(f"Exceção ao executar yt-dlp: {e}")
         return None

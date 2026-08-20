@@ -45,9 +45,17 @@ load_dotenv()
 
 BASE_DIR      = Path(__file__).resolve().parent.parent
 LOG_DIR       = Path(__file__).parent / "logs"
-PANIC_SIGNAL  = Path("/tmp/.ghost_panic")       # Arquivo-gatilho de emergência
-LOCK_FILE     = Path("/tmp/.ghost_locked")       # Indicador de estado LOCKED
-STATE_FILE    = Path("/tmp/.ghost_ks_state")     # Estado do daemon
+
+# Diretório de runtime seguro e exclusivo do usuário (permissão 0700)
+RUNTIME_DIR   = Path(os.getenv("XDG_RUNTIME_DIR", Path.home() / ".ghost_runtime"))
+try:
+    RUNTIME_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
+except Exception:
+    pass
+
+PANIC_SIGNAL  = RUNTIME_DIR / "panic.signal"       # Arquivo-gatilho de emergência
+LOCK_FILE     = RUNTIME_DIR / "locked.state"       # Indicador de estado LOCKED
+STATE_FILE    = RUNTIME_DIR / "daemon.state"       # Estado do daemon
 
 # Redes consideradas "zonas seguras" (SSIDs confiáveis)
 # Configure com os SSIDs do seu ambiente doméstico/operacional
@@ -179,11 +187,14 @@ def execute_lockdown(trigger: str):
         for mount in media_base.iterdir():
             if mount.is_dir():
                 try:
-                    subprocess.run(["udisksctl", "unmount", "-b", str(mount)], 
+                    subprocess.run(["udisksctl", "unmount", "-p", str(mount)], 
                                    capture_output=True, timeout=5)
                     log.info(f"Drive ejetado: {mount}")
-                except Exception as e:
-                    log.warning(f"Falha ao ejetar {mount}: {e}")
+                except Exception:
+                    try:
+                        subprocess.run(["umount", str(mount)], capture_output=True, timeout=5)
+                    except Exception as e:
+                        log.warning(f"Falha ao ejetar {mount}: {e}")
 
     # Fase 5: Marcar como LOCKED
     LOCK_FILE.write_text(f"LOCKED:{timestamp}:{trigger}")

@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Video, X, Volume2, VolumeX } from 'lucide-react';
+import { Video, X, Volume2, VolumeX, MapPin, Compass, ExternalLink, ShieldCheck } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
-import Hls from 'hls.js';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { TacticalVideoPlayer } from '../components/player/TacticalVideoPlayer';
 
 function cn(...inputs: ClassValue[]) {
     return twMerge(clsx(inputs));
@@ -16,7 +16,17 @@ interface Camera {
     id: string | number;
     nome: string;
     local?: string | null;
+    endereco?: string | null;
+    cidade?: string | null;
+    uf?: string | null;
+    tipo_area?: string | null;
+    setor?: string;
+    pais?: string;
     thumbnail_url: string;
+    url?: string;
+    video_id?: string;
+    lat?: number | null;
+    long?: number | null;
 }
 
 interface CameraAlert {
@@ -35,11 +45,18 @@ export default function CameraGrid() {
     const [tick, setTick] = useState(() => Math.floor(Date.now() / 5000));
     const [selected, setSelected] = useState<Camera | null>(null);
     const [alerts, setAlerts] = useState<CameraAlert[]>([]);
+    
+    // Controles de Busca e Filtro
+    const [searchQuery, setSearchQuery] = useState('');
+    const [sectorFilter, setSectorFilter] = useState(''); // Padrão: Todas as câmeras reais
+    const [stateFilter, setStateFilter] = useState('');
+    const [displayLimit, setDisplayLimit] = useState(10); // 10 em 10 câmeras
 
     useEffect(() => {
         let mounted = true;
         setLoading(true);
-        fetch(`${API_BASE}/api/cameras`)
+        // Carrega as transmissões reais ao vivo do backend
+        fetch(`${API_BASE}/api/cameras?limit=2000`)
             .then((res) => {
                 if (!res.ok) throw new Error(`HTTP ${res.status}`);
                 return res.json();
@@ -91,15 +108,122 @@ export default function CameraGrid() {
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [handleClose]);
 
+    // Filtragem Instantânea em Memória
+    const filteredCameras = useMemo(() => {
+        let list = cameras;
+
+        if (sectorFilter) {
+            list = list.filter((c) => (c.setor || c.pais || '').toUpperCase() === sectorFilter.toUpperCase());
+        }
+
+        if (stateFilter && sectorFilter === 'BR') {
+            const uf = stateFilter.toUpperCase();
+            list = list.filter((c) => (c.local || '').toUpperCase().includes(uf));
+        }
+
+        if (searchQuery.trim()) {
+            const q = searchQuery.toLowerCase().trim();
+            list = list.filter(
+                (c) =>
+                    c.nome.toLowerCase().includes(q) ||
+                    (c.endereco && c.endereco.toLowerCase().includes(q)) ||
+                    (c.local && c.local.toLowerCase().includes(q)) ||
+                    (c.cidade && c.cidade.toLowerCase().includes(q)) ||
+                    (c.tipo_area && c.tipo_area.toLowerCase().includes(q)) ||
+                    (c.pais && c.pais.toLowerCase().includes(q))
+            );
+        }
+
+        return list;
+    }, [cameras, sectorFilter, stateFilter, searchQuery]);
+
+    const displayedCameras = useMemo(() => {
+        return filteredCameras.slice(0, displayLimit);
+    }, [filteredCameras, displayLimit]);
+
+    const activeAlertMap = useMemo(() => {
+        const map = new Map<string, CameraAlert>();
+        for (const a of alerts) {
+            map.set(String(a.camera_id), a);
+        }
+        return map;
+    }, [alerts]);
+
     return (
-        <main className="flex-1 px-8 py-6 overflow-y-auto">
-            <div className="flex items-center justify-between mb-6">
-                <h2 className="text-sm font-black tracking-widest uppercase text-muted flex items-center gap-2">
-                    <Video className="w-4 h-4 text-accent-blue" /> {t('cameras.title')}
-                </h2>
-                <span className="text-[10px] font-mono text-muted">
-                    {cameras.length} {t('cameras.online_suffix')}
-                </span>
+        <main className="flex-1 px-8 py-6 overflow-y-auto custom-scrollbar">
+            {/* Header & Status C4ISR */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 pb-4 border-b border-white/5">
+                <div>
+                    <h2 className="text-sm font-black tracking-widest uppercase text-white flex items-center gap-2">
+                        <Video className="w-4 h-4 text-accent-emerald" /> {t('cameras.title')}
+                    </h2>
+                    <p className="text-[10px] font-mono text-accent-emerald tracking-wider uppercase mt-1">
+                        REDE AO VIVO: {cameras.length} TRANSMISSÕES REAIS ATIVAS
+                    </p>
+                </div>
+
+                {/* Filtros Rápidos de Continente / Setor */}
+                <div className="flex flex-wrap items-center gap-2">
+                    <button
+                        onClick={() => { setSectorFilter(''); setStateFilter(''); setDisplayLimit(10); }}
+                        className={cn(
+                            "px-3 py-1.5 rounded-full text-[10px] font-black tracking-wider uppercase transition-all border",
+                            sectorFilter === '' ? "bg-accent-amber/20 border-accent-amber text-accent-amber" : "bg-white/[0.02] border-white/10 text-muted hover:bg-white/5"
+                        )}
+                    >
+                        🌐 TODAS AS CÂMERAS ({cameras.length})
+                    </button>
+                    <button
+                        onClick={() => { setSectorFilter('BR'); setStateFilter(''); setDisplayLimit(10); }}
+                        className={cn(
+                            "px-3 py-1.5 rounded-full text-[10px] font-black tracking-wider uppercase transition-all border",
+                            sectorFilter === 'BR' ? "bg-accent-emerald/20 border-accent-emerald text-accent-emerald" : "bg-white/[0.02] border-white/10 text-muted hover:bg-white/5"
+                        )}
+                    >
+                        🇧🇷 BRASIL
+                    </button>
+                    <button
+                        onClick={() => { setSectorFilter('US'); setStateFilter(''); setDisplayLimit(10); }}
+                        className={cn(
+                            "px-3 py-1.5 rounded-full text-[10px] font-black tracking-wider uppercase transition-all border",
+                            sectorFilter === 'US' ? "bg-blue-500/20 border-blue-500 text-blue-400" : "bg-white/[0.02] border-white/10 text-muted hover:bg-white/5"
+                        )}
+                    >
+                        🇺🇸 AMÉRICA DO NORTE
+                    </button>
+                </div>
+            </div>
+
+            {/* Sub-Filtros de Estados Brasileiros */}
+            {sectorFilter === 'BR' && (
+                <div className="flex flex-wrap items-center gap-1.5 mb-4">
+                    <span className="text-[9px] font-mono uppercase text-muted mr-1">ESTADOS:</span>
+                    {['', 'SP', 'RJ', 'SC', 'PR', 'RS', 'MG', 'BA', 'CE', 'PE', 'DF'].map((uf) => (
+                        <button
+                            key={uf}
+                            onClick={() => { setStateFilter(uf); setDisplayLimit(10); }}
+                            className={cn(
+                                "px-2.5 py-1 rounded-md text-[9px] font-mono tracking-wider transition-all border",
+                                stateFilter === uf 
+                                    ? "bg-accent-emerald text-black font-black border-accent-emerald" 
+                                    : "bg-white/[0.02] text-muted border-white/5 hover:bg-white/[0.06] hover:text-white"
+                            )}
+                        >
+                            {uf === '' ? 'TODOS UFs' : uf}
+                        </button>
+                    ))}
+                </div>
+            )}
+
+            {/* Barra de Busca Rápida */}
+            <div className="mb-6">
+                <input
+                    type="text"
+                    placeholder="Filtrar por cidade, rodovia, praia ou aeroporto (ex: São Paulo, Florianópolis, Tóquio, Times Square, Rodovia)..."
+                    value={searchQuery}
+                    onChange={(e) => { setSearchQuery(e.target.value); setDisplayLimit(10); }}
+                    className="w-full h-11 bg-white/[0.03] border border-white/10 rounded-xl px-4 text-xs font-medium focus:outline-none focus:border-accent-amber/50 focus:bg-white/[0.05] transition-all text-white placeholder:text-muted"
+                />
             </div>
 
             {error && (
@@ -113,14 +237,9 @@ export default function CameraGrid() {
                     <div className="w-6 h-6 border-2 border-accent-amber border-t-transparent rounded-full animate-spin" />
                 </div>
             ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-6">
-                    {[...cameras]
-                        .sort((a, b) => {
-                            const aAlert = alerts.some((al) => al.camera_id === String(a.id)) ? 1 : 0;
-                            const bAlert = alerts.some((al) => al.camera_id === String(b.id)) ? 1 : 0;
-                            return bAlert - aAlert;
-                        })
-                        .map((cam) => (
+                <>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
+                        {displayedCameras.map((cam) => (
                             <CameraTile
                                 key={cam.id}
                                 camera={cam}
@@ -129,21 +248,33 @@ export default function CameraGrid() {
                                 onClick={() => setSelected(cam)}
                             />
                         ))}
-                </div>
+                    </div>
+
+                    {filteredCameras.length > displayLimit && (
+                        <div className="mt-12 flex justify-center pb-12">
+                            <button
+                                onClick={() => setDisplayLimit((prev) => prev + 10)}
+                                className="px-6 py-3 bg-white/[0.03] hover:bg-white/[0.08] border border-accent-amber/30 text-accent-amber hover:text-white font-black text-xs tracking-widest uppercase rounded-xl transition-all shadow-lg flex items-center gap-2"
+                            >
+                                Carregar Mais Câmeras (+10) — Exibindo {displayedCameras.length} de {filteredCameras.length}
+                            </button>
+                        </div>
+                    )}
+                </>
             )}
 
-            {!loading && !error && cameras.length === 0 && (
+            {!loading && !error && filteredCameras.length === 0 && (
                 <div className="text-muted italic text-sm">{t('cameras.no_cameras')}</div>
             )}
 
             <AnimatePresence>
-                {selected && <LiveModal camera={selected} onClose={handleClose} />}
+                {selected && <TacticalVideoPlayer camera={selected} onClose={handleClose} />}
             </AnimatePresence>
         </main>
     );
 }
 
-function CameraTile({
+const CameraTile = React.memo(function CameraTile({
     camera,
     tick,
     alert,
@@ -155,7 +286,22 @@ function CameraTile({
     onClick: () => void;
 }) {
     const { t } = useTranslation();
-    const src = `${API_BASE}${camera.thumbnail_url}?t=${tick}`;
+    const defaultThumb = camera.thumbnail_url 
+        ? `${API_BASE}${camera.thumbnail_url}?t=${tick}`
+        : camera.video_id 
+            ? `https://img.youtube.com/vi/${camera.video_id}/hqdefault.jpg`
+            : '';
+
+    const [imgSrc, setImgSrc] = useState<string>(defaultThumb);
+
+    useEffect(() => {
+        if (camera.thumbnail_url) {
+            setImgSrc(`${API_BASE}${camera.thumbnail_url}?t=${tick}`);
+        } else if (camera.video_id) {
+            setImgSrc(`https://img.youtube.com/vi/${camera.video_id}/hqdefault.jpg`);
+        }
+    }, [camera.thumbnail_url, camera.video_id, tick]);
+
     const alertLabel = alert
         ? alert.type === 'WEAPON'
             ? t('cameras.alert_weapon')
@@ -168,22 +314,28 @@ function CameraTile({
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             className={cn(
-                'intelligence-card group cursor-pointer',
+                'intelligence-card group cursor-pointer border border-white/5 hover:border-accent-emerald/40 transition-all shadow-lg',
                 alert && 'ring-2 ring-red-500 animate-pulse shadow-[0_0_20px_rgba(239,68,68,0.5)]'
             )}
             onClick={onClick}
         >
             <div className="aspect-video relative bg-neutral-900 overflow-hidden">
                 <img
-                    src={src}
+                    src={imgSrc}
+                    onError={() => {
+                        if (camera.thumbnail_url) {
+                            setImgSrc(`${API_BASE}${camera.thumbnail_url}`);
+                        }
+                    }}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                     alt={camera.nome}
+                    loading="lazy"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-80" />
 
-                <div className="absolute top-3 left-3 flex items-center gap-1.5 bg-black/40 backdrop-blur-sm px-2 py-1 rounded-full border border-white/10">
+                <div className="absolute top-3 left-3 flex items-center gap-1.5 bg-black/60 backdrop-blur-sm px-2 py-1 rounded-full border border-white/10">
                     <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
-                    <span className="text-[9px] font-black tracking-widest text-red-400 uppercase">LIVE</span>
+                    <span className="text-[9px] font-black tracking-widest text-red-400 uppercase">C4ISR LIVE</span>
                 </div>
 
                 {alertLabel && (
@@ -192,117 +344,29 @@ function CameraTile({
                     </div>
                 )}
 
-                <div className="absolute bottom-3 left-3 right-3 glass-panel rounded-lg border border-white/10 px-3 py-2">
-                    <h3 className="text-xs font-black uppercase tracking-tight line-clamp-1 leading-tight">{camera.nome}</h3>
+                <div className="absolute bottom-3 left-3 right-3 glass-panel rounded-lg border border-white/10 px-3 py-2.5">
+                    <div className="flex items-center justify-between gap-1 mb-1">
+                        <h3 className="text-xs font-black uppercase tracking-tight line-clamp-1 leading-tight text-white">{camera.nome}</h3>
+                        {camera.tipo_area && (
+                            <span className="text-[8px] font-mono px-1.5 py-0.5 rounded bg-white/10 text-accent-amber shrink-0 uppercase">
+                                {camera.tipo_area.split('/')[0].trim()}
+                            </span>
+                        )}
+                    </div>
+                    {camera.endereco && (
+                        <p className="text-[10px] text-accent-amber font-mono truncate flex items-center gap-1">
+                            <MapPin className="w-2.5 h-2.5 text-accent-amber shrink-0" />
+                            <span className="truncate">{camera.endereco}</span>
+                        </p>
+                    )}
                     {camera.local && (
-                        <p className="text-[10px] text-muted font-mono mt-0.5 truncate">{camera.local}</p>
+                        <p className="text-[9px] text-muted font-mono mt-0.5 truncate flex items-center gap-1">
+                            <Compass className="w-2.5 h-2.5 text-muted shrink-0" />
+                            <span className="truncate">{camera.local} ({camera.pais || 'BR'})</span>
+                        </p>
                     )}
                 </div>
             </div>
         </motion.div>
     );
-}
-
-function LiveModal({ camera, onClose }: { camera: Camera; onClose: () => void }) {
-    const { t } = useTranslation();
-    const [liveUrl, setLiveUrl] = useState<string | null>(null);
-    const [fetchError, setFetchError] = useState<string | null>(null);
-    const [muted, setMuted] = useState(true);
-    const videoRef = useRef<HTMLVideoElement | null>(null);
-    const hlsRef = useRef<Hls | null>(null);
-
-    useEffect(() => {
-        let mounted = true;
-        setLiveUrl(null);
-        setFetchError(null);
-        fetch(`${API_BASE}/api/cameras/${camera.id}/live_url`)
-            .then((res) => {
-                if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                return res.json();
-            })
-            .then((data: { url?: string }) => {
-                if (!mounted) return;
-                if (data?.url) setLiveUrl(data.url);
-                else setFetchError(t('cameras.no_stream'));
-            })
-            .catch((err) => {
-                if (mounted) setFetchError(String(err));
-            });
-        return () => {
-            mounted = false;
-        };
-    }, [camera.id, t]);
-
-    useEffect(() => {
-        const video = videoRef.current;
-        if (!video || !liveUrl) return;
-
-        if (Hls.isSupported()) {
-            const hls = new Hls();
-            hlsRef.current = hls;
-            hls.loadSource(liveUrl);
-            hls.attachMedia(video);
-            hls.on(Hls.Events.ERROR, (_evt, data) => {
-                if (data.fatal) setFetchError(`HLS: ${data.type}`);
-            });
-        } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-            video.src = liveUrl;
-        } else {
-            setFetchError(t('cameras.hls_unsupported'));
-        }
-
-        return () => {
-            if (hlsRef.current) {
-                hlsRef.current.destroy();
-                hlsRef.current = null;
-            }
-        };
-    }, [liveUrl, t]);
-
-    return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-8 bg-black/80 backdrop-blur-sm">
-            <motion.div
-                initial={{ opacity: 0, scale: 0.95, y: 20 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                className="bg-surface border border-white/5 rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden"
-            >
-                <div className="h-16 px-6 border-b border-white/5 flex items-center justify-between bg-white/[0.02]">
-                    <div className="flex items-center gap-3">
-                        <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-                        <span className="text-[10px] font-black tracking-widest text-muted uppercase">{camera.nome}</span>
-                    </div>
-                    <button onClick={onClose} className="p-2 hover:bg-white/5 rounded-lg transition-colors">
-                        <X className="w-5 h-5 text-muted" />
-                    </button>
-                </div>
-
-                <div className="flex-1 bg-black relative flex items-center justify-center min-h-[40vh]">
-                    {liveUrl ? (
-                        <video
-                            ref={videoRef}
-                            autoPlay
-                            muted={muted}
-                            controls={false}
-                            playsInline
-                            className="w-full h-full max-h-[70vh] object-contain"
-                        />
-                    ) : (
-                        <div className={cn('text-sm font-mono py-20', fetchError ? 'text-red-500' : 'text-muted')}>
-                            {fetchError || t('common.loading')}
-                        </div>
-                    )}
-
-                    {liveUrl && (
-                        <button
-                            onClick={() => setMuted((m) => !m)}
-                            className="absolute bottom-4 right-4 w-10 h-10 rounded-full bg-black/60 border border-white/10 flex items-center justify-center hover:bg-white/10 transition-colors"
-                        >
-                            {muted ? <VolumeX className="w-4 h-4 text-white" /> : <Volume2 className="w-4 h-4 text-accent-emerald" />}
-                        </button>
-                    )}
-                </div>
-            </motion.div>
-        </div>
-    );
-}
+});

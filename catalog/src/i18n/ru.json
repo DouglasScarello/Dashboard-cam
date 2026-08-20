@@ -119,5 +119,18 @@
         "waiter or food service worker": "Официант / Работник общепита",
         "it worker": "IT-специалист",
         "landscaper": "Ландшафтный дизайнер"
+    },
+    "alerts": {
+        "title": "Центр оповещений C4ISR",
+        "empty": "Биометрических оповещений нет.",
+        "unknown_target": "Неопознанная цель",
+        "camera_label": "Камера",
+        "new_match": "НОВОЕ БИОМЕТРИЧЕСКОЕ СОВПАДЕНИЕ",
+        "view_camera": "Перейти к камере",
+        "status": {
+            "connected": "Подключено",
+            "connecting": "Подключение...",
+            "disconnected": "Отключено"
+        }
     }
 }

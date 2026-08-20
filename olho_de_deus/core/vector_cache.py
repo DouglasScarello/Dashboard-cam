@@ -23,7 +23,14 @@ class VectorCache:
 
     def _hash_vector(self, vector):
         """Gera um hash SHA-256 único para o vetor de embedding."""
-        return hashlib.sha256(vector.tobytes()).hexdigest()
+        import numpy as np
+        if isinstance(vector, list):
+            arr = np.asarray(vector, dtype=np.float32)
+        elif isinstance(vector, np.ndarray):
+            arr = vector.astype(np.float32)
+        else:
+            arr = np.asarray(vector, dtype=np.float32)
+        return hashlib.sha256(arr.tobytes()).hexdigest()
 
     def get_match(self, embedding):
         """Busca um match no cache."""

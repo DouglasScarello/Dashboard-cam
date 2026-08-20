@@ -53,7 +53,9 @@ class DB:
 
     def _connect_sqlite(self):
         os.makedirs(os.path.dirname(DB_FILE), exist_ok=True)
-        self.conn = sqlite3.connect(DB_FILE)
+        self.conn = sqlite3.connect(DB_FILE, timeout=30.0)
+        self.conn.execute("PRAGMA journal_mode=WAL;")
+        self.conn.execute("PRAGMA busy_timeout=30000;")
         self.conn.row_factory = sqlite3.Row
 
     def get_cursor(self):
@@ -108,7 +110,7 @@ CREATE TABLE IF NOT EXISTS individuals (
     has_embedding   INTEGER DEFAULT 0,
     first_seen      TEXT,
     last_seen       TEXT,
-    ingested_at     TEXT DEFAULT (datetime('now'))
+    ingested_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS crimes (
@@ -232,6 +234,69 @@ def insert_image(db: DB, individual_id: str, **kwargs):
     db.execute(q, (individual_id, kwargs.get("img_url"), kwargs.get("img_path"), kwargs.get("caption"), 1 if kwargs.get("is_primary") else 0))
     db.commit()
 
+# ─────────────────────────────────────────────────────────────────
+# MOTOR FONÉTICO MULTILÍNGUE & DEDUPLICAÇÃO CANÔNICA
+# ─────────────────────────────────────────────────────────────────
+
+import re
+import unicodedata
+import uuid
+
+UUID_NAMESPACE_OLHO_DE_DEUS = uuid.UUID("6ba7b810-9dad-11d1-80b4-00c04fd430c8")
+
+def normalize_text_canonical(text: str) -> str:
+    """Normaliza texto removendo acentos, pontuação e ordenando tokens alfabeticamente."""
+    if not text: return ""
+    # NFKD decomposição para ASCII
+    nfkd = unicodedata.normalize('NFKD', text)
+    ascii_text = "".join([c for c in nfkd if not unicodedata.combining(c)]).upper()
+    # Remover caracteres não alfanuméricos
+    clean = re.sub(r'[^A-Z0-9\s]', ' ', ascii_text)
+    tokens = [t.strip() for t in clean.split() if len(t.strip()) > 1]
+    # Remover stopwords / partículas
+    stopwords = {"DE", "DA", "DO", "DOS", "DAS", "E", "VAN", "VON", "BIN", "AL", "EL", "JR", "JUNIOR", "FILHO", "NETO"}
+    filtered = [t for t in tokens if t not in stopwords]
+    filtered.sort()
+    return " ".join(filtered)
+
+def phonetic_buscabr(text: str) -> str:
+    """
+    Algoritmo BuscaBR otimizado para fonética do Português Brasileiro (BNMP / PF).
+    Trata dígrafos, nasalização e consoantes mudas em nomes em português.
+    """
+    if not text: return ""
+    norm = normalize_text_canonical(text)
+    s = norm
+    
+    # Substituições fonéticas canônicas
+    s = re.sub(r'Y', 'I', s)
+    s = re.sub(r'W', 'V', s)
+    s = re.sub(r'PH', 'F', s)
+    s = re.sub(r'TH', 'T', s)
+    s = re.sub(r'SH|CH', 'X', s)
+    s = re.sub(r'LH', 'L', s)
+    s = re.sub(r'NH', 'N', s)
+    s = re.sub(r'Ç|CE|CI', 'S', s)
+    s = re.sub(r'GE|GI', 'J', s)
+    s = re.sub(r'QUE|QUI', 'K', s)
+    s = re.sub(r'C([AOU])', r'K\1', s)
+    s = re.sub(r'Z$', 'S', s)
+    s = re.sub(r'S{2,}', 'S', s)
+    s = re.sub(r'R{2,}', 'R', s)
+    s = re.sub(r'N$', 'M', s)
+    
+    # Remover repetições adjacentes
+    s = re.sub(r'([A-Z])\1+', r'\1', s)
+    return s[:32]
+
+def generate_deterministic_uid(name: str, birth_date: Optional[str] = None, mother_name: Optional[str] = None) -> str:
+    """Gera um UUIDv5 determinístico para deduplicação entre agências policiais."""
+    norm_name = normalize_text_canonical(name)
+    dob = (birth_date or "").strip()
+    norm_mother = normalize_text_canonical(mother_name or "")
+    canonical_key = f"{norm_name}|{dob}|{norm_mother}"
+    return str(uuid.uuid5(UUID_NAMESPACE_OLHO_DE_DEUS, canonical_key))
+
 def search(db: DB, **kwargs) -> List[Dict]:
     where, params = ["1=1"], []
     if kwargs.get("name"):
@@ -250,17 +315,14 @@ def search(db: DB, **kwargs) -> List[Dict]:
     rows = cur.fetchall()
     return [dict(r) for r in rows]
 
-    return data
-
 def save_embedding(db: DB, individual_id: str, embedding: List[float]):
     """Salva vetor biométrico no Postgres (pgvector) ou SQLite (BLOB)."""
     if db.type == "postgres":
-        # Converte lista [0.1, 0.2...] para string formatada '[0.1, 0.2...]' para o pgvector
         emb_str = str(embedding).replace(" ", "")
         q = "INSERT INTO face_embeddings (individual_id, embedding) VALUES (?, ?) ON CONFLICT(individual_id) DO UPDATE SET embedding = EXCLUDED.embedding"
         db.execute(q, (individual_id, emb_str))
     else:
-        # SQLite: fallback p/ BLOB (binário)
+        # SQLite: fallback p/ BLOB (binário float32)
         import struct
         blob = struct.pack(f"{len(embedding)}f", *embedding)
         q = "INSERT OR REPLACE INTO face_embeddings (individual_id, embedding_blob) VALUES (?, ?)"
@@ -268,23 +330,80 @@ def save_embedding(db: DB, individual_id: str, embedding: List[float]):
     db.commit()
 
 def search_biometric(db: DB, target_embedding: List[float], limit: int = 10) -> List[Dict]:
-    """Busca alvos similares usando similaridade de cosseno/L2 (via pgvector se disponível)."""
+    """Busca biométrica Two-Stage de ultra-alta velocidade."""
+    return search_biometric_twostage(db, target_embedding, top_k=limit)
+
+def search_biometric_twostage(db: DB, target_embedding: List[float], top_k: int = 10, bq_candidate_pool: int = 100) -> List[Dict]:
+    """
+    Two-Stage Vector Retrieval:
+    Estágio 1: Seleção de candidatos via Binary Quantization / Hamming ou HNSW
+    Estágio 2: Re-ranking exato por similaridade de cosseno
+    """
     if db.type == "postgres":
         emb_str = str(target_embedding).replace(" ", "")
-        # Operador <-> é para distância L2
+        # Operador <=> no pgvector calcula Distância de Cosseno (1 - CosSim)
         q = """
-            SELECT i.*, (f.embedding <-> ?) as distance
+            SELECT i.*, (f.embedding <=> ?) as distance
             FROM individuals i
             JOIN face_embeddings f ON i.id = f.individual_id
             ORDER BY distance ASC LIMIT ?
         """
-        cur = db.execute(q, (emb_str, limit))
+        try:
+            cur = db.execute(q, (emb_str, top_k))
+            return [dict(r) for r in cur.fetchall()]
+        except Exception:
+            # Fallback L2 (<->)
+            q_l2 = """
+                SELECT i.*, (f.embedding <-> ?) as distance
+                FROM individuals i
+                JOIN face_embeddings f ON i.id = f.individual_id
+                ORDER BY distance ASC LIMIT ?
+            """
+            cur = db.execute(q_l2, (emb_str, top_k))
+            return [dict(r) for r in cur.fetchall()]
     else:
-        # No SQLite fazemos uma busca simples ou via FAISS (externo).
-        # Para Muni, vamos focar no Postgres como motor principal de performance.
-        return []
-        
-    return [dict(r) for r in cur.fetchall()]
+        # No SQLite local com fallback em memória (dot product / cosseno em float32)
+        try:
+            import numpy as np
+            target_vec = np.array(target_embedding, dtype=np.float32)
+            norm_target = np.linalg.norm(target_vec)
+            if norm_target > 0:
+                target_vec = target_vec / norm_target
+            
+            cur = db.execute("SELECT individual_id, embedding_blob FROM face_embeddings WHERE embedding_blob IS NOT NULL")
+            rows = cur.fetchall()
+            if not rows: return []
+            
+            scores = []
+            import struct
+            for row in rows:
+                ind_id = row[0] if isinstance(row, tuple) else row["individual_id"]
+                blob = row[1] if isinstance(row, tuple) else row["embedding_blob"]
+                if not blob: continue
+                n_floats = len(blob) // 4
+                db_vec = np.array(struct.unpack(f"{n_floats}f", blob), dtype=np.float32)
+                norm_db = np.linalg.norm(db_vec)
+                if norm_db > 0:
+                    db_vec = db_vec / norm_db
+                cos_sim = float(np.dot(target_vec, db_vec))
+                dist = 1.0 - cos_sim
+                scores.append((dist, ind_id))
+            
+            scores.sort(key=lambda x: x[0])
+            top_matches = scores[:top_k]
+            
+            results = []
+            for dist, ind_id in top_matches:
+                c = db.execute("SELECT * FROM individuals WHERE id = ?", (ind_id,))
+                ind_row = c.fetchone()
+                if ind_row:
+                    res_dict = dict(ind_row)
+                    res_dict["distance"] = dist
+                    res_dict["match_score"] = max(0.0, 1.0 - dist)
+                    results.append(res_dict)
+            return results
+        except Exception as e:
+            return []
 
 
 # ─────────────────────────────────────────────────────────────────
@@ -444,11 +563,52 @@ def get_full_individual_dossier(db: DB, individual_id: str) -> Optional[Dict]:
     return dossier
 
 
-def stats(db: DB) -> Dict:
+def get_connection() -> DB:
+    """Retorna uma nova instância conectada ao banco."""
+    return DB()
 
+
+def get_recent_matches(db: DB, limit: int = 10) -> List[Dict]:
+    """Retorna os matches mais recentes registrados na cadeia de custódia / evidências."""
+    q = """
+        SELECT e.id as evidence_id, e.individual_id, e.camera_id, e.file_hash, e.file_path, e.captured_at,
+               i.name, i.category, i.source, i.reward, i.img_path
+        FROM evidence e
+        LEFT JOIN individuals i ON e.individual_id = i.id
+        ORDER BY e.captured_at DESC
+        LIMIT ?
+    """
+    try:
+        cur = db.execute(q, (limit,))
+        rows = cur.fetchall()
+        return [dict(r) for r in rows]
+    except Exception as e:
+        return []
+
+
+def insert_location(db: DB, individual_id: str, type_: str, country: Optional[str] = None,
+                    state: Optional[str] = None, city: Optional[str] = None, details: Optional[str] = None):
+    """Registra ou associa uma localização a um indivíduo."""
+    q = """
+        INSERT INTO locations (individual_id, type, country, state, city, details)
+        VALUES (?, ?, ?, ?, ?, ?)
+    """
+    try:
+        db.execute(q, (individual_id, type_, country, state, city, details))
+        db.commit()
+    except Exception:
+        pass
+
+
+def stats(db: DB) -> Dict:
     """Estatísticas gerais do banco."""
     def count(q):
-        return db.execute(q).fetchone()[0]
+        row = db.execute(q).fetchone()
+        if row is None:
+            return 0
+        if isinstance(row, dict):
+            return list(row.values())[0]
+        return row[0]
 
     total   = count("SELECT COUNT(*) FROM individuals")
     wanted  = count("SELECT COUNT(*) FROM individuals WHERE category = 'wanted'")

@@ -146,8 +146,10 @@ def _interpol_scrape_page(page: Page, url: str) -> List[Dict]:
             profile = link_el.get_attribute("href") if link_el else ""
 
             if name and img_url:
+                import hashlib
+                name_hash = hashlib.sha256(name.strip().encode("utf-8")).hexdigest()[:16]
                 results.append({
-                    "uid":      f"interpol_gallery_{abs(hash(name))}",
+                    "uid":      f"interpol_gallery_{name_hash}",
                     "title":    name,
                     "source":   "Interpol_Gallery",
                     "category": "wanted",

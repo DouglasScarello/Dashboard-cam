@@ -7,8 +7,8 @@
 channels:
   telegram:
     enabled: true
-    bot_token: "8633505158:AAEXn6dKsxVqxVWvKxG7iMU5oJ-KkdL-EJk"
-    chat_id: "8265627051"     # Chat ID do Douglas Dyogo Scarello Remor
+    bot_token: "${TELEGRAM_BOT_TOKEN}"
+    chat_id: "${TELEGRAM_CHAT_ID}"     # Configurado via variável de ambiente
     parse_mode: "Markdown" # "Markdown" ou "HTML"
 
   webhook:

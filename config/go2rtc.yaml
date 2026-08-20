@@ -6,22 +6,18 @@ rtsp:
 
 webrtc:
   listen: ":8555/tcp"
-  # Candidates para WebRTC funcionar em LAN/Local
-  # O go2rtc anuncia estes IPs ao browser para negociação ICE
+  # Candidates para WebRTC com baixa latência em LAN/Local (RFC 5245)
   candidates:
     - 127.0.0.1         # loopback local
-    - stun:stun.l.google.com:19302  # STUN externo como fallback
 
 streams:
-  # Streams são registrados dinamicamente pelo live_pipeline.py
-  # ao enviar via RTSP para porta 8554.
+  # Câmeras com remuxing puro de vídeo (zero-transcoding) e áudio em Opus para conformidade WebRTC
+  # As NAL units originais H.264/H.265 transitam diretamente para os pacotes RTP sem perda de píxeis
   #
-  # Exemplo: quando rodar `python live_pipeline.py --id CAM_ID --stream`
-  # o pipeline empurra frames via FFmpeg → rtsp://localhost:8554/CAM_ID
-  # e o go2rtc disponibiliza em:
-  #   - RTSP:   rtsp://localhost:8554/CAM_ID
-  #   - WebRTC: http://localhost:1984/stream.html?src=CAM_ID
-  #   - HLS:    http://localhost:1984/stream.m3u8?src=CAM_ID
+  # Exemplo de canal com remuxing puro:
+  # camera_estacionamento:
+  #   - rtsp://admin:password@192.168.1.100:554/cam/realmonitor?channel=1&subtype=0
+  #   - "ffmpeg:camera_estacionamento#video=copy#audio=opus"
 
 log:
   level: warn

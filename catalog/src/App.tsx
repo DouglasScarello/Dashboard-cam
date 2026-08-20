@@ -12,6 +12,8 @@ function cn(...inputs: ClassValue[]) {
     return twMerge(clsx(inputs));
 }
 
+const API_URL = 'http://localhost:8000';
+
 // ─── Interfaces ──────────────────────────────────────────────────────────────
 interface Individual {
     id: string;
@@ -19,6 +21,7 @@ interface Individual {
     category: string;
     source: string;
     img_path?: string;
+    img_url?: string;
     has_embedding: number;
     reward?: string;
     ingested_at?: string;
@@ -50,9 +53,67 @@ interface IndividualDetail extends Individual {
     eye_color?: string;
     hair_color?: string;
     occupation?: string;
-    images: Array<{ img_path: string; is_primary: number }>;
+    images: Array<{ img_url?: string; img_path?: string; is_primary: number }>;
     crimes: string[];
     locations: Location[];
+}
+
+// ─── API Client (Dual-Mode: Tauri Desktop ou Web Browser) ─────────────────────
+
+async function apiGetStats(): Promise<Stats> {
+    if ((window as any).__TAURI_INTERNALS__) {
+        try {
+            return await invoke<Stats>('get_stats');
+        } catch {
+            // fallback para REST se tauri der erro
+        }
+    }
+    const res = await fetch(`${API_URL}/api/catalog/stats`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
+}
+
+async function apiSearchIndividuals(params: {
+    name?: string | null;
+    category?: string | null;
+    has_embedding?: boolean | null;
+    source_filter?: string | null;
+    country?: string | null;
+    page: number;
+    limit: number;
+}): Promise<Individual[]> {
+    if ((window as any).__TAURI_INTERNALS__) {
+        try {
+            return await invoke<Individual[]>('search_individuals', params);
+        } catch {
+            // fallback para REST
+        }
+    }
+    const query = new URLSearchParams();
+    if (params.name) query.append('name', params.name);
+    if (params.category) query.append('category', params.category);
+    if (params.has_embedding) query.append('has_embedding', 'true');
+    if (params.source_filter) query.append('source_filter', params.source_filter);
+    if (params.country) query.append('country', params.country);
+    query.append('page', String(params.page || 0));
+    query.append('limit', String(params.limit || 40));
+
+    const res = await fetch(`${API_URL}/api/catalog/individuals?${query.toString()}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
+}
+
+async function apiGetIndividual(id: string): Promise<IndividualDetail> {
+    if ((window as any).__TAURI_INTERNALS__) {
+        try {
+            return await invoke<IndividualDetail>('get_individual', { id });
+        } catch {
+            // fallback
+        }
+    }
+    const res = await fetch(`${API_URL}/api/catalog/individuals/${encodeURIComponent(id)}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
 }
 
 // ─── Componentes ─────────────────────────────────────────────────────────────
@@ -78,11 +139,12 @@ export default function App() {
 
     // Carregar Stats
     useEffect(() => {
-        if (!(window as any).__TAURI_INTERNALS__) {
-            setTauriError("TAURI_NOT_DETECTED: Execute via 'npm run tauri dev'");
-            return;
-        }
-        invoke<Stats>('get_stats').then(setStats).catch(err => setTauriError(String(err)));
+        apiGetStats()
+            .then(s => {
+                setStats(s);
+                setTauriError(null);
+            })
+            .catch(err => setTauriError(String(err)));
     }, []);
 
     // Atalhos de Teclado
@@ -107,11 +169,10 @@ export default function App() {
     }, [searchQuery, category, bioOnly, source, country]);
 
     async function loadPage(p: number, reset = false) {
-        if (!(window as any).__TAURI_INTERNALS__) return;
         if (loading && !reset) return;
         setLoading(true);
         try {
-            const results = await invoke<Individual[]>('search_individuals', {
+            const results = await apiSearchIndividuals({
                 name: searchQuery || null,
                 category: category || null,
                 has_embedding: bioOnly || null,
@@ -139,20 +200,25 @@ export default function App() {
 
     // Infinite Scroll Observer
     useEffect(() => {
-        if (loading) return;
-        if (observer.current) observer.current.disconnect();
-        observer.current = new IntersectionObserver(entries => {
+        if (loading || !hasMore) return;
+        const currentObserver = new IntersectionObserver(entries => {
             if (entries[0].isIntersecting && hasMore) {
-                loadPage(page + 1);
+                setPage(prevPage => {
+                    const nextPage = prevPage + 1;
+                    loadPage(nextPage);
+                    return nextPage;
+                });
             }
         });
-        if (lastElementRef.current) observer.current.observe(lastElementRef.current);
+        const el = lastElementRef.current;
+        if (el) currentObserver.observe(el);
+        return () => currentObserver.disconnect();
     }, [loading, hasMore]);
 
     // Carregar Detalhe
     useEffect(() => {
         if (selectedId) {
-            invoke<IndividualDetail>('get_individual', { id: selectedId })
+            apiGetIndividual(selectedId)
                 .then(setDetail)
                 .catch(console.error);
         } else {
@@ -165,9 +231,11 @@ export default function App() {
             {/* Status Bar */}
             <div className="h-6 bg-surface border-b border-white/5 flex items-center justify-between px-4 text-[10px] font-black tracking-widest text-muted uppercase shrink-0">
                 <div className="flex items-center gap-4">
-                    <span className="flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" /> {t('common.os')}</span>
+                    <span className="flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> {t('common.os')}</span>
                     <span>|</span>
                     <span className="text-white/40">{t('common.ghost_protocol')}</span>
+                    <span>|</span>
+                    <span className="text-accent-emerald">MODO WEB & TÁTICO ATIVO</span>
                 </div>
                 {tauriError && (
                     <div className="bg-red-500/20 text-red-500 px-3 py-0.5 rounded flex items-center gap-2 animate-pulse border border-red-500/30">
@@ -254,9 +322,7 @@ export default function App() {
                             className="appearance-none h-9 pl-4 pr-10 rounded-full border border-white/10 bg-transparent text-[10px] font-black tracking-widest hover:bg-white/5 transition-all outline-none cursor-pointer"
                         >
                             <option value="" className="bg-surface">{t('filters.source_all')}</option>
-                            <option value="FBI" className="bg-surface">FBI</option>
-                            <option value="Interpol" className="bg-surface">INTERPOL</option>
-                            <option value="Europol" className="bg-surface">EUROPOL</option>
+                            <option value="FBI" className="bg-surface">FBI WANTED API (OFICIAL)</option>
                         </select>
                         <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-3 h-3 text-muted pointer-events-none" />
                     </div>
@@ -268,17 +334,22 @@ export default function App() {
                             className="appearance-none h-9 pl-4 pr-10 rounded-full border border-white/10 bg-transparent text-[10px] font-black tracking-widest hover:bg-white/5 transition-all outline-none cursor-pointer"
                         >
                             <option value="" className="bg-surface">{t('filters.country_all')}</option>
-                            <option value="BR" className="bg-surface">{t('filters.br')}</option>
-                            <option value="US" className="bg-surface">{t('filters.us')}</option>
-                            <option value="RU" className="bg-surface">{t('filters.ru')}</option>
-                            <option value="IR" className="bg-surface">{t('filters.ir')}</option>
+                            <option value="US" className="bg-surface">ESTADOS UNIDOS</option>
+                            <option value="BR" className="bg-surface">BRASIL</option>
+                            <option value="RU" className="bg-surface">RÚSSIA</option>
+                            <option value="CN" className="bg-surface">CHINA</option>
+                            <option value="IR" className="bg-surface">IRÃ</option>
+                            <option value="MX" className="bg-surface">MÉXICO</option>
+                            <option value="CO" className="bg-surface">COLÔMBIA</option>
                         </select>
                         <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-3 h-3 text-muted pointer-events-none" />
                     </div>
                 </div>
 
                 <button
-                    onClick={() => invoke('export_csv').catch(alert)}
+                    onClick={() => {
+                        window.open('http://localhost:8000/api/catalog/export-csv', '_blank');
+                    }}
                     className="h-9 px-5 rounded-full border border-accent-amber/20 text-accent-amber text-[10px] font-black tracking-widest hover:bg-accent-amber/10 transition-all flex items-center gap-2 shadow-[0_0_15px_rgba(245,158,11,0.05)]"
                 >
                     <Download className="w-3.5 h-3.5" /> {t('common.export_csv')}
@@ -340,15 +411,17 @@ function FilterButton({ children, active, onClick }: { children: React.ReactNode
 
 function IndividualCard({ person, onClick }: { person: Individual, onClick: () => void }) {
     const { t } = useTranslation();
-    const [imgUrl, setImgUrl] = useState<string | null>(null);
+    const [imgUrl, setImgUrl] = useState<string | null>(person.img_url || null);
 
     useEffect(() => {
-        if (person.img_path) {
+        if (person.img_path && (window as any).__TAURI_INTERNALS__) {
             invoke<string>('get_image_base64', { imgPath: person.img_path })
                 .then(setImgUrl)
-                .catch(() => setImgUrl(null));
+                .catch(() => setImgUrl(person.img_url || null));
+        } else if (person.img_url) {
+            setImgUrl(person.img_url);
         }
-    }, [person.img_path]);
+    }, [person.img_path, person.img_url]);
 
     return (
         <motion.div
@@ -371,8 +444,13 @@ function IndividualCard({ person, onClick }: { person: Individual, onClick: () =
                 {/* Badges */}
                 <div className="absolute top-3 left-3 flex gap-2">
                     {person.has_embedding === 1 && (
-                        <div className="w-8 h-8 rounded-full bg-accent-emerald text-black flex items-center justify-center shadow-lg shadow-accent-emerald/20 border border-black" title="Biometria Disponível">
-                            <Fingerprint className="w-4 h-4" />
+                        <div className="w-7 h-7 rounded-full bg-accent-emerald text-black flex items-center justify-center shadow-lg shadow-accent-emerald/20 border border-black" title="Biometria Disponível">
+                            <Fingerprint className="w-3.5 h-3.5" />
+                        </div>
+                    )}
+                    {person.reward && (
+                        <div className="px-2 py-0.5 rounded bg-accent-amber/90 text-black text-[9px] font-black tracking-wider flex items-center gap-1 shadow-md shadow-accent-amber/20">
+                            <span>RECOMPENSA</span>
                         </div>
                     )}
                 </div>
@@ -388,10 +466,17 @@ function IndividualCard({ person, onClick }: { person: Individual, onClick: () =
 
                 {/* Info */}
                 <div className="absolute bottom-4 left-4 right-4">
-                    <h3 className="text-sm font-black uppercase tracking-tight line-clamp-2 leading-tight drop-shadow-lg">{person.name}</h3>
-                    <p className="text-[10px] text-muted font-mono mt-2 flex items-center gap-1">
-                        <Info className="w-3 h-3" /> {person.source}
-                    </p>
+                    <h3 className="text-sm font-black uppercase tracking-tight line-clamp-2 leading-tight drop-shadow-lg text-white">{person.name}</h3>
+                    <div className="flex items-center justify-between mt-2">
+                        <p className="text-[10px] text-accent-blue/90 font-mono flex items-center gap-1">
+                            <Info className="w-3 h-3" /> {person.source}
+                        </p>
+                        {person.reward && (
+                            <span className="text-[10px] font-mono font-bold text-accent-amber">
+                                {person.reward.split(' ')[0]} {person.reward.split(' ')[1] || ''}
+                            </span>
+                        )}
+                    </div>
                 </div>
             </div>
         </motion.div>
@@ -412,10 +497,12 @@ function DossierModal({ detail, onClose }: { detail: IndividualDetail, onClose: 
     const [translatedLocations, setTranslatedLocations] = useState<Location[] | null>(null);
 
     useEffect(() => {
-        if (detail.img_path) {
+        if (detail.img_url) {
+            setActiveImg(detail.img_url);
+        } else if (detail.img_path && (window as any).__TAURI_INTERNALS__) {
             invoke<string>('get_image_base64', { imgPath: detail.img_path }).then(setActiveImg);
         }
-    }, [detail.img_path]);
+    }, [detail.img_path, detail.img_url]);
 
     // Traduz texto livre quando o idioma muda
     useEffect(() => {
@@ -523,8 +610,11 @@ function DossierModal({ detail, onClose }: { detail: IndividualDetail, onClose: 
                             <h4 className="text-[10px] font-black text-muted tracking-widest uppercase mb-4">{t('dossier.forensic_gallery')}</h4>
                             <div className="grid grid-cols-4 gap-2">
                                 {detail.images.map((img, i) => (
-                                    <GalleryThumb key={i} path={img.img_path} active={img.img_path === activeImg} onClick={() => {
-                                        invoke<string>('get_image_base64', { imgPath: img.img_path }).then(setActiveImg);
+                                    <GalleryThumb key={i} path={img.img_path} url={img.img_url} active={(img.img_url || img.img_path) === activeImg} onClick={() => {
+                                        if (img.img_url) setActiveImg(img.img_url);
+                                        else if (img.img_path && (window as any).__TAURI_INTERNALS__) {
+                                            invoke<string>('get_image_base64', { imgPath: img.img_path }).then(setActiveImg);
+                                        }
                                     }} />
                                 ))}
                             </div>
@@ -567,6 +657,50 @@ function DossierModal({ detail, onClose }: { detail: IndividualDetail, onClose: 
                                 <p className="text-2xl font-mono font-bold text-white">{translatedReward || detail.reward}</p>
                             </div>
                         )}
+
+                        {/* PAINEL DE AÇÕES TÁTICAS C4ISR & PERÍCIA */}
+                        <div className="bg-white/[0.02] border border-white/10 p-6 rounded-xl mb-12 flex flex-col md:flex-row gap-4 items-center justify-between">
+                            <div>
+                                <span className="text-[10px] font-black text-accent-emerald tracking-widest uppercase block mb-1">PROTOCOLO C4ISR & PERÍCIA JUDICIAL</span>
+                                <p className="text-xs text-white/60 font-medium">Geração de prova técnica pericial e mobilização de cerco viário.</p>
+                            </div>
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={async () => {
+                                        try {
+                                            const res = await fetch(`http://localhost:8000/api/forensics/generate-laudo/${detail.id}`, { method: 'POST' });
+                                            const data = await res.json();
+                                            if (data.status === 'SUCCESS') {
+                                                alert(`✅ Laudo Pericial PAdES-LTA gerado com sucesso!\nArquivo: ${data.laudo_pdf_path}\nManifesto: ${data.manifest_audit_path}`);
+                                            } else {
+                                                alert(`⚠️ Erro ao gerar laudo: ${data.message}`);
+                                            }
+                                        } catch (e) {
+                                            alert(`Falha de conexão com a API Forense: ${e}`);
+                                        }
+                                    }}
+                                    className="px-4 py-2.5 bg-accent-amber/20 hover:bg-accent-amber/30 text-accent-amber border border-accent-amber/40 rounded-lg text-xs font-black tracking-wider uppercase transition-all flex items-center gap-2"
+                                >
+                                    <Download className="w-4 h-4" /> Laudo CNJ 484 (PDF Assinado)
+                                </button>
+                                <button
+                                    onClick={async () => {
+                                        try {
+                                            const res = await fetch(`http://localhost:8000/api/tactical/dispatch-containment`, { method: 'POST' });
+                                            const data = await res.json();
+                                            if (data.status === 'DISPATCH_ENGAGED') {
+                                                alert(`🚨 Cerco Viário LAPJV Acionado!\nViaturas Despachadas: ${data.dispatch_assignments.length}\nChokepoints: ${data.containment_pincer.chokepoints.length} pontos de estrangulamento`);
+                                            }
+                                        } catch (e) {
+                                            alert(`Falha ao acionar despacho: ${e}`);
+                                        }
+                                    }}
+                                    className="px-4 py-2.5 bg-red-500/20 hover:bg-red-500/30 text-red-500 border border-red-500/40 rounded-lg text-xs font-black tracking-wider uppercase transition-all flex items-center gap-2"
+                                >
+                                    🚨 Despacho & Cerco LAPJV
+                                </button>
+                            </div>
+                        </div>
 
                         <div className="space-y-12">
                             <section>
@@ -683,7 +817,7 @@ function RichBriefing({ content, personName }: { content: string, personName?: s
                             ? t(key, { name: personName || 'TARGET' })
                             : t(key);
                         // RETORNA IMEDIATAMENTE — não cai nos handlers de * e ###
-                        return <p key={i} className="text-sm text-white/60 leading-relaxed font-medium" dangerouslySetInnerHTML={{ __html: translated }} />;
+                        return <p key={i} className="text-sm text-white/60 leading-relaxed font-medium">{parseBold(translated)}</p>;
                     }
                 }
 
@@ -708,13 +842,13 @@ function RichBriefing({ content, personName }: { content: string, personName?: s
                     return (
                         <div key={i} className="flex gap-3 text-sm text-white/70 leading-relaxed group">
                             <div className="w-1.5 h-1.5 rounded-full bg-accent-amber/40 mt-1.5 shrink-0 group-hover:bg-accent-amber transition-colors" />
-                            <span dangerouslySetInnerHTML={{ __html: trimmed.replace(/^\*\s*/, '') }} />
+                            <span>{parseBold(trimmed.replace(/^\*\s*/, ''))}</span>
                         </div>
                     );
                 }
 
                 // Paragraphs
-                return <p key={i} className="text-sm text-white/60 leading-relaxed font-medium" dangerouslySetInnerHTML={{ __html: trimmed }} />;
+                return <p key={i} className="text-sm text-white/60 leading-relaxed font-medium">{parseBold(trimmed)}</p>;
             })}
         </div>
     );
@@ -730,11 +864,15 @@ function parseBold(text: string) {
     });
 }
 
-function GalleryThumb({ path, active, onClick }: { path: string, active: boolean, onClick: () => void }) {
-    const [url, setUrl] = useState<string | null>(null);
+function GalleryThumb({ path, url: externalUrl, active, onClick }: { path?: string, url?: string, active: boolean, onClick: () => void }) {
+    const [url, setUrl] = useState<string | null>(externalUrl || null);
     useEffect(() => {
-        invoke<string>('get_image_base64', { imgPath: path }).then(setUrl);
-    }, [path]);
+        if (externalUrl) {
+            setUrl(externalUrl);
+        } else if (path && (window as any).__TAURI_INTERNALS__) {
+            invoke<string>('get_image_base64', { imgPath: path }).then(setUrl).catch(() => setUrl(null));
+        }
+    }, [path, externalUrl]);
 
     return (
         <div
@@ -744,7 +882,11 @@ function GalleryThumb({ path, active, onClick }: { path: string, active: boolean
                 active ? "border-accent-amber scale-95" : "border-white/10 hover:border-white/30"
             )}
         >
-            {url && <img src={url} className="w-full h-full object-cover" />}
+            {url ? <img src={url} className="w-full h-full object-cover" /> : (
+                <div className="w-full h-full bg-neutral-900 flex items-center justify-center opacity-30">
+                    <User className="w-6 h-6" />
+                </div>
+            )}
         </div>
     );
 }

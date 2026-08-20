@@ -10,7 +10,7 @@
         "devUrl": "http://localhost:1420"
     },
     "app": {
-        "withGlobalTauri": true,
+        "withGlobalTauri": false,
         "windows": [
             {
                 "title": "Intelligence Catalog — Olho de Deus",
@@ -24,7 +24,7 @@
             }
         ],
         "security": {
-            "csp": null
+            "csp": "default-src 'self'; img-src 'self' data: blob: http://localhost:8001; media-src 'self' blob: http://localhost:8001 http://localhost:1984; connect-src 'self' http://localhost:8001 http://localhost:8000 http://localhost:5000; font-src 'self' https://fonts.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; script-src 'self'"
         }
     },
     "bundle": {

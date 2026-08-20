@@ -1,0 +1,21 @@
+{
+  "target_id": "W-98124",
+  "target_name": "SUSPEITO TESTE ALVO",
+  "timestamp_utc": "2026-08-16T22:58:59.789669+00:00",
+  "sha256_pdf": "4c6ccf0b2c5cf76da39e30536737419462b77cbb4552fcced38d792bf0c841be",
+  "merkle_root": "688bc5248570490d92cc79aadf66038c4f793cc899e1f3122bd0e3dd63701466",
+  "slr_evaluation": {
+    "score": 0.86,
+    "lr_point": 4266401859.6888847,
+    "log10_lr_point": 9.630061759980194,
+    "ci_95": [
+      8.589115765724765,
+      10.585840102891064
+    ],
+    "conservative_log10_lr": 8.589115765724765,
+    "verbal_scale": "Apoio Extremamente Forte para Hp (Mesma Origem)",
+    "cllr_metric": 0.0084
+  },
+  "cnj_484_lineup_generated": true,
+  "pades_lta_signed": true
+}

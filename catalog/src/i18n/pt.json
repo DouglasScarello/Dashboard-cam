@@ -119,5 +119,18 @@
         "waiter or food service worker": "Garçom / Serviços de Alimentação",
         "it worker": "Trabalhador de TI",
         "landscaper": "Paisagista"
+    },
+    "alerts": {
+        "title": "Central de Alertas C4ISR",
+        "empty": "Nenhum alerta biométrico registrado.",
+        "unknown_target": "Alvo Não Identificado",
+        "camera_label": "Câmera",
+        "new_match": "NOVO MATCH BIOMÉTRICO",
+        "view_camera": "Acessar Câmera",
+        "status": {
+            "connected": "Conectado",
+            "connecting": "Conectando...",
+            "disconnected": "Desconectado"
+        }
     }
 }
