@@ -36,6 +36,19 @@ export const InteractiveCanvasViewer: React.FC<InteractiveCanvasViewerProps> = (
     const containerRef = useRef<HTMLDivElement | null>(null);
     const loupeCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
+    // Cobre o iframe do YouTube até o autoplay realmente começar — sem
+    // isso, o iframe mostra por um instante seu próprio botão de
+    // play/pause nativo, o que não faz sentido pra um stream "ao vivo"
+    // (usuário reportou: "fica feio pro usuário final"). Timeout de
+    // segurança: se o evento onLoad não disparar em 3s, libera mesmo
+    // assim — melhor mostrar o vídeo atrasado do que travar a UI pra sempre.
+    const [videoReady, setVideoReady] = useState(false);
+    useEffect(() => {
+        setVideoReady(false);
+        const timer = setTimeout(() => setVideoReady(true), 3000);
+        return () => clearTimeout(timer);
+    }, [videoId, camera.id]);
+
     // Matriz de Transformação (Pan & Zoom de 1.0x a 16.0x)
     const [transform, setTransform] = useState<TransformMatrix>({
         scale: 1.0,
@@ -375,7 +388,24 @@ export const InteractiveCanvasViewer: React.FC<InteractiveCanvasViewerProps> = (
                     title={camera.nome}
                     className="w-[115%] h-[115%] min-h-[115%] max-w-none border-0 pointer-events-none select-none object-cover"
                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    onLoad={() => setVideoReady(true)}
                 />
+
+                {/* Cobre o flash inicial do botão de play/pause nativo do
+                    YouTube com a snapshot real da câmera — some assim que o
+                    autoplay realmente começa (ou em até 3s por segurança). */}
+                <div
+                    className="absolute inset-0 bg-black transition-opacity duration-300 pointer-events-none"
+                    style={{ opacity: videoReady ? 0 : 1 }}
+                >
+                    {camera.thumbnail_url && (
+                        <img
+                            src={`http://localhost:8001${camera.thumbnail_url}`}
+                            alt=""
+                            className="w-full h-full object-cover"
+                        />
+                    )}
+                </div>
             </div>
 
             {/* BOTÃO FLUTUANTE DE RECONSTRUÇÃO IA 4X QUANDO SOB ZOOM */}
