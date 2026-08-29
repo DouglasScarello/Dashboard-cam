@@ -14,9 +14,10 @@ import asyncio
 import json
 import logging
 import os
+import subprocess
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from typing import Any, Dict, List, Optional
@@ -37,9 +38,19 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [CAM-GRID] %(message
 ROOT = Path(__file__).resolve().parent.parent
 LIVE_CAMERAS_PATH = ROOT / "database" / "live_cameras.json"
 OMNI_CAMS_PATH = ROOT / "database" / "omni_cams.json"
+LIVENESS_STATE_PATH = ROOT / "database" / "camera_liveness_state.json"
+
+# Um "LIVE" checado há mais tempo que isso é tratado como desconhecido, não
+# como vivo — evita confiar indefinidamente numa checagem antiga enquanto o
+# intervalo real de rotatividade das lives (ver camera_liveness.py) ainda
+# não foi medido empiricamente. 30 min é um valor conservador de partida.
+LIVENESS_STALE_AFTER_SECONDS = 30 * 60
 
 STREAM_URL_TTL = 240.0  # 4 minutos
-THUMBNAIL_TTL = 5.0     # 5 segundos
+# Captura real via ffmpeg leva alguns segundos (resolve stream + decodifica
+# 1 frame) — 5s como antes faria recapturar quase a cada request. 30s é um
+# equilíbrio razoável entre "atual" e não sobrecarregar o yt-dlp/ffmpeg.
+THUMBNAIL_TTL = 30.0
 
 # Cadência do worker de detecção de perigo (round-robin, uma câmera por vez)
 DANGER_ROUND_ROBIN_DELAY = 1.5  # segundos entre câmeras
@@ -61,6 +72,66 @@ app.add_middleware(
 
 _cameras: List[Dict[str, Any]] = []
 _cameras_by_id: Dict[str, Dict[str, Any]] = {}
+_liveness_state: Dict[str, Any] = {}
+_liveness_mtime: float = 0.0
+
+
+def _reload_liveness_state_if_changed() -> None:
+    """Recarrega database/camera_liveness_state.json só se o arquivo mudou
+    desde a última leitura — permite rodar `camera_liveness.py` por fora
+    (manual ou cron) e o servidor pega o resultado sem precisar reiniciar."""
+    global _liveness_state, _liveness_mtime
+    try:
+        mtime = LIVENESS_STATE_PATH.stat().st_mtime
+    except FileNotFoundError:
+        return
+    if mtime == _liveness_mtime:
+        return
+    try:
+        with open(LIVENESS_STATE_PATH, "r", encoding="utf-8") as f:
+            _liveness_state = json.load(f)
+        _liveness_mtime = mtime
+        log.info(f"Estado de liveness recarregado ({len(_liveness_state)} câmeras checadas).")
+    except Exception as e:
+        log.error(f"Falha ao ler {LIVENESS_STATE_PATH.name}: {e}")
+
+
+def get_camera_liveness(cam_id: str) -> Dict[str, Any]:
+    """Retorna {live_confirmed, confirmed_dead, live_status, checked_at}.
+
+    Duas perguntas diferentes, de propósito:
+    - `live_confirmed`: temos evidência POSITIVA recente de que está ao vivo.
+    - `confirmed_dead`: temos evidência NEGATIVA recente (checagem real
+      disse que não está ao vivo). É este campo que o frontend usa pra
+      bloquear a abertura — nunca abrir o que sabemos que está morto.
+
+    Sem checagem nenhuma ainda (cold start, ou checagem velha demais) os
+    dois ficam False — não travamos a UI inteira só porque a varredura
+    ainda não rodou; só bloqueamos quando há prova real de que morreu."""
+    entry = _liveness_state.get(cam_id)
+    if not entry:
+        return {"live_confirmed": False, "confirmed_dead": False, "live_status": "UNKNOWN", "checked_at": None}
+
+    checked_at = entry.get("checked_at")
+    is_stale = True
+    if checked_at:
+        try:
+            checked_dt = datetime.fromisoformat(checked_at)
+            age = (datetime.now(timezone.utc) - checked_dt).total_seconds()
+            is_stale = age > LIVENESS_STALE_AFTER_SECONDS
+        except Exception:
+            is_stale = True
+
+    if is_stale:
+        return {"live_confirmed": False, "confirmed_dead": False, "live_status": "UNKNOWN", "checked_at": checked_at}
+
+    status = entry.get("status", "UNKNOWN")
+    return {
+        "live_confirmed": status == "LIVE",
+        "confirmed_dead": status in ("DEAD", "ENDED_BUT_EXISTS"),
+        "live_status": status,
+        "checked_at": checked_at,
+    }
 
 # cache de URL de stream resolvida: camera_id -> {"url": str|None, "ts": float}
 _stream_url_cache: Dict[str, Dict[str, Any]] = {}
@@ -126,6 +197,26 @@ def _get_active_alerts() -> List[Dict[str, Any]]:
 # --------------------------------------------------------------------------
 # Carregamento da lista de câmeras
 # --------------------------------------------------------------------------
+
+def _capture_real_frame_jpeg(camera_id: str, source_url: str, timeout_s: float = 8.0) -> Optional[bytes]:
+    """Frame REAL da transmissão ao vivo agora — não a thumbnail estática do
+    YouTube (que pode ser de qualquer momento passado, ou nem existir pra
+    uma live). Resolve a URL do stream (reaproveitando o cache de
+    `_resolve_stream_url_sync`) e usa `ffmpeg` pra extrair 1 frame."""
+    stream_url = _resolve_stream_url_sync(camera_id, source_url)
+    if not stream_url:
+        return None
+    try:
+        result = subprocess.run(
+            ["ffmpeg", "-y", "-i", stream_url, "-frames:v", "1", "-q:v", "3", "-f", "image2", "pipe:1"],
+            capture_output=True, timeout=timeout_s,
+        )
+        if result.returncode == 0 and len(result.stdout) > 2000:
+            return result.stdout
+    except Exception as e:
+        log.warning(f"Falha ao capturar frame real da câmera {camera_id}: {e}")
+    return None
+
 
 def _fetch_youtube_thumbnail(video_id: str) -> Optional[bytes]:
     if not video_id:
@@ -242,7 +333,12 @@ async def resolve_stream_url(camera_id: str, source_url: str) -> Optional[str]:
 # --------------------------------------------------------------------------
 
 def _capture_thumbnail_sync(camera_id: str, source_url: str) -> bytes:
-    """Retorna JPEG bytes da thumbnail real da transmissão."""
+    """Retorna JPEG bytes de um frame REAL e atual da transmissão — não a
+    thumbnail estática do YouTube (que pode ser de qualquer momento, ou
+    inexistente pra uma live). Achado de auditoria: tanto esta função
+    quanto o endpoint `/snapshot` só buscavam a imagem estática do YouTube
+    antes desta correção — o usuário reportou "quero um print real de
+    agora, não thumbnail do YouTube"."""
     now = time.time()
     lock = _get_camera_lock(camera_id)
     with lock:
@@ -252,10 +348,14 @@ def _capture_thumbnail_sync(camera_id: str, source_url: str) -> bytes:
 
         cam = _cameras_by_id.get(camera_id, {})
         video_id = cam.get("video_id")
-        
-        # 1. Busca instantânea da thumbnail real do stream
-        jpeg_bytes = None
-        if video_id:
+
+        # 1. Frame real via ffmpeg do stream ao vivo (pode levar alguns
+        # segundos — por isso o cache com TTL mais longo agora).
+        jpeg_bytes = _capture_real_frame_jpeg(camera_id, source_url)
+
+        # 2. Fallback: thumbnail estática do YouTube (câmera pode estar
+        # offline — melhor mostrar algo do que travar a UI).
+        if not jpeg_bytes and video_id:
             jpeg_bytes = _fetch_youtube_thumbnail(video_id)
 
         if not jpeg_bytes:
@@ -404,8 +504,9 @@ async def list_cameras(
     country: Optional[str] = None,
     sector: Optional[str] = None
 ):
+    _reload_liveness_state_if_changed()
     filtered = _cameras
-    
+
     if country:
         c_upper = country.strip().upper()
         filtered = [c for c in filtered if c.get("pais", "").upper() == c_upper]
@@ -431,6 +532,7 @@ async def list_cameras(
         if not vid_id and "v=" in source_url:
             vid_id = source_url.split("v=")[1].split("&")[0]
             
+        liveness = get_camera_liveness(cam_id)
         result.append(
             {
                 "id": cam_id,
@@ -447,6 +549,13 @@ async def list_cameras(
                 "video_id": vid_id,
                 "lat": cam.get("lat"),
                 "long": cam.get("long"),
+                # Liveness real (ver camera_liveness.py) — nunca assumir
+                # "ao vivo" sem checagem recente. O frontend usa isto pra
+                # nunca abrir uma câmera que já não existe mais no YouTube.
+                "live_confirmed": liveness["live_confirmed"],
+                "confirmed_dead": liveness["confirmed_dead"],
+                "live_status": liveness["live_status"],
+                "live_checked_at": liveness["checked_at"],
             }
         )
     return result
@@ -498,11 +607,11 @@ async def camera_live_url(camera_id: str):
 @app.post("/api/cameras/{camera_id}/snapshot")
 async def camera_snapshot_native(camera_id: str):
     """
-    Captura snapshot nativo em alta resolução da câmera para perícia forense.
-    Garante resposta instantânea (<200ms) sem erros 500.
+    Captura um frame REAL e atual da transmissão pra uso forense (crop de
+    placa/rosto). Antes só buscava a thumbnail estática do YouTube — o
+    usuário reportou que isso não reflete o que a câmera está gravando
+    agora, e pra perícia isso importa de verdade, não é cosmético.
     """
-    import urllib.request
-
     cam = _cameras_by_id.get(camera_id)
     if not cam:
         if not camera_id.startswith("cam_"):
@@ -512,45 +621,23 @@ async def camera_snapshot_native(camera_id: str):
             cam = _cameras_by_id.get(raw_id)
 
     if not cam:
-        # Tenta pegar qualquer câmera válida como fallback gracioso
         if _cameras:
             cam = _cameras[0]
         else:
             return Response(content=_PLACEHOLDER_JPEG, media_type="image/jpeg")
 
+    real_id = str(cam.get("id", camera_id))
     source_url = cam.get("url", "")
-    video_id = cam.get("video_id")
-    if not video_id and "v=" in source_url:
-        video_id = source_url.split("v=")[1].split("&")[0]
+    jpeg_bytes = await capture_thumbnail(real_id, source_url)
 
-    # 1. Tentar obter o frame em alta resolução direto do CDN da transmissão
-    if video_id:
-        for quality in ["maxresdefault", "sddefault", "hqdefault"]:
-            try:
-                thumb_url = f"https://img.youtube.com/vi/{video_id}/{quality}.jpg"
-                req = urllib.request.Request(thumb_url, headers={"User-Agent": "Mozilla/5.0"})
-                loop = asyncio.get_event_loop()
-                def _fetch():
-                    with urllib.request.urlopen(req, timeout=2.5) as resp:
-                        return resp.read()
-                data = await loop.run_in_executor(None, _fetch)
-                if data and len(data) > 5000:
-                    return Response(
-                        content=data,
-                        media_type="image/jpeg",
-                        headers={
-                            "X-Camera-ID": str(cam.get("id", camera_id)),
-                            "X-Resolution": "1080p",
-                            "X-Capture-Timestamp": datetime.utcnow().isoformat() + "Z"
-                        }
-                    )
-            except Exception:
-                continue
-
-    # 2. Fallback para cache de thumbnail
-    cached_thumb = _thumbnail_cache.get(cam.get("id", camera_id))
-    if cached_thumb:
-        return Response(content=cached_thumb["bytes"], media_type="image/jpeg")
+    return Response(
+        content=jpeg_bytes,
+        media_type="image/jpeg",
+        headers={
+            "X-Camera-ID": real_id,
+            "X-Capture-Timestamp": datetime.utcnow().isoformat() + "Z",
+        },
+    )
 
     return Response(content=_PLACEHOLDER_JPEG, media_type="image/jpeg")
 
