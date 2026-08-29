@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Any, Tuple, Set
 from dataclasses import dataclass, field
 import numpy as np
+import h3
 
 log = logging.getLogger("SpatialEngine")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] [%(name)s] %(message)s")
@@ -90,19 +91,60 @@ class SpatialH3CameraIndex:
         self.cameras: Dict[str, Dict[str, Any]] = {}
         self.frustums: Dict[str, CameraFrustum3D] = {}
 
-    def _coord_to_h3_simulated(self, lat: float, lon: float, res: int) -> str:
-        """Gera chave de célula hexagonal (equivalente bitwise a Uber H3 Index)."""
-        scale = 10 ** (res - 4)
-        q = int((lon * 1.5 * scale) + (lat * scale * 0.5))
-        r = int(lat * scale)
-        return f"8{res:x}{q & 0xffffff:06x}{r & 0xffffff:06x}"
+    def _coord_to_h3(self, lat: float, lon: float, res: int) -> str:
+        """Índice H3 real (Uber H3 v4, `h3.latlng_to_cell`) — não é mais um
+        hash retangular caseiro. Resoluções 7/8/9 têm hexágonos de aresta
+        média ~1.22km / ~0.46km / ~0.174km respectivamente (valores da
+        própria especificação H3), compatíveis com as escalas descritas
+        abaixo (Batalhão/Bairro/Cruzamento são aproximações de produto,
+        não limiares oficiais do H3)."""
+        return h3.latlng_to_cell(lat, lon, res)
+
+    def get_coverage_cells(self, camera_id: str, res: int = 11) -> List[str]:
+        """Células H3 reais que o campo de visão (Frustum 3D) da câmera
+        efetivamente cobre no chão — usa `h3.polygon_to_cells` sobre o
+        polígono já calculado por `CameraFrustum3D`. Combina H3 com FOV de
+        câmera, algo que não existe em nenhuma biblioteca pronta (pesquisado
+        em 2026-08-29 — nicho sem ferramenta de mercado, precisa ser feito
+        assim mesmo).
+
+        Resolução padrão 11 (aresta ~24m) porque o footprint típico de uma
+        câmera (`max_range_m=120` por padrão) é pequeno demais pras
+        resoluções 7-9 usadas no índice de proximidade câmera-a-câmera —
+        `polygon_to_cells` só retorna células cujo CENTRO cai dentro do
+        polígono (comportamento real e documentado do H3), então um
+        polígono menor que um hexágono de res 9 legitimamente resulta em 0
+        células, não é bug. Se mesmo assim vier vazio (polígono muito fino
+        ou mal alinhado), cai pro centróide como aproximação mínima
+        garantida em vez de reportar cobertura zero."""
+        frustum = self.frustums.get(str(camera_id))
+        if not frustum:
+            return []
+        polygon_pts = frustum.compute_ground_footprint_polygon()
+        if len(polygon_pts) < 3:
+            return []
+        try:
+            poly = h3.LatLngPoly(polygon_pts)
+            cells = list(h3.polygon_to_cells(poly, res))
+            if cells:
+                return cells
+            centroid_lat = sum(p[0] for p in polygon_pts) / len(polygon_pts)
+            centroid_lon = sum(p[1] for p in polygon_pts) / len(polygon_pts)
+            return [h3.latlng_to_cell(centroid_lat, centroid_lon, res)]
+        except Exception as e:
+            log.warning(f"Falha ao calcular cobertura H3 da câmera {camera_id}: {e}")
+            return []
 
     def index_camera(self, camera_id: str, name: str, lat: float, lon: float, metadata: Optional[Dict[str, Any]] = None):
         cid = str(camera_id)
         cam_info = {"id": cid, "name": name, "lat": lat, "lon": lon, "meta": metadata or {}}
         self.cameras[cid] = cam_info
         
-        # Gerar Frustum 3D
+        # Gerar Frustum 3D — heading real de sensor não existe em
+        # live_cameras.json (sem campo de azimute/bússola), então usamos um
+        # placeholder determinístico por câmera. Isso NÃO é dado real de
+        # orientação, é só um valor estável pra não ficar 0° em todas —
+        # tratar como tal em qualquer cálculo que dependa de direção real.
         self.frustums[cid] = CameraFrustum3D(
             camera_id=cid,
             lat=lat,
@@ -111,23 +153,32 @@ class SpatialH3CameraIndex:
         )
 
         # Indexar nos 3 níveis de resolução
-        c7 = self._coord_to_h3_simulated(lat, lon, 7)
-        c8 = self._coord_to_h3_simulated(lat, lon, 8)
-        c9 = self._coord_to_h3_simulated(lat, lon, 9)
+        c7 = self._coord_to_h3(lat, lon, 7)
+        c8 = self._coord_to_h3(lat, lon, 8)
+        c9 = self._coord_to_h3(lat, lon, 9)
 
         self.index_res7.setdefault(c7, []).append(cid)
         self.index_res8.setdefault(c8, []).append(cid)
         self.index_res9.setdefault(c9, []).append(cid)
 
     def find_cameras_in_radius(self, lat: float, lon: float, radius_meters: float = 1000.0) -> List[Dict[str, Any]]:
-        """Busca ultrarrápida de câmeras próximas em raio especificado (< 50µs)."""
-        c8 = self._coord_to_h3_simulated(lat, lon, 8)
-        candidate_ids = self.index_res8.get(c8, [])
-        
-        # Se poucos candidatos, expande para o nível 7
+        """Busca de câmeras próximas via k-ring H3 real (`h3.grid_disk`).
+
+        Olhar só a célula exata (`index_res8.get(c8)`) erra câmeras que
+        caem do outro lado de uma borda de hexágono bem perto do ponto de
+        busca — por isso a varredura real inclui os vizinhos de 1 anel
+        (k=1) ao redor da célula central, não só a célula em si. Esse é o
+        padrão usual de raio-aproximado com H3 (edge ~0.46km em res 8, então
+        k=1 cobre uma vizinhança de ~1.4km de diâmetro)."""
+        c8 = self._coord_to_h3(lat, lon, 8)
+        ring8 = h3.grid_disk(c8, 1)
+        candidate_ids = [cid for cell in ring8 for cid in self.index_res8.get(cell, [])]
+
+        # Se poucos candidatos, expande para o nível 7 (hexágonos maiores)
         if len(candidate_ids) < 5:
-            c7 = self._coord_to_h3_simulated(lat, lon, 7)
-            candidate_ids = self.index_res7.get(c7, candidate_ids)
+            c7 = self._coord_to_h3(lat, lon, 7)
+            ring7 = h3.grid_disk(c7, 1)
+            candidate_ids = [cid for cell in ring7 for cid in self.index_res7.get(cell, [])] or candidate_ids
 
         results = []
         for cid in candidate_ids:
