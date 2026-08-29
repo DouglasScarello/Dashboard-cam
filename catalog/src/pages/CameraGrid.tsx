@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useSearchParams } from 'react-router-dom';
 import { Video, X, Volume2, VolumeX, MapPin, Compass, ExternalLink, ShieldCheck } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { clsx, type ClassValue } from 'clsx';
@@ -27,6 +28,14 @@ interface Camera {
     video_id?: string;
     lat?: number | null;
     long?: number | null;
+    // Liveness real vinda do backend (camera_liveness.py) — muitas destas
+    // câmeras são lives de terceiros no YouTube que saem do ar ou trocam de
+    // video_id sem aviso. Sem isso, o app abria um player pra um stream que
+    // já não existe mais (tela "Vídeo indisponível").
+    live_confirmed?: boolean;
+    confirmed_dead?: boolean;
+    live_status?: string;
+    live_checked_at?: string | null;
 }
 
 interface CameraAlert {
@@ -39,6 +48,7 @@ interface CameraAlert {
 
 export default function CameraGrid() {
     const { t } = useTranslation();
+    const [searchParams] = useSearchParams();
     const [cameras, setCameras] = useState<Camera[]>([]);
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
@@ -98,7 +108,34 @@ export default function CameraGrid() {
         return () => clearInterval(interval);
     }, []);
 
+    const [offlineNotice, setOfflineNotice] = useState<string | null>(null);
+
+    // Deep-link vindo do AlertCenter (?camera=<id>): abre a câmera do alerta
+    // assim que a lista de câmeras carregar — mas só se ela estiver
+    // confirmadamente ao vivo agora. Muitas câmeras são lives de terceiros
+    // no YouTube que já saíram do ar; abrir mesmo assim só mostra "Vídeo
+    // indisponível" pro usuário sem explicação nenhuma.
+    useEffect(() => {
+        const camId = searchParams.get('camera');
+        if (!camId || cameras.length === 0) return;
+        const match = cameras.find((c) => String(c.id) === camId);
+        if (!match) return;
+        if (match.confirmed_dead) {
+            setOfflineNotice(`${match.nome}: esta transmissão encerrou e não está mais disponível no YouTube.`);
+        } else {
+            setSelected(match);
+        }
+    }, [searchParams, cameras]);
+
     const handleClose = useCallback(() => setSelected(null), []);
+
+    const handleTileClick = useCallback((cam: Camera) => {
+        if (cam.confirmed_dead) {
+            setOfflineNotice(`${cam.nome}: esta transmissão encerrou e não está mais disponível no YouTube.`);
+        } else {
+            setSelected(cam);
+        }
+    }, []);
 
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
@@ -232,6 +269,13 @@ export default function CameraGrid() {
                 </div>
             )}
 
+            {offlineNotice && (
+                <div className="bg-amber-500/10 text-accent-amber px-4 py-3 rounded-lg border border-accent-amber/30 text-xs font-mono mb-6 flex items-center justify-between gap-4">
+                    <span>{offlineNotice}</span>
+                    <button onClick={() => setOfflineNotice(null)} className="text-accent-amber/70 hover:text-accent-amber shrink-0">✕</button>
+                </div>
+            )}
+
             {loading ? (
                 <div className="h-40 flex items-center justify-center">
                     <div className="w-6 h-6 border-2 border-accent-amber border-t-transparent rounded-full animate-spin" />
@@ -245,7 +289,7 @@ export default function CameraGrid() {
                                 camera={cam}
                                 tick={tick}
                                 alert={alerts.find((al) => al.camera_id === String(cam.id)) ?? null}
-                                onClick={() => setSelected(cam)}
+                                onClick={() => handleTileClick(cam)}
                             />
                         ))}
                     </div>
@@ -314,7 +358,8 @@ const CameraTile = React.memo(function CameraTile({
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             className={cn(
-                'intelligence-card group cursor-pointer border border-white/5 hover:border-accent-emerald/40 transition-all shadow-lg',
+                'intelligence-card group border border-white/5 hover:border-accent-emerald/40 transition-all shadow-lg',
+                camera.confirmed_dead ? 'cursor-not-allowed opacity-50 grayscale' : 'cursor-pointer',
                 alert && 'ring-2 ring-red-500 animate-pulse shadow-[0_0_20px_rgba(239,68,68,0.5)]'
             )}
             onClick={onClick}
@@ -333,10 +378,22 @@ const CameraTile = React.memo(function CameraTile({
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-80" />
 
-                <div className="absolute top-3 left-3 flex items-center gap-1.5 bg-black/60 backdrop-blur-sm px-2 py-1 rounded-full border border-white/10">
-                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
-                    <span className="text-[9px] font-black tracking-widest text-red-400 uppercase">C4ISR LIVE</span>
-                </div>
+                {camera.confirmed_dead ? (
+                    <div className="absolute top-3 left-3 flex items-center gap-1.5 bg-black/60 backdrop-blur-sm px-2 py-1 rounded-full border border-white/10">
+                        <div className="w-1.5 h-1.5 rounded-full bg-neutral-500" />
+                        <span className="text-[9px] font-black tracking-widest text-neutral-400 uppercase">OFFLINE — TRANSMISSÃO ENCERRADA</span>
+                    </div>
+                ) : camera.live_confirmed ? (
+                    <div className="absolute top-3 left-3 flex items-center gap-1.5 bg-black/60 backdrop-blur-sm px-2 py-1 rounded-full border border-white/10">
+                        <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                        <span className="text-[9px] font-black tracking-widest text-red-400 uppercase">C4ISR LIVE</span>
+                    </div>
+                ) : (
+                    <div className="absolute top-3 left-3 flex items-center gap-1.5 bg-black/60 backdrop-blur-sm px-2 py-1 rounded-full border border-white/10">
+                        <div className="w-1.5 h-1.5 rounded-full bg-accent-amber" />
+                        <span className="text-[9px] font-black tracking-widest text-accent-amber uppercase">NÃO VERIFICADA</span>
+                    </div>
+                )}
 
                 {alertLabel && (
                     <div className="absolute top-3 right-3 flex items-center gap-1.5 bg-red-600/80 backdrop-blur-sm px-2 py-1 rounded-full border border-red-400/50 animate-pulse">
