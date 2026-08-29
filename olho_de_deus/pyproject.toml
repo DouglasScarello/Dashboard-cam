@@ -40,6 +40,14 @@ sse-starlette = "^3.3.2"
 onnxruntime = "^1.27.0"
 cryptography = "^50.0.0"
 python-multipart = "^0.0.32"
+pyhanko = "^0.35.1"
+reportlab = "^4.0.0"
+h3 = "^4.5.0"
+pymerkle = "^6.1.0"
+# EasyOCR, não PaddleOCR: PaddleOCR precisa de `paddlepaddle`, que não tem
+# wheel pra Python >=3.13 no momento (2026-08-29) — ver PLANO_CONTINUACAO.md
+# Seção 5.2/8b. Revisitar se/quando a Paddle Foundation publicar suporte.
+easyocr = "^1.7.2"
 
 [build-system]
 requires = ["poetry-core"]
