@@ -305,7 +305,8 @@ fn get_stats() -> Result<Stats, String> {
 #[tauri::command]
 fn get_image_base64(img_path: String) -> Result<String, String> {
     let db_p = db_path();
-    let data_dir = db_p.parent().unwrap_or(&PathBuf::from("."));
+    let current_dir_fallback = PathBuf::from(".");
+    let data_dir = db_p.parent().unwrap_or(&current_dir_fallback);
     let base_dir = data_dir.parent().unwrap_or(data_dir);
     let canonical_base = std::fs::canonicalize(base_dir).map_err(|e| e.to_string())?;
 
