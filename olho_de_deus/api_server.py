@@ -130,14 +130,23 @@ async def generate_forensic_laudo(target_id: str):
         
         generated_path = build_official_forensic_laudo(dossier, pdf_path)
         manifest_path = generated_path.replace(".pdf", "_manifest_audit.json")
-        
+
+        # Ler de volta o status REAL da assinatura gravado pelo próprio
+        # forensic_core.py — nunca reafirmar "certified: True" aqui de forma
+        # fixa (esse exato bug já existiu tanto aqui quanto no manifesto).
+        with open(manifest_path, "r", encoding="utf-8") as f:
+            manifest = json.load(f)
+
         return {
             "status": "SUCCESS",
             "target_id": target_id,
             "laudo_pdf_path": generated_path,
             "manifest_audit_path": manifest_path,
-            "pades_lta_certified": True,
-            "cnj_484_compliant": True,
+            "pades_lta_signed": manifest.get("pades_lta_signed", False),
+            "pades_signing_error": manifest.get("pades_signing_error"),
+            "icp_brasil_accredited": manifest.get("icp_brasil_accredited", False),
+            "tsa_used": manifest.get("tsa_used"),
+            "cnj_484_lineup_generated": manifest.get("cnj_484_lineup_generated", False),
             "created_at_utc": datetime.utcnow().isoformat()
         }
     except Exception as e:

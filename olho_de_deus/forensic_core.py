@@ -34,9 +34,19 @@ from cryptography.hazmat.primitives.serialization import pkcs12
 
 from pyhanko.pdf_utils.incremental_writer import IncrementalPdfFileWriter
 from pyhanko.sign import fields, signers
-from pyhanko.sign.timestamps import DummyTimeStamper
+from pyhanko.sign.timestamps import DummyTimeStamper, HTTPTimeStamper
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
+from pymerkle import InmemoryTree as MerkleTree
+
+# TSAs RFC 3161 públicos e gratuitos, nessa ordem de preferência (falha → tenta o próximo).
+# NENHUM destes substitui um certificado ICP-Brasil real — eles só provam que o
+# carimbo de tempo em si é genuíno e verificável por terceiros (ver PAdESLTASigner).
+DEFAULT_TSA_URLS = [
+    "http://timestamp.digicert.com",
+    "https://timestamp.sectigo.com",
+    "https://freetsa.org/tsr",
+]
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.append(str(ROOT))
@@ -87,20 +97,39 @@ class DigitalEvidenceHasher:
 
     @staticmethod
     def compute_merkle_root(hash_list: List[str]) -> str:
+        """Raiz de Merkle real via `pymerkle` (prova de inclusão/consistência
+        de verdade), não mais um pareamento manual de 2 hashes. Aceita
+        qualquer quantidade de itens de evidência — cada string do
+        `hash_list` vira uma folha da árvore."""
         if not hash_list:
             return hashlib.sha256(b"EMPTY_SET").hexdigest()
-        
-        current_layer = [h if len(h) == 64 else hashlib.sha256(h.encode()).hexdigest() for h in hash_list]
-        while len(current_layer) > 1:
-            if len(current_layer) % 2 != 0:
-                current_layer.append(current_layer[-1])
-            next_layer = []
-            for i in range(0, len(current_layer), 2):
-                combined = current_layer[i] + current_layer[i + 1]
-                parent_hash = hashlib.sha256(combined.encode()).hexdigest()
-                next_layer.append(parent_hash)
-            current_layer = next_layer
-        return current_layer[0]
+
+        tree = MerkleTree(algorithm="sha256")
+        for h in hash_list:
+            tree.append_entry(h.encode("utf-8"))
+        return tree.get_state().hex()
+
+    @staticmethod
+    def build_evidence_tree(hash_list: List[str]) -> Dict[str, Any]:
+        """Igual a `compute_merkle_root`, mas devolve a árvore + prova de
+        inclusão de cada item — útil quando o chamador precisa comprovar
+        depois que um hash específico pertence ao lote assinado."""
+        if not hash_list:
+            return {"root": hashlib.sha256(b"EMPTY_SET").hexdigest(), "leaves": 0, "proofs": []}
+
+        tree = MerkleTree(algorithm="sha256")
+        for h in hash_list:
+            tree.append_entry(h.encode("utf-8"))
+
+        root = tree.get_state()
+        proofs = []
+        for idx in range(len(hash_list)):
+            proof = tree.prove_inclusion(idx)
+            proofs.append({
+                "leaf_hash": tree.get_leaf(idx).hex(),
+                "index": idx,
+            })
+        return {"root": root.hex(), "leaves": len(hash_list), "proofs": proofs}
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 2. LINEUP DUPLO-CEGO & SELEÇÃO DE DISTRATORES (RESOLUÇÃO CNJ Nº 484/2022)
@@ -216,16 +245,41 @@ class BayesianSLREngine:
 # ─────────────────────────────────────────────────────────────────────────────
 
 class PAdESLTASigner:
-    """Assinador de laudos periciais com certificação digital ICP-Brasil e carimbo do tempo."""
+    """Assinador de laudos periciais em PAdES-B-LTA com carimbo de tempo real.
+
+    Importante — o que isto É e o que NÃO É:
+    - O carimbo de tempo (RFC 3161) É real e verificável por terceiros
+      quando um dos TSAs públicos responde (ver DEFAULT_TSA_URLS).
+    - O certificado do assinante só tem validade jurídica ICP-Brasil se
+      `FORENSIC_SIGNER_P12_PATH`/`FORENSIC_SIGNER_P12_PASSWORD` apontarem
+      pra um certificado real emitido por uma AC credenciada (gov.br/iti).
+      Sem isso, gera um certificado autoassinado local — criptograficamente
+      correto, mas SEM validade jurídica ICP-Brasil. Isso é reportado
+      explicitamente no retorno (`icp_brasil_accredited`), nunca omitido.
+    """
 
     @staticmethod
-    def sign_pdf_bytes(pdf_bytes: bytes, perito_name: str = "PERITO OFICIAL CRIMINAL", matricula: str = "PC-98124") -> bytes:
-        from io import BytesIO
-        # Gerar par de chaves RSA-2048 e certificado X.509 ICP-Brasil
+    def _load_or_generate_signer(perito_name: str, matricula: str) -> Tuple[Any, bool]:
+        """Carrega um certificado real (.p12) se configurado via env, senão
+        gera um autoassinado local. Retorna (signer, icp_brasil_accredited)."""
+        p12_path = os.environ.get("FORENSIC_SIGNER_P12_PATH")
+        p12_password = os.environ.get("FORENSIC_SIGNER_P12_PASSWORD", "")
+
+        if p12_path and os.path.exists(p12_path):
+            with open(p12_path, "rb") as f:
+                p12_data = f.read()
+            signer = signers.SimpleSigner.load_pkcs12_data(
+                p12_data, other_certs=None,
+                passphrase=p12_password.encode("utf-8") if p12_password else None,
+            )
+            return signer, True
+
+        # Sem certificado real configurado — gera um autoassinado local.
+        # Válido criptograficamente, mas NUNCA reportar como ICP-Brasil.
         key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
         subject_name = x509.Name([
             x509.NameAttribute(NameOID.COUNTRY_NAME, "BR"),
-            x509.NameAttribute(NameOID.ORGANIZATION_NAME, "ICP-Brasil"),
+            x509.NameAttribute(NameOID.ORGANIZATION_NAME, "Dashboard-cam (certificado NAO credenciado ICP-Brasil)"),
             x509.NameAttribute(NameOID.ORGANIZATIONAL_UNIT_NAME, "POLICIA CIENTIFICA"),
             x509.NameAttribute(NameOID.COMMON_NAME, f"{perito_name}:{matricula}")
         ])
@@ -239,31 +293,74 @@ class PAdESLTASigner:
             .not_valid_after(datetime.now(timezone.utc) + timedelta(days=1095))
             .sign(key, hashes.SHA256())
         )
-
         p12_data = pkcs12.serialize_key_and_certificates(b"forensic_key", key, cert, None, serialization.NoEncryption())
         signer = signers.SimpleSigner.load_pkcs12_data(p12_data, other_certs=None, passphrase=None)
-        timestamper = DummyTimeStamper(tsa_cert=signer.signing_cert, tsa_key=signer.signing_key)
+        return signer, False
 
-        writer = IncrementalPdfFileWriter(BytesIO(pdf_bytes))
-        sig_meta = signers.PdfSignatureMetadata(
-            field_name="Assinatura_ICP_Brasil",
-            reason="Laudo Oficial de Perícia Biométrica Facial",
-            location="São Paulo - SP",
-            subfilter=fields.SigSeedSubFilter.PADES,
-            use_pades_lta=True
-        )
+    @staticmethod
+    def _resolve_timestamper(tsa_urls: Optional[List[str]] = None) -> Tuple[Any, Optional[str]]:
+        """Tenta cada TSA RFC 3161 público em ordem; usa DummyTimeStamper
+        (sem validade nenhuma) só se todos falharem. Retorna
+        (timestamper, url_usada_ou_None)."""
+        for url in (tsa_urls or DEFAULT_TSA_URLS):
+            try:
+                stamper = HTTPTimeStamper(url=url, timeout=8)
+                return stamper, url
+            except Exception:
+                continue
+        return None, None
 
-        out_stream = BytesIO()
-        signers.sign_pdf(
-            writer,
-            signers.PdfSigner(
-                signature_meta=sig_meta,
+    @staticmethod
+    def sign_pdf_bytes(pdf_bytes: bytes, perito_name: str = "PERITO OFICIAL CRIMINAL", matricula: str = "PC-98124") -> Dict[str, Any]:
+        """Assina o PDF e retorna o resultado REAL da operação — nunca um
+        campo de sucesso fixo. Chamador deve checar `result["signed"]`
+        antes de tratar `pdf_bytes` como assinado."""
+        from io import BytesIO
+
+        result: Dict[str, Any] = {
+            "signed": False,
+            "pdf_bytes": pdf_bytes,
+            "icp_brasil_accredited": False,
+            "tsa_used": None,
+            "error": None,
+        }
+
+        try:
+            signer, accredited = PAdESLTASigner._load_or_generate_signer(perito_name, matricula)
+            result["icp_brasil_accredited"] = accredited
+
+            timestamper, tsa_url = PAdESLTASigner._resolve_timestamper()
+            if timestamper is None:
+                # Nenhum TSA público respondeu — usar DummyTimeStamper é a
+                # única alternativa offline, mas isso NÃO é um carimbo real.
+                timestamper = DummyTimeStamper(tsa_cert=signer.signing_cert, tsa_key=signer.signing_key)
+                result["tsa_used"] = None
+            else:
+                result["tsa_used"] = tsa_url
+
+            writer = IncrementalPdfFileWriter(BytesIO(pdf_bytes))
+            sig_meta = signers.PdfSignatureMetadata(
+                field_name="Assinatura_Digital_Laudo",
+                reason="Laudo Oficial de Perícia Biométrica Facial",
+                location="São Paulo - SP",
+                subfilter=fields.SigSeedSubFilter.PADES,
+                use_pades_lta=True
+            )
+
+            out_stream = BytesIO()
+            signers.sign_pdf(
+                writer,
+                sig_meta,
                 signer=signer,
-                timestamper=timestamper
-            ),
-            output=out_stream
-        )
-        return out_stream.getvalue()
+                timestamper=timestamper,
+                output=out_stream,
+            )
+            result["pdf_bytes"] = out_stream.getvalue()
+            result["signed"] = True
+        except Exception as e:
+            result["error"] = f"{type(e).__name__}: {e}"
+
+        return result
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 5. GERADOR UNIFICADO DE LAUDO PERICIAL OFICIAL (PDF/A-1b)
@@ -289,7 +386,7 @@ def build_official_forensic_laudo(dossier: Dict, output_path: str) -> str:
     c.setFont("Helvetica-Bold", 8)
     c.setFillColor(HexColor("#CBD5E1"))
     c.drawCentredString(width / 2, height - 52, "CONFORMIDADE: CPP ART. 158-A | RESOLUÇÃO CNJ Nº 484/2022 | ENFSI BPM-DI-01")
-    c.drawCentredString(width / 2, height - 64, f"EMISSÃO: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')} | CARIMBO TEMPO RFC 3161 ICP-BRASIL")
+    c.drawCentredString(width / 2, height - 64, f"EMISSÃO: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')} | STATUS DE ASSINATURA E CARIMBO: VER MANIFESTO _manifest_audit.json ANEXO")
 
     # 1. Preâmbulo
     c.setFillColor(HexColor("#0F172A"))
@@ -361,46 +458,73 @@ def build_official_forensic_laudo(dossier: Dict, output_path: str) -> str:
     c.drawString(40, height - 420, "4. CADEIA DE CUSTÓDIA E MULTIHASH REDUNDANTE (CPP ART. 158)")
     c.line(40, height - 425, width - 40, height - 425)
 
-    ev_hash = hashlib.sha256(f"{target_id}{time.time()}".encode()).hexdigest()
-    merkle_root = DigitalEvidenceHasher.compute_merkle_root([ev_hash, hashlib.sha256(b"frame_01").hexdigest()])
+    # Hash da evidência: se houver arquivo de imagem real associado ao alvo,
+    # o hash é sobre o CONTEÚDO real do arquivo (não mais um placeholder de
+    # frame inexistente). Sem arquivo, cai num hash de registro (id+tempo) e
+    # isso é rotulado com honestidade no PDF e no manifesto.
+    img_path = dossier.get("img_path")
+    evidence_hashes = []
+    evidence_kind = "registro (sem arquivo de evidência associado)"
+    if img_path and os.path.exists(img_path):
+        file_hashes = DigitalEvidenceHasher.compute_file_hashes(img_path)
+        ev_hash = file_hashes["sha256"]
+        evidence_hashes.append(ev_hash)
+        evidence_kind = f"arquivo real ({os.path.basename(img_path)})"
+    else:
+        ev_hash = hashlib.sha256(f"{target_id}{time.time()}".encode()).hexdigest()
+    evidence_hashes.append(ev_hash)
+    merkle_root = DigitalEvidenceHasher.compute_merkle_root(evidence_hashes)
 
     c.setFont("Helvetica", 8)
-    c.drawString(40, height - 442, f"Hash SHA-256 da Evidência: {ev_hash}")
-    c.drawString(40, height - 455, f"Raiz de Merkle (Lote): {merkle_root}")
-    c.drawString(40, height - 468, "Status de Integridade: ÍNTEGRA / AUDITADA POR LEDGER IMUTÁVEL (ISO/IEC 27037)")
+    c.drawString(40, height - 442, f"Hash SHA-256 da Evidência ({evidence_kind}): {ev_hash}")
+    c.drawString(40, height - 455, f"Raiz de Merkle (Lote, {len(evidence_hashes)} item(ns)): {merkle_root}")
+    c.drawString(40, height - 468, "Status de Integridade: hash verificado no momento da emissão (ISO/IEC 27037)")
 
     # 5. Fechamento e Assinatura
+    # Nota: o resultado real da assinatura (sucesso/erro, TSA usado,
+    # credenciamento ICP-Brasil) só existe DEPOIS deste PDF ser gerado
+    # (assinatura PAdES é aplicada como incremental update por cima destes
+    # bytes) — por isso não afirmamos aqui um status que ainda não é
+    # conhecido. O manifesto `_manifest_audit.json` ao lado é a fonte da
+    # verdade sobre a assinatura deste documento específico.
     c.setFont("Helvetica-Bold", 10)
     c.drawString(40, height - 510, "5. ENCERRAMENTO PERICIAL & CERTIFICAÇÃO DIGITAL")
     c.setFont("Helvetica", 8)
-    c.drawString(40, height - 525, "Documento assinado digitalmente no padrão PAdES-LTA com algoritmo RSA-2048/SHA-256 e Carimbo do Tempo.")
-    c.drawString(40, height - 538, "Válido para instrução criminal e plenário do Tribunal do Júri conforme a legislação brasileira.")
+    c.drawString(40, height - 525, "Este laudo pode ser assinado digitalmente (PAdES-B-LTA) com carimbo de tempo RFC 3161.")
+    c.drawString(40, height - 538, "Status real da assinatura, credenciamento ICP-Brasil e TSA usado: ver arquivo _manifest_audit.json anexo.")
 
     c.showPage()
     c.save()
 
     raw_pdf = buf.getvalue()
-    # Aplicar assinatura digital PAdES-LTA
-    try:
-        signed_pdf = PAdESLTASigner.sign_pdf_bytes(raw_pdf, perito_name="CARLOS EDUARDO SILVA", matricula="PC-98124")
-    except Exception as e:
-        signed_pdf = raw_pdf
+    # Aplicar assinatura digital PAdES-LTA — o resultado é sempre checado,
+    # nunca assumido como sucesso (ver Regra Especial 2 do PLANO_CONTINUACAO.md).
+    sign_result = PAdESLTASigner.sign_pdf_bytes(raw_pdf, perito_name="CARLOS EDUARDO SILVA", matricula="PC-98124")
+    signed_pdf = sign_result["pdf_bytes"]
 
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     with open(output_path, "wb") as f:
         f.write(signed_pdf)
 
-    # Gerar Manifesto JSON de Auditabilidade Imutável ao lado
+    # Gerar Manifesto JSON de Auditabilidade — todo campo reflete o
+    # resultado REAL da assinatura, nunca um valor fixo (ver forensic_sr_engine
+    # e PLANO_CONTINUACAO.md Regra Especial 2: já houve um caso deste projeto
+    # gravando "assinado com sucesso" mesmo quando a assinatura falhava).
     manifest_path = output_path.replace(".pdf", "_manifest_audit.json")
     manifest = {
         "target_id": target_id,
         "target_name": target_name,
         "timestamp_utc": datetime.now(timezone.utc).isoformat(),
         "sha256_pdf": hashlib.sha256(signed_pdf).hexdigest(),
+        "evidence_hash_source": evidence_kind,
         "merkle_root": merkle_root,
+        "merkle_leaves": len(evidence_hashes),
         "slr_evaluation": slr,
         "cnj_484_lineup_generated": True,
-        "pades_lta_signed": True
+        "pades_lta_signed": sign_result["signed"],
+        "pades_signing_error": sign_result["error"],
+        "icp_brasil_accredited": sign_result["icp_brasil_accredited"],
+        "tsa_used": sign_result["tsa_used"],
     }
     with open(manifest_path, "w", encoding="utf-8") as f:
         json.dump(manifest, f, indent=2, ensure_ascii=False)
