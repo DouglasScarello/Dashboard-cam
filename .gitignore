@@ -33,6 +33,10 @@ yt_dlp
 *.jpeg
 *.png
 !uploaded_media_*.png
+# Ícones do app Tauri são build-essenciais, não "faces baixadas" — sem
+# eles o `cargo build` quebra num clone novo (aconteceu, ver PLANO_CONTINUACAO.md).
+!catalog/src-tauri/app-icon.png
+!catalog/src-tauri/icons/**
 
 # Banco de dados e embeddings (pesados — ficam local)
 data/
@@ -41,6 +45,10 @@ olho_de_deus/data/
 *.db
 *.faiss
 *.json.bak
+live_cameras.json.bak-*
+# Estado de liveness é gerado por camera_liveness.py, muda a cada rodada —
+# dado de execução, não código-fonte.
+database/camera_liveness_state.json
 
 # Modelos YOLO (pesados — baixar via script)
 *.pt
