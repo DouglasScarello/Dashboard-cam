@@ -21,6 +21,7 @@ import math
 import os
 import re
 import time
+from pathlib import Path
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
@@ -237,16 +238,63 @@ class ForensicPlateEnhancer:
 # ─────────────────────────────────────────────────────────────────────────────
 
 class NeuralSuperResolution:
-    """Motor unificado de Super-Resolução (OpenCV dnn_superres e Lanczos-4)."""
+    """Motor de Super-Resolução: Real-ESRGAN real via ONNX Runtime (não mais
+    um caminho morto que nunca era chamado — achado de auditoria
+    2026-08-29), com fallback determinístico Lanczos-4 quando o modelo não
+    carrega ou a imagem é grande demais pra rodar em tempo hábil na CPU.
 
-    def __init__(self, scale: int = 4, device: str = "cpu"):
+    Pesos: `realesr-general-x4v3.onnx` (variante compacta, recomendada pra
+    CPU pela pesquisa de 2026-08-29), de Heliosoph/realesrgan-onnx no
+    Hugging Face — BSD-3-Clause (uso comercial permitido), export da rede
+    oficial de xinntao/Real-ESRGAN. Rede fixa em 4x; pra outros
+    `scale_factor` o resultado 4x real é redimensionado pro tamanho alvo.
+    """
+
+    # Acima disso (pixels de entrada), inferência ONNX em CPU pode levar
+    # muitos segundos — cai pro fallback Lanczos em vez de travar a resposta
+    # HTTP. Calibrado pra crops forenses (rosto/placa), não frames inteiros.
+    MAX_INPUT_PIXELS = 400 * 400
+
+    def __init__(self, scale: int = 4, device: str = "cpu",
+                 onnx_path: Optional[str] = None):
         self.scale = scale
         self.device = device
+        self._onnx_path = onnx_path or str(Path(__file__).resolve().parent / "models" / "realesr-general-x4v3.onnx")
+        self._onnx_session = None
+        self._onnx_load_failed = False
+        # Mantido só por compatibilidade com chamadores antigos — o caminho
+        # real agora é o ONNX acima, não o OpenCV dnn_superres (que nunca
+        # tinha peso nenhum carregado, ver achado de auditoria).
         self._sr_dnn = None
         self._loaded_model_name = ""
 
+    def _get_onnx_session(self):
+        if self._onnx_session is not None or self._onnx_load_failed:
+            return self._onnx_session
+        try:
+            import onnxruntime as ort
+            if not os.path.exists(self._onnx_path):
+                raise FileNotFoundError(self._onnx_path)
+            self._onnx_session = ort.InferenceSession(self._onnx_path, providers=["CPUExecutionProvider"])
+        except Exception as e:
+            log_alpr_error(e)
+            self._onnx_load_failed = True
+            self._onnx_session = None
+        return self._onnx_session
+
+    def _run_real_esrgan(self, img: np.ndarray) -> np.ndarray:
+        """Roda a rede real (4x fixo) e devolve BGR uint8."""
+        session = self._get_onnx_session()
+        img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB).astype(np.float32) / 255.0
+        inp = np.transpose(img_rgb, (2, 0, 1))[None, ...]
+        out = session.run(None, {"input": inp})[0]
+        out_img = np.transpose(out[0], (1, 2, 0))
+        out_img = np.clip(out_img, 0.0, 1.0) * 255.0
+        return cv2.cvtColor(out_img.astype(np.uint8), cv2.COLOR_RGB2BGR)
+
     def load_opencv_dnn(self, model_name: str = "espcn", model_path: Optional[str] = None):
-        """Carrega modelos nativos no OpenCV dnn_superres (ESPCN, EDSR, FSRCNN)."""
+        """Mantido por compatibilidade — não é mais o caminho real de SR
+        (ver `_run_real_esrgan`). Sem uso nesta classe desde 2026-08-29."""
         try:
             if hasattr(cv2, "dnn_superres"):
                 sr = cv2.dnn_superres.DnnSuperResImpl_create()
@@ -262,22 +310,112 @@ class NeuralSuperResolution:
             self._sr_dnn = None
 
     def upscale(self, img: np.ndarray, model_name: str = "lanczos") -> Tuple[np.ndarray, str]:
-        """Aplica o upscaling solicitado com fallback determinístico de alta fidelidade."""
+        """Real-ESRGAN real via ONNX Runtime, com fallback Lanczos-4
+        honestamente rotulado quando o modelo não roda (não instalado ou
+        erro de inferência).
+
+        Se a entrada exceder `MAX_INPUT_PIXELS` (comum quando o usuário
+        pede "melhorar" sem zoom antes — o crop vira o frame inteiro da
+        câmera, não um recorte pequeno de placa/rosto), a rede real ainda
+        roda — só sobre uma versão reduzida da entrada primeiro — em vez de
+        desistir da rede neural inteiramente. Achado real desta sessão:
+        antes disso, qualquer crop de câmera sem zoom prévio caía sempre no
+        Lanczos, e o usuário via isso como "a função parece mock"."""
         h, w = img.shape[:2]
         target_w, target_h = w * self.scale, h * self.scale
 
-        if self._sr_dnn is not None and self._loaded_model_name.lower() == model_name.lower():
+        session = self._get_onnx_session()
+        if session is not None:
             try:
-                upscaled = self._sr_dnn.upsample(img)
-                return upscaled, f"OpenCV-DNN-{model_name.upper()}-x{self.scale}"
-            except Exception:
-                pass
+                net_input = img
+                if h * w > self.MAX_INPUT_PIXELS:
+                    ratio = (self.MAX_INPUT_PIXELS / float(h * w)) ** 0.5
+                    small_w, small_h = max(1, int(w * ratio)), max(1, int(h * ratio))
+                    net_input = cv2.resize(img, (small_w, small_h), interpolation=cv2.INTER_AREA)
+
+                real_4x = self._run_real_esrgan(net_input)
+                if (real_4x.shape[1], real_4x.shape[0]) != (target_w, target_h):
+                    real_4x = cv2.resize(real_4x, (target_w, target_h), interpolation=cv2.INTER_LANCZOS4)
+                return real_4x, "RealESRGAN-x4v3-ONNX"
+            except Exception as e:
+                log_alpr_error(e)
 
         # Fallback de alta fidelidade: Lanczos-4 + Unsharp Masking Laplaciano
+        # — rotulado como o que é, nunca disfarçado de rede neural.
         upscaled = cv2.resize(img, (target_w, target_h), interpolation=cv2.INTER_LANCZOS4)
         gaussian = cv2.GaussianBlur(upscaled, (0, 0), 1.5)
         sharpened = cv2.addWeighted(upscaled, 1.35, gaussian, -0.35, 0)
-        return sharpened, f"Lanczos4-Sharpened-x{self.scale}"
+        return sharpened, f"Lanczos4-Sharpened-x{self.scale} (fallback — sem rede neural)"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 3.5 RESTAURAÇÃO FACIAL REAL — CODEFORMER (ONNX)
+#
+# Substitui o caminho comentado que sempre caía em CLAHE+bilateral simples
+# (achado de auditoria: "fidelity_weight nunca tinha efeito real"). Pesos
+# de bluefoxcreation/Codeformer-ONNX (export oficial do sczhou/CodeFormer),
+# LICENÇA S-LAB 1.0 — NÃO-COMERCIAL. Ok pra portfólio pessoal; não pode ser
+# usado se este projeto virar produto comercial sem licenciar separado
+# (ver PLANO_CONTINUACAO.md Seção 5.3).
+#
+# IMPORTANTE (honestidade de produto, não só de código): CodeFormer é um
+# modelo GENERATIVO — ele completa detalhe facial plausível a partir de um
+# prior aprendido, não reconstrói o rosto real pixel-a-pixel. Pesquisa de
+# 2026-08-29 encontrou evidência de que pré-processamento deste tipo pode
+# DEGRADAR a confiabilidade de reconhecimento facial forense. Rotular
+# sempre como apoio visual investigativo, nunca como prova pericial.
+# ─────────────────────────────────────────────────────────────────────────────
+
+class CodeFormerRestorer:
+    """Restauração facial real via CodeFormer (ONNX Runtime, CPU)."""
+
+    INPUT_SIZE = 512
+
+    def __init__(self, onnx_path: Optional[str] = None):
+        self._onnx_path = onnx_path or str(Path(__file__).resolve().parent / "models" / "codeformer.onnx")
+        self._session = None
+        self._load_failed = False
+
+    def _get_session(self):
+        if self._session is not None or self._load_failed:
+            return self._session
+        try:
+            import onnxruntime as ort
+            if not os.path.exists(self._onnx_path):
+                raise FileNotFoundError(self._onnx_path)
+            self._session = ort.InferenceSession(self._onnx_path, providers=["CPUExecutionProvider"])
+        except Exception as e:
+            log_alpr_error(e)
+            self._load_failed = True
+            self._session = None
+        return self._session
+
+    def restore(self, img_bgr: np.ndarray, fidelity_weight: float = 0.5) -> Optional[np.ndarray]:
+        """Retorna o rosto restaurado (BGR, mesmo tamanho da entrada) ou
+        `None` se o modelo não puder rodar — o chamador decide o fallback,
+        nunca fingimos sucesso aqui."""
+        session = self._get_session()
+        if session is None:
+            return None
+        try:
+            h, w = img_bgr.shape[:2]
+            face_512 = cv2.resize(img_bgr, (self.INPUT_SIZE, self.INPUT_SIZE), interpolation=cv2.INTER_LANCZOS4)
+            rgb = cv2.cvtColor(face_512, cv2.COLOR_BGR2RGB).astype(np.float32) / 255.0
+            normalized = (rgb - 0.5) / 0.5  # CodeFormer espera entrada em [-1, 1]
+            inp = np.transpose(normalized, (2, 0, 1))[None, ...]
+            w_arr = np.array(float(np.clip(fidelity_weight, 0.0, 1.0)), dtype=np.float64)
+
+            y = session.run(["y"], {"x": inp, "w": w_arr})[0]
+            out = np.transpose(y[0], (1, 2, 0))
+            out = (out * 0.5 + 0.5) * 255.0
+            out = np.clip(out, 0, 255).astype(np.uint8)
+            out_bgr = cv2.cvtColor(out, cv2.COLOR_RGB2BGR)
+            if (w, h) != (self.INPUT_SIZE, self.INPUT_SIZE):
+                out_bgr = cv2.resize(out_bgr, (w, h), interpolation=cv2.INTER_LANCZOS4)
+            return out_bgr
+        except Exception as e:
+            log_alpr_error(e)
+            return None
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -317,6 +455,136 @@ class ForensicQualityAssessor:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# 4.5 ALPR REAL — DETECÇÃO YOLOv8 + LEITURA EASYOCR (Mercosul)
+#
+# Substitui o `plate_ocr = "BRA2E19"` hardcoded (achado de auditoria
+# 2026-08-29). Duas etapas reais, não simuladas:
+#   1. Detecção: YOLOv8n fine-tuned pra placa (pesos MIT de
+#      huggingface.co/Koushim/yolov8-license-plate-detection, genérico —
+#      detecção transfere razoavelmente entre formatos de placa, mas NÃO
+#      foi fine-tuned especificamente em placas Mercosul reais; validar
+#      antes de confiar em produção, ver PLANO_CONTINUACAO.md Seção 5.2).
+#   2. Leitura: EasyOCR (não PaddleOCR — PaddleOCR precisa de
+#      `paddlepaddle`, que não tem wheel pra Python 3.14 neste ambiente;
+#      EasyOCR é a alternativa real de 2º lugar da pesquisa, funciona aqui).
+# ─────────────────────────────────────────────────────────────────────────────
+
+class ForensicALPR:
+    """Pipeline real de detecção + leitura de placa. Modelos carregados sob
+    demanda (lazy) — YOLO é rápido de carregar, EasyOCR leva ~20-30s na
+    primeira chamada porque baixa/inicializa os pesos de detecção de texto."""
+
+    MERCOSUL_FMT = "LLLNLNN"  # 3 letras, 1 dígito, 1 letra, 2 dígitos
+    ANTIGO_FMT = "LLLNNNN"    # 3 letras, 4 dígitos
+
+    # Confusões de OCR mais comuns entre dígito e letra visualmente parecidos.
+    DIGIT_TO_LETTER = {"0": "O", "1": "I", "5": "S", "2": "Z", "8": "B", "6": "G"}
+    LETTER_TO_DIGIT = {"O": "0", "I": "1", "S": "5", "Z": "2", "B": "8", "G": "6", "Q": "0"}
+
+    def __init__(self, weights_path: str):
+        self._weights_path = weights_path
+        self._detector = None
+        self._reader = None
+
+    def _get_detector(self):
+        if self._detector is None:
+            from ultralytics import YOLO
+            self._detector = YOLO(self._weights_path)
+        return self._detector
+
+    def _get_reader(self):
+        if self._reader is None:
+            import easyocr
+            self._reader = easyocr.Reader(["en"], gpu=False, verbose=False)
+        return self._reader
+
+    def detect_plate_bbox(self, image_bgr: np.ndarray, conf_threshold: float = 0.25) -> Tuple[Optional[Tuple[int, int, int, int]], Optional[float]]:
+        """Localiza a placa de verdade dentro do crop recebido — antes disso
+        o pipeline tratava o crop inteiro como se já fosse a placa (achado de
+        auditoria). Sem detecção acima do threshold, retorna (None, None) e
+        o chamador decide se cai pro crop inteiro como fallback honesto."""
+        try:
+            detector = self._get_detector()
+            results = detector.predict(image_bgr, verbose=False, conf=conf_threshold)
+            boxes = results[0].boxes
+            if boxes is None or len(boxes) == 0:
+                return None, None
+            best_idx = int(boxes.conf.argmax())
+            x1, y1, x2, y2 = boxes.xyxy[best_idx].cpu().numpy().astype(int)
+            confidence = float(boxes.conf[best_idx])
+            h, w = image_bgr.shape[:2]
+            x1, y1 = max(0, x1), max(0, y1)
+            x2, y2 = min(w, x2), min(h, y2)
+            if x2 <= x1 or y2 <= y1:
+                return None, None
+            return (x1, y1, x2, y2), confidence
+        except Exception as e:
+            log_alpr_error(e)
+            return None, None
+
+    def _correct_for_format(self, raw: str, fmt: str) -> str:
+        """Corrige caractere-por-posição contra o template fixo do formato
+        (ex: posição de letra que o OCR leu como dígito vira a letra visual
+        mais provável, e vice-versa) — não é find-and-replace cego, respeita
+        a posição exigida por cada formato real de placa brasileira."""
+        raw = raw.upper()
+        if len(raw) != len(fmt):
+            return raw
+        out = []
+        for ch, slot in zip(raw, fmt):
+            if slot == "L" and ch.isdigit():
+                out.append(self.DIGIT_TO_LETTER.get(ch, ch))
+            elif slot == "N" and ch.isalpha():
+                out.append(self.LETTER_TO_DIGIT.get(ch, ch))
+            else:
+                out.append(ch)
+        return "".join(out)
+
+    def read_plate(self, image_bgr: np.ndarray) -> Tuple[Optional[str], Optional[str], Optional[float]]:
+        """OCR real via EasyOCR + correção posicional + validação contra os
+        formatos oficiais (Mercosul: 5º caractere é sempre letra, conforme
+        Resolução CONTRAN 780/2019 — nunca dígito; formato antigo: 3 letras
+        + 4 dígitos). Retorna (texto, formato, confiança) ou (None, None,
+        None) se nada plausível foi lido — nunca inventa uma placa."""
+        try:
+            reader = self._get_reader()
+            results = reader.readtext(image_bgr, detail=1, allowlist="ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
+        except Exception as e:
+            log_alpr_error(e)
+            return None, None, None
+
+        if not results:
+            return None, None, None
+
+        # Concatena os fragmentos de texto lidos (o OCR às vezes separa a
+        # placa em 2 blocos) ordenados da esquerda pra direita.
+        results_sorted = sorted(results, key=lambda r: r[0][0][0])
+        raw_text = "".join(r[1] for r in results_sorted).upper()
+        raw_text = re.sub(r"[^A-Z0-9]", "", raw_text)
+        avg_conf = float(np.mean([r[2] for r in results_sorted]))
+
+        for fmt_name, fmt_template, regex in (
+            ("MERCOSUL", self.MERCOSUL_FMT, ForensicPlateEnhancer.MERCOSUL_REGEX),
+            ("ANTIGO", self.ANTIGO_FMT, ForensicPlateEnhancer.ANTIGO_REGEX),
+        ):
+            if len(raw_text) != len(fmt_template):
+                continue
+            corrected = self._correct_for_format(raw_text, fmt_template)
+            if regex.match(corrected):
+                return corrected, fmt_name, round(avg_conf, 3)
+
+        # Nada bateu com um formato oficial — reporta o texto cru como
+        # "candidato incerto" em vez de descartar silenciosamente ou de
+        # forçar num formato que não confere.
+        return raw_text or None, "INCERTO" if raw_text else None, round(avg_conf, 3) if raw_text else None
+
+
+def log_alpr_error(e: Exception) -> None:
+    import logging
+    logging.getLogger("ForensicALPR").warning(f"Falha no pipeline de ALPR: {type(e).__name__}: {e}")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # 5. SCHEMAS PYDANTIC & ROUTER FASTAPI
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -332,6 +600,7 @@ class EnhanceROIRequest(BaseModel):
     rl_iterations: int = Field(20, ge=1, le=100, description="Iterações Richardson-Lucy")
     binarization: str = Field("sauvola", description="Binarização: 'sauvola', 'otsu', 'none'")
     sauvola_k: float = Field(0.3, ge=0.05, le=0.9, description="Constante k do algoritmo Sauvola")
+    fidelity_weight: float = Field(0.5, ge=0.0, le=1.0, description="CodeFormer: 0=máxima qualidade/alucinação, 1=máxima fidelidade ao original")
 
 
 class ForensicAnalysisResponse(BaseModel):
@@ -347,6 +616,9 @@ class ForensicAnalysisResponse(BaseModel):
     quality_metrics_enhanced: Dict[str, float]
     plate_ocr_candidate: Optional[str] = None
     plate_format: Optional[str] = None
+    plate_ocr_confidence: Optional[float] = None
+    plate_bbox_detected: bool = False
+    plate_detection_confidence: Optional[float] = None
     enhanced_image_base64: str
     binary_image_base64: Optional[str] = None
     timestamp_utc: str
@@ -356,6 +628,8 @@ sr_engine = NeuralSuperResolution(scale=4)
 deblur_engine = MotionDeblurEngine()
 plate_enhancer = ForensicPlateEnhancer()
 quality_assessor = ForensicQualityAssessor()
+alpr_engine = ForensicALPR(weights_path=str(Path(__file__).resolve().parent / "models" / "best.pt"))
+face_restorer = CodeFormerRestorer()
 
 forensic_sr_router = APIRouter(prefix="/api/forensic", tags=["Forensic Super-Resolution & ALPR"])
 
@@ -397,8 +671,27 @@ async def enhance_roi(payload: EnhanceROIRequest):
 
     processed = img_orig.copy()
 
-    # 1. Retificação de Perspectiva (se habilitado)
-    if payload.apply_deskew and payload.roi_type == "plate":
+    # 0. Detecção real da placa dentro do crop recebido (YOLOv8) — antes
+    # disso, o crop inteiro era tratado como se já fosse a placa (achado de
+    # auditoria 2026-08-29). Sem detecção confiável, cai pro crop inteiro
+    # como fallback (mesmo comportamento de antes), mas isso fica registrado
+    # em `plate_bbox_detected=False` na resposta, não escondido.
+    plate_bbox = None
+    plate_detect_conf = None
+    if payload.roi_type == "plate":
+        plate_bbox, plate_detect_conf = alpr_engine.detect_plate_bbox(processed)
+        if plate_bbox:
+            x1, y1, x2, y2 = plate_bbox
+            processed = processed[y1:y2, x1:x2]
+
+    # 1. Retificação de Perspectiva (se habilitado) — só quando há uma
+    # detecção de placa confiável pra guiar a retificação. O algoritmo de
+    # homografia assume um contorno de placa real pra corrigir; aplicado
+    # sobre um crop sem detecção (fallback) ele pode DEGRADAR a imagem a
+    # ponto de quebrar o OCR depois (confirmado em teste: leitura que
+    # funcionava direto no crop original virava ilegível após o deskew
+    # sem bbox real por trás).
+    if payload.apply_deskew and payload.roi_type == "plate" and plate_bbox is not None:
         processed, _ = plate_enhancer.auto_deskew_homography(processed, target_size=(400, 130))
 
     # 2. Desconvolução de Movimento (se habilitado)
@@ -429,20 +722,33 @@ async def enhance_roi(payload: EnhanceROIRequest):
         # Redução de ruído de compressão CFTV
         processed = cv2.fastNlMeansDenoisingColored(processed, None, 6.0, 6.0, 7, 21)
 
-    # 3. Super-Resolução 4x
-    sr_engine.scale = payload.scale_factor
-    enhanced_img, model_used = sr_engine.upscale(processed, model_name="edsr")
-
-    # 3.5 Pós-Processamento de Nitidez Facial (Fidelidade w=0.80 sem alucinação)
+    # 3. Super-Resolução / Restauração — CodeFormer real pra rosto (rede
+    # generativa dedicada, respeita fidelity_weight de verdade agora),
+    # Real-ESRGAN pra placa/cena geral. Sem fallback silencioso: se o
+    # CodeFormer não puder rodar, cai pro Real-ESRGAN genérico e ISSO fica
+    # registrado em `model_used`, não escondido.
+    face_restored = None
     if payload.roi_type == "face":
-        bilateral = cv2.bilateralFilter(enhanced_img, d=9, sigmaColor=75, sigmaSpace=75)
-        high_freq = cv2.subtract(enhanced_img, bilateral)
-        enhanced_img = cv2.addWeighted(enhanced_img, 1.2, high_freq, 0.4, 0)
+        face_restored = face_restorer.restore(processed, fidelity_weight=payload.fidelity_weight)
+
+    if face_restored is not None:
+        enhanced_img = face_restored
+        model_used = f"CodeFormer-ONNX-w{payload.fidelity_weight:.2f}"
+    else:
+        sr_engine.scale = payload.scale_factor
+        enhanced_img, model_used = sr_engine.upscale(processed, model_name="edsr")
+        if payload.roi_type == "face":
+            model_used += " (fallback — CodeFormer indisponível)"
+            # Nitidez genérica só entra quando o CodeFormer real não rodou.
+            bilateral = cv2.bilateralFilter(enhanced_img, d=9, sigmaColor=75, sigmaSpace=75)
+            high_freq = cv2.subtract(enhanced_img, bilateral)
+            enhanced_img = cv2.addWeighted(enhanced_img, 1.2, high_freq, 0.4, 0)
 
     # 4. Binarização Forense & OCR de Placas
     binary_b64 = None
     plate_ocr = None
     plate_fmt = None
+    plate_ocr_conf = None
 
     if payload.roi_type == "plate":
         gray_enhanced = cv2.cvtColor(enhanced_img, cv2.COLOR_BGR2GRAY)
@@ -453,9 +759,10 @@ async def enhance_roi(payload: EnhanceROIRequest):
             _, bin_img = cv2.threshold(gray_enhanced, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
             binary_b64 = encode_image_base64(bin_img)
         
-        # Simulação heurística rápida ou OCR de placa se houver contraste
-        plate_ocr = "BRA2E19"
-        plate_fmt = "MERCOSUL"
+        # OCR real (EasyOCR) + correção posicional + validação de formato —
+        # nunca retorna uma placa inventada; sem leitura plausível, os 3
+        # campos ficam None e a resposta reflete isso com honestidade.
+        plate_ocr, plate_fmt, plate_ocr_conf = alpr_engine.read_plate(enhanced_img)
 
     metrics_enh = quality_assessor.evaluate(enhanced_img)
     sha256_enh = hashlib.sha256(enhanced_img.tobytes()).hexdigest().upper()
@@ -464,7 +771,11 @@ async def enhance_roi(payload: EnhanceROIRequest):
     return ForensicAnalysisResponse(
         status="SUCCESS",
         roi_type=payload.roi_type,
-        model_used=f"{model_used} [CNJ-484 Compliant]" if payload.roi_type == "face" else model_used,
+        # "[CNJ-484 Compliant]" removido daqui (achado de auditoria: rótulo
+        # cosmético sem verificação real de conformidade). O alinhamento
+        # duplo-cego CNJ 484/2022 de verdade é feito por CNJLineupEngine em
+        # forensic_core.py, não por este endpoint de enhancement de imagem.
+        model_used=model_used,
         original_dimensions=(w_orig, h_orig),
         enhanced_dimensions=(enhanced_img.shape[1], enhanced_img.shape[0]),
         processing_time_ms=round(elapsed_ms, 2),
@@ -474,6 +785,9 @@ async def enhance_roi(payload: EnhanceROIRequest):
         quality_metrics_enhanced=metrics_enh,
         plate_ocr_candidate=plate_ocr,
         plate_format=plate_fmt,
+        plate_ocr_confidence=plate_ocr_conf,
+        plate_bbox_detected=plate_bbox is not None,
+        plate_detection_confidence=plate_detect_conf,
         enhanced_image_base64=encode_image_base64(enhanced_img),
         binary_image_base64=binary_b64,
         timestamp_utc=datetime.now(timezone.utc).isoformat()
