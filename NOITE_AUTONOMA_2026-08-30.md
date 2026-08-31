@@ -309,6 +309,36 @@ desperdiçava minutos e gerava log inútil. Corrigido: agora filtra só
 `video_id`-based antes de rodar; verificado que completa em 0.0s com o
 catálogo atual (0 candidatas, como esperado).
 
+## 05:00–05:20 — Espanha (DGT) parqueada + checagem estática de bugs (pyflakes)
+
+**Espanha (DGT)**: endpoint DATEX2 documentado
+(`infocar.dgt.es/datex2/dgt/CCTVSiteTablePublication/all/content.xml`) dá
+`404` — parece ter sido desativado. O padrão de URL de imagem conhecido
+(`infocar.dgt.es/etraffic/data/camaras/{id}.jpg`) redireciona pra um
+portal de login (`etraffic.dgt.es/etrafficWEB/`) — sistema legado
+descomissionado, mesmo padrão do NSW e Utah. Espanha parqueada.
+
+Rodei `pyflakes` (instalado num venv isolado em `/tmp`, não afeta o
+projeto) contra todos os módulos de câmera pra caçar mais bugs de
+"variável não definida" antes de confiar só em leitura manual. **Nenhum
+`F821` (nome indefinido) encontrado** — confirma que as duas auditorias
+anteriores desta noite já cobriram os bugs reais dessa classe. Só achados
+cosméticos (imports não usados, uma f-string sem placeholder que é só
+estilo, não bug) — não vale commit.
+
+**Resumo das fontes de câmera pesquisadas esta noite** (pra não repetir
+trabalho numa sessão futura):
+- ✅ Integradas: OpenTrafficCamMap (+6903), Ontario 511 (+1587), NZTA
+  (+319), Islândia/Vegagerdin (+500)
+- ⏸️ Parqueadas (motivo documentado acima/antes): Digitraffic/Finlândia
+  (rate-limit agressivo e duradouro), Quebec 511 (Cloudflare no host de
+  vídeo), Polônia GDDKiA (JS não óbvio), Suécia/UK-Escócia/UK-Wales
+  (exigem cadastro), Coreia do Sul (endpoint inacessível/provável chave),
+  Noruega Vegvesen (exige acesso a nó DATEX), Main Roads WA (não achado)
+- ❌ Descartadas por dado morto/legado desativado: NSW Austrália, Utah
+  UDOT (atrás de WAF), Espanha DGT (endpoint antigo desativado)
+- ❌ Sem dado de câmera (só fluxo/velocidade): Holanda NDW
+
 ## Próximos itens da fila (ordem que pretendo seguir)
 
 - [ ] Verificar thumbnail real numa amostra maior de câmeras (não só 1)
