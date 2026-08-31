@@ -428,6 +428,27 @@ thumbnails reais (175KB a 2.4MB) pelo servidor rodando, `live_confirmed:
 true`. **6195 → 8453 câmeras (8449 pós-filtro).** Fonte que passou a
 noite inteira sendo tentativa/erro finalmente entregue de verdade.
 
+## 07:56–08:15 — Quase perdi o Digitraffic de novo: bug real em snapshot_liveness.py
+
+Rodei a revalidação periódica de rotina (`snapshot_liveness.py`) minutos
+depois de reintegrar a Finlândia — e 1406 das 2258 câmeras Digitraffic
+voltaram "mortas" de novo. Causa: o script roda TODAS as fontes snapshot
+juntas na mesma leva concorrente (Ontario + NZTA + Islândia + Digitraffic),
+e mesmo concorrência moderada (15) foi o suficiente pra re-acionar o
+rate-limit agressivo específico desse host — as câmeras não morreram,
+só voltaram `HTTP 429` porque pediram demais de uma vez.
+
+Isso quase apagou de novo o trabalho de quase 1h que tinha acabado de dar
+certo. Restaurei o estado das 1406 afetadas (não eram mortas de verdade,
+só rate-limited) e **corrigi o script na raiz**: `HTTP 429` agora vira um
+status próprio (`RATE_LIMITED` — nem confirma vivo nem confirma morto,
+inconclusivo), e o merge no `camera_liveness_state.json` nunca deixa um
+resultado `RATE_LIMITED` sobrescrever um `LIVE` anterior. Isso protege
+qualquer fonte futura com comportamento parecido, não só a Digitraffic —
+generalização real, não gambiarra específica. Verificado: rodando de novo,
+0 mortas, 1519 corretamente em quarentena (preservando o estado anterior),
+Digitraffic continua 2258/2258 online pela API.
+
 ## Próximos itens da fila (ordem que pretendo seguir)
 
 - [ ] Verificar thumbnail real numa amostra maior de câmeras (não só 1)
