@@ -10,6 +10,8 @@ import {
 } from './types/player.types';
 import { tacticalAudio } from './audio/TacticalAudioEngine';
 import { Search, Lock, Unlock, Crop, Zap, Sparkles } from 'lucide-react';
+import { HlsVideoPlayer } from './HlsVideoPlayer';
+import { SnapshotImagePlayer } from './SnapshotImagePlayer';
 
 interface InteractiveCanvasViewerProps {
     camera: CameraData;
@@ -382,14 +384,53 @@ export const InteractiveCanvasViewer: React.FC<InteractiveCanvasViewerProps> = (
                 }}
                 className="w-full h-full relative overflow-hidden bg-black flex items-center justify-center pointer-events-none select-none"
             >
-                {/* Embed Tático de Stream com Letterbox Crop */}
-                <iframe
-                    src={`https://www.youtube-nocookie.com/embed/${effectiveVideoId}?autoplay=1&mute=1&playsinline=1&controls=0&modestbranding=1&rel=0&iv_load_policy=3&showinfo=0&disablekb=1&fs=0`}
-                    title={camera.nome}
-                    className="w-[115%] h-[115%] min-h-[115%] max-w-none border-0 pointer-events-none select-none object-cover"
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                    onLoad={() => setVideoReady(true)}
-                />
+                {/* Embed Tático de Stream com Letterbox Crop Agressivo para esconder UI do YouTube */}
+                {camera.video_id ? (
+                    <iframe
+                        src={`https://www.youtube-nocookie.com/embed/${camera.video_id}?autoplay=1&mute=1&playsinline=1&controls=0&modestbranding=1&rel=0&iv_load_policy=3&showinfo=0&disablekb=1&fs=0`}
+                        title={camera.nome}
+                        style={{
+                            position: 'absolute',
+                            top: '50%',
+                            left: '50%',
+                            width: '160%',
+                            height: '160%',
+                            transform: 'translate(-50%, -50%)',
+                            border: 'none',
+                            pointerEvents: 'none'
+                        }}
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        onLoad={() => setVideoReady(true)}
+                    />
+                ) : camera.url && camera.stream_format === 'SNAPSHOT_JPEG' ? (
+                    <SnapshotImagePlayer
+                        src={camera.url}
+                        style={{
+                            position: 'absolute',
+                            top: '0',
+                            left: '0',
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'cover'
+                        }}
+                        className="pointer-events-none select-none"
+                        onReady={() => setVideoReady(true)}
+                    />
+                ) : camera.url ? (
+                    <HlsVideoPlayer
+                        src={camera.url}
+                        style={{
+                            position: 'absolute',
+                            top: '0',
+                            left: '0',
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'cover'
+                        }}
+                        className="pointer-events-none select-none"
+                        onReady={() => setVideoReady(true)}
+                    />
+                ) : null}
 
                 {/* Cobre o flash inicial do botão de play/pause nativo do
                     YouTube com a snapshot real da câmera — some assim que o
@@ -467,11 +508,49 @@ export const InteractiveCanvasViewer: React.FC<InteractiveCanvasViewerProps> = (
                                 filter: getCssFilterString(),
                             }}
                         >
-                            <iframe
-                                src={`https://www.youtube-nocookie.com/embed/${effectiveVideoId}?autoplay=1&mute=1&playsinline=1&controls=0&modestbranding=1&rel=0&iv_load_policy=3&showinfo=0&disablekb=1&fs=0`}
-                                title="Loupe Sub-Stream"
-                                className="w-full h-full border-0 pointer-events-none object-cover"
-                            />
+                            {/* Embed Tático na Lupa com Crop Agressivo */}
+                            {camera.video_id ? (
+                                <iframe
+                                    src={`https://www.youtube-nocookie.com/embed/${camera.video_id}?autoplay=1&mute=1&playsinline=1&controls=0&modestbranding=1&rel=0&iv_load_policy=3&showinfo=0&disablekb=1&fs=0`}
+                                    title="Loupe Sub-Stream"
+                                    style={{
+                                        position: 'absolute',
+                                        top: '50%',
+                                        left: '50%',
+                                        width: '160%',
+                                        height: '160%',
+                                        transform: 'translate(-50%, -50%)',
+                                        border: 'none',
+                                        pointerEvents: 'none'
+                                    }}
+                                />
+                            ) : camera.url && camera.stream_format === 'SNAPSHOT_JPEG' ? (
+                                <SnapshotImagePlayer
+                                    src={camera.url}
+                                    style={{
+                                        position: 'absolute',
+                                        top: '0',
+                                        left: '0',
+                                        width: '100%',
+                                        height: '100%',
+                                        objectFit: 'cover'
+                                    }}
+                                    className="pointer-events-none select-none"
+                                />
+                            ) : camera.url ? (
+                                <HlsVideoPlayer
+                                    src={camera.url}
+                                    style={{
+                                        position: 'absolute',
+                                        top: '0',
+                                        left: '0',
+                                        width: '100%',
+                                        height: '100%',
+                                        objectFit: 'cover'
+                                    }}
+                                    className="pointer-events-none select-none"
+                                />
+                            ) : null}
                         </div>
 
                         {/* Retículo Mil-dot */}

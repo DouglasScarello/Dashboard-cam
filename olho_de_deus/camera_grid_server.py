@@ -26,7 +26,7 @@ from typing import Any, Dict, List, Optional
 import cv2
 import numpy as np
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 
@@ -549,6 +549,11 @@ async def list_cameras(
                 "video_id": vid_id,
                 "lat": cam.get("lat"),
                 "long": cam.get("long"),
+                # SNAPSHOT_JPEG (Ontario 511, NZTA, ...) = imagem única que
+                # atualiza a cada request, não stream HLS contínuo — o
+                # frontend precisa saber disso pra não tentar abrir a URL
+                # como manifesto .m3u8 no player de vídeo.
+                "stream_format": cam.get("stream_format"),
                 "live_confirmed": liveness["live_confirmed"],
                 "confirmed_dead": liveness["confirmed_dead"],
                 "live_status": liveness["live_status"],
@@ -559,10 +564,18 @@ async def list_cameras(
 
 @app.get("/api/cameras/map")
 async def list_cameras_map(north: float, south: float, east: float, west: float, limit: int = 1000):
+    _reload_liveness_state_if_changed()
     cams = db_manager.get_cameras_in_bbox(north, south, east, west, limit)
     result = []
     for cam in cams:
         cam_id = str(cam.get("id"))
+        # Achado real (2026-08-31): esse endpoint tinha 2 bugs — (1)
+        # `db_result["total"]` referenciava uma variável que não existe
+        # nesta função (NameError em toda chamada), e (2) `confirmed_dead`
+        # vinha direto da coluna crua do banco em vez de
+        # `get_camera_liveness()`, então o mapa não recebia override
+        # manual nem respeitava a janela de "checagem velha demais".
+        liveness = get_camera_liveness(cam_id, cam)
         result.append({
             "id": cam_id,
             "nome": cam.get("nome", ""),
@@ -572,9 +585,52 @@ async def list_cameras_map(north: float, south: float, east: float, west: float,
             "thumbnail_url": f"/api/cameras/{cam_id}/thumbnail.jpg",
             "video_id": cam.get("video_id"),
             "url": cam.get("url"),
-            "confirmed_dead": cam.get("confirmed_dead", False)
+            "stream_format": cam.get("stream_format"),
+            "confirmed_dead": liveness["confirmed_dead"],
+            "live_confirmed": liveness["live_confirmed"],
         })
-    return {"cameras": result, "total": db_result["total"]}
+    return {"cameras": result, "total": len(result)}
+
+
+@app.get("/api/cameras/{camera_id}")
+async def get_camera_detail(camera_id: str):
+    """Busca UMA câmera por id, com liveness computada — usado pelo
+    deep-link de alertas: como a listagem principal agora pagina do lado
+    do servidor (`displayLimit`), a câmera de um alerta quase nunca está
+    no lote já carregado no frontend. Sem isso, o deep-link simplesmente
+    não achava a câmera (achado real 2026-08-31)."""
+    _reload_liveness_state_if_changed()
+    cam = db_manager.get_camera_by_id(camera_id)
+    if not cam:
+        raise HTTPException(status_code=404, detail="Câmera não encontrada")
+
+    source_url = cam.get("url", "")
+    vid_id = cam.get("video_id")
+    if not vid_id and source_url and "v=" in source_url:
+        vid_id = source_url.split("v=")[1].split("&")[0]
+
+    liveness = get_camera_liveness(camera_id, cam)
+    return {
+        "id": camera_id,
+        "nome": cam.get("nome", ""),
+        "local": cam.get("local", ""),
+        "endereco": cam.get("endereco", ""),
+        "cidade": cam.get("cidade", ""),
+        "uf": cam.get("uf", ""),
+        "tipo_area": cam.get("tipo_area", "PONTO DE MONITORAMENTO"),
+        "setor": cam.get("setor", ""),
+        "pais": cam.get("pais", ""),
+        "thumbnail_url": f"/api/cameras/{camera_id}/thumbnail.jpg",
+        "url": source_url,
+        "video_id": vid_id,
+        "lat": cam.get("lat"),
+        "long": cam.get("long"),
+        "stream_format": cam.get("stream_format"),
+        "live_confirmed": liveness["live_confirmed"],
+        "confirmed_dead": liveness["confirmed_dead"],
+        "live_status": liveness["live_status"],
+        "live_checked_at": liveness["checked_at"],
+    }
 
 
 @app.get("/api/cameras/{camera_id}/thumbnail.jpg")

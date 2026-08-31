@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS cameras (
     confirmed_dead BOOLEAN DEFAULT 0,
     live_confirmed BOOLEAN DEFAULT 0,
     live_status TEXT,
+    stream_format TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );

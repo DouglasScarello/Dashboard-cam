@@ -36,6 +36,9 @@ interface Camera {
     confirmed_dead?: boolean;
     live_status?: string;
     live_checked_at?: string | null;
+    // "SNAPSHOT_JPEG" (Ontario 511, NZTA, ...) = imagem única por
+    // request, não stream HLS contínuo — ver SnapshotImagePlayer.tsx.
+    stream_format?: string | null;
 }
 
 interface CameraAlert {
@@ -58,32 +61,64 @@ export default function CameraGrid() {
     
     // Controles de Busca e Filtro
     const [searchQuery, setSearchQuery] = useState('');
-    const [sectorFilter, setSectorFilter] = useState(''); // Padrão: Todas as câmeras reais
-    const [stateFilter, setStateFilter] = useState('');
-    const [displayLimit, setDisplayLimit] = useState(10); // 10 em 10 câmeras
+    const [countryFilter, setCountryFilter] = useState('');
+    const [geoFilter, setGeoFilter] = useState<'ALL' | 'NO_GEO' | 'WITH_GEO'>('ALL');
+    const [areaFilter, setAreaFilter] = useState('');
+    const [statusFilter, setStatusFilter] = useState<'ALL' | 'ONLINE' | 'OFFLINE'>('ALL');
+    const [displayLimit, setDisplayLimit] = useState(10);
+    const [totalCameras, setTotalCameras] = useState(0);
+
+    const [uniqueCountries, setUniqueCountries] = useState<string[]>([]);
+    const [uniqueAreas, setUniqueAreas] = useState<string[]>([]);
+
+    useEffect(() => {
+        fetch(`${(import.meta as any).env.VITE_API_URL || 'http://localhost:8001'}/api/metadata/countries`)
+            .then(res => res.json())
+            .then(data => setUniqueCountries(data))
+            .catch(err => console.error("Erro countries:", err));
+
+        fetch(`${(import.meta as any).env.VITE_API_URL || 'http://localhost:8001'}/api/metadata/areas`)
+            .then(res => res.json())
+            .then(data => setUniqueAreas(data))
+            .catch(err => console.error("Erro areas:", err));
+    }, []);
 
     useEffect(() => {
         let mounted = true;
         setLoading(true);
-        // Carrega as transmissões reais ao vivo do backend
-        fetch(`${API_BASE}/api/cameras?limit=2000`)
-            .then((res) => {
+
+        const params = new URLSearchParams();
+        params.append('limit', displayLimit.toString());
+        params.append('offset', '0');
+        
+        if (countryFilter) params.append('country', countryFilter);
+        if (areaFilter) params.append('area', areaFilter);
+        if (statusFilter !== 'ALL') params.append('status', statusFilter);
+        if (geoFilter === 'NO_GEO' || geoFilter === 'WITH_GEO') params.append('geo', geoFilter);
+        if (searchQuery) params.append('search', searchQuery);
+
+        fetch(`${(import.meta as any).env.VITE_API_URL || 'http://localhost:8001'}/api/cameras?${params.toString()}`)
+            .then(res => {
                 if (!res.ok) throw new Error(`HTTP ${res.status}`);
                 return res.json();
             })
-            .then((data: Camera[]) => {
-                if (mounted) setCameras(Array.isArray(data) ? data : []);
+            .then(data => {
+                if (mounted) {
+                    setCameras(data.cameras || data);
+                    setTotalCameras(data.total || data.length || 0);
+                    setLoading(false);
+                }
             })
-            .catch((err) => {
-                if (mounted) setError(String(err));
-            })
-            .finally(() => {
-                if (mounted) setLoading(false);
+            .catch(err => {
+                console.error("Erro ao carregar câmeras", err);
+                if (mounted) {
+                    setError(String(err));
+                    setLoading(false);
+                }
             });
-        return () => {
-            mounted = false;
-        };
-    }, []);
+
+        return () => { mounted = false; };
+    }, [countryFilter, areaFilter, statusFilter, geoFilter, searchQuery, displayLimit]);
 
     useEffect(() => {
         const fetchAlerts = () => {
@@ -111,21 +146,37 @@ export default function CameraGrid() {
     const [offlineNotice, setOfflineNotice] = useState<string | null>(null);
 
     // Deep-link vindo do AlertCenter (?camera=<id>): abre a câmera do alerta
-    // assim que a lista de câmeras carregar — mas só se ela estiver
-    // confirmadamente ao vivo agora. Muitas câmeras são lives de terceiros
-    // no YouTube que já saíram do ar; abrir mesmo assim só mostra "Vídeo
-    // indisponível" pro usuário sem explicação nenhuma.
+    // — mas só se ela estiver confirmadamente ao vivo agora. Muitas câmeras
+    // são de fontes de terceiros que saem do ar; abrir mesmo assim só
+    // mostra "Vídeo indisponível" pro usuário sem explicação nenhuma.
+    //
+    // Achado real (2026-08-31): desde que a listagem principal passou a
+    // paginar do lado do servidor (`displayLimit`), o array local
+    // `cameras` quase nunca contém a câmera do alerta (ela pode estar em
+    // qualquer página, entre milhares). Buscar direto por id no backend
+    // em vez de procurar só no lote já carregado.
     useEffect(() => {
         const camId = searchParams.get('camera');
-        if (!camId || cameras.length === 0) return;
-        const match = cameras.find((c) => String(c.id) === camId);
-        if (!match) return;
-        if (match.confirmed_dead) {
-            setOfflineNotice(`${match.nome}: esta transmissão encerrou e não está mais disponível no YouTube.`);
-        } else {
-            setSelected(match);
-        }
-    }, [searchParams, cameras]);
+        if (!camId) return;
+        let cancelled = false;
+        fetch(`${(import.meta as any).env.VITE_API_URL || 'http://localhost:8001'}/api/cameras/${camId}`)
+            .then((res) => {
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                return res.json();
+            })
+            .then((match: Camera) => {
+                if (cancelled) return;
+                if (match.confirmed_dead) {
+                    setOfflineNotice(`${match.nome}: esta câmera não está confirmadamente ao vivo no momento.`);
+                } else {
+                    setSelected(match);
+                }
+            })
+            .catch(() => {
+                if (!cancelled) setOfflineNotice(`Câmera #${camId}: não encontrada.`);
+            });
+        return () => { cancelled = true; };
+    }, [searchParams]);
 
     const handleClose = useCallback(() => setSelected(null), []);
 
@@ -145,38 +196,8 @@ export default function CameraGrid() {
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [handleClose]);
 
-    // Filtragem Instantânea em Memória
-    const filteredCameras = useMemo(() => {
-        let list = cameras;
-
-        if (sectorFilter) {
-            list = list.filter((c) => (c.setor || c.pais || '').toUpperCase() === sectorFilter.toUpperCase());
-        }
-
-        if (stateFilter && sectorFilter === 'BR') {
-            const uf = stateFilter.toUpperCase();
-            list = list.filter((c) => (c.local || '').toUpperCase().includes(uf));
-        }
-
-        if (searchQuery.trim()) {
-            const q = searchQuery.toLowerCase().trim();
-            list = list.filter(
-                (c) =>
-                    c.nome.toLowerCase().includes(q) ||
-                    (c.endereco && c.endereco.toLowerCase().includes(q)) ||
-                    (c.local && c.local.toLowerCase().includes(q)) ||
-                    (c.cidade && c.cidade.toLowerCase().includes(q)) ||
-                    (c.tipo_area && c.tipo_area.toLowerCase().includes(q)) ||
-                    (c.pais && c.pais.toLowerCase().includes(q))
-            );
-        }
-
-        return list;
-    }, [cameras, sectorFilter, stateFilter, searchQuery]);
-
-    const displayedCameras = useMemo(() => {
-        return filteredCameras.slice(0, displayLimit);
-    }, [filteredCameras, displayLimit]);
+    // A filtragem agora é 100% Server-Side via banco de dados!
+    const displayedCameras = cameras;
 
     const activeAlertMap = useMemo(() => {
         const map = new Map<string, CameraAlert>();
@@ -185,6 +206,24 @@ export default function CameraGrid() {
         }
         return map;
     }, [alerts]);
+
+    const handleNext = useCallback(() => {
+        if (!selected) return;
+        const idx = cameras.findIndex(c => c.id === selected.id);
+        if (idx !== -1) {
+            const nextIdx = (idx + 1) % cameras.length;
+            setSelected(cameras[nextIdx]);
+        }
+    }, [selected, cameras]);
+
+    const handlePrev = useCallback(() => {
+        if (!selected) return;
+        const idx = cameras.findIndex(c => c.id === selected.id);
+        if (idx !== -1) {
+            const prevIdx = (idx - 1 + cameras.length) % cameras.length;
+            setSelected(cameras[prevIdx]);
+        }
+    }, [selected, cameras]);
 
     return (
         <main className="flex-1 px-8 py-6 overflow-y-auto custom-scrollbar">
@@ -195,62 +234,94 @@ export default function CameraGrid() {
                         <Video className="w-4 h-4 text-accent-emerald" /> {t('cameras.title')}
                     </h2>
                     <p className="text-[10px] font-mono text-accent-emerald tracking-wider uppercase mt-1">
-                        REDE AO VIVO: {cameras.length} TRANSMISSÕES REAIS ATIVAS
+                        REDE AO VIVO: {totalCameras} TRANSMISSÕES REAIS ATIVAS
                     </p>
                 </div>
 
-                {/* Filtros Rápidos de Continente / Setor */}
-                <div className="flex flex-wrap items-center gap-2">
-                    <button
-                        onClick={() => { setSectorFilter(''); setStateFilter(''); setDisplayLimit(10); }}
-                        className={cn(
-                            "px-3 py-1.5 rounded-full text-[10px] font-black tracking-wider uppercase transition-all border",
-                            sectorFilter === '' ? "bg-accent-amber/20 border-accent-amber text-accent-amber" : "bg-white/[0.02] border-white/10 text-muted hover:bg-white/5"
-                        )}
-                    >
-                        🌐 TODAS AS CÂMERAS ({cameras.length})
-                    </button>
-                    <button
-                        onClick={() => { setSectorFilter('BR'); setStateFilter(''); setDisplayLimit(10); }}
-                        className={cn(
-                            "px-3 py-1.5 rounded-full text-[10px] font-black tracking-wider uppercase transition-all border",
-                            sectorFilter === 'BR' ? "bg-accent-emerald/20 border-accent-emerald text-accent-emerald" : "bg-white/[0.02] border-white/10 text-muted hover:bg-white/5"
-                        )}
-                    >
-                        🇧🇷 BRASIL
-                    </button>
-                    <button
-                        onClick={() => { setSectorFilter('US'); setStateFilter(''); setDisplayLimit(10); }}
-                        className={cn(
-                            "px-3 py-1.5 rounded-full text-[10px] font-black tracking-wider uppercase transition-all border",
-                            sectorFilter === 'US' ? "bg-blue-500/20 border-blue-500 text-blue-400" : "bg-white/[0.02] border-white/10 text-muted hover:bg-white/5"
-                        )}
-                    >
-                        🇺🇸 AMÉRICA DO NORTE
-                    </button>
-                </div>
-            </div>
-
-            {/* Sub-Filtros de Estados Brasileiros */}
-            {sectorFilter === 'BR' && (
-                <div className="flex flex-wrap items-center gap-1.5 mb-4">
-                    <span className="text-[9px] font-mono uppercase text-muted mr-1">ESTADOS:</span>
-                    {['', 'SP', 'RJ', 'SC', 'PR', 'RS', 'MG', 'BA', 'CE', 'PE', 'DF'].map((uf) => (
+                {/* Filtros Geográficos */}
+                <div className="flex flex-col sm:flex-row flex-wrap items-end sm:items-center gap-4">
+                    {/* Filtro de Sem Local */}
+                    <div className="flex items-center gap-1.5 bg-black/40 border border-white/10 rounded-lg p-1">
                         <button
-                            key={uf}
-                            onClick={() => { setStateFilter(uf); setDisplayLimit(10); }}
+                            onClick={() => { setGeoFilter('ALL'); setDisplayLimit(10); }}
                             className={cn(
-                                "px-2.5 py-1 rounded-md text-[9px] font-mono tracking-wider transition-all border",
-                                stateFilter === uf 
-                                    ? "bg-accent-emerald text-black font-black border-accent-emerald" 
-                                    : "bg-white/[0.02] text-muted border-white/5 hover:bg-white/[0.06] hover:text-white"
+                                "px-3 py-1.5 rounded-md text-[10px] font-black tracking-wider uppercase transition-all",
+                                geoFilter === 'ALL' ? "bg-white/10 text-white" : "text-muted hover:text-white"
                             )}
                         >
-                            {uf === '' ? 'TODOS UFs' : uf}
+                            TODAS
                         </button>
-                    ))}
+                        <button
+                            onClick={() => { setGeoFilter('WITH_GEO'); setDisplayLimit(10); }}
+                            className={cn(
+                                "px-3 py-1.5 rounded-md text-[10px] font-black tracking-wider uppercase transition-all",
+                                geoFilter === 'WITH_GEO' ? "bg-accent-emerald/20 text-accent-emerald" : "text-muted hover:text-white"
+                            )}
+                        >
+                            📍 COM LOCAL
+                        </button>
+                        <button
+                            onClick={() => { setGeoFilter('NO_GEO'); setDisplayLimit(10); }}
+                            className={cn(
+                                "px-3 py-1.5 rounded-md text-[10px] font-black tracking-wider uppercase transition-all",
+                                geoFilter === 'NO_GEO' ? "bg-accent-amber/20 text-accent-amber" : "text-muted hover:text-white"
+                            )}
+                        >
+                            ❓ SEM LOCAL
+                        </button>
+                    </div>
+
+                    {/* Select de Países */}
+                    <div className="relative">
+                        <select
+                            value={countryFilter}
+                            onChange={(e) => { setCountryFilter(e.target.value); setDisplayLimit(10); }}
+                            className="h-[34px] appearance-none bg-black/40 border border-white/10 rounded-lg pl-3 pr-8 text-[10px] font-black tracking-wider uppercase text-white focus:outline-none focus:border-accent-emerald/50"
+                        >
+                            <option value="">🌐 TODOS OS PAÍSES</option>
+                            {uniqueCountries.map(c => (
+                                <option key={c} value={c}>{c}</option>
+                            ))}
+                        </select>
+                        <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-white/50">
+                            <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
+                        </div>
+                    </div>
+
+                    {/* Select de Área */}
+                    <div className="relative">
+                        <select
+                            value={areaFilter}
+                            onChange={(e) => { setAreaFilter(e.target.value); setDisplayLimit(10); }}
+                            className="h-[34px] appearance-none bg-black/40 border border-white/10 rounded-lg pl-3 pr-8 text-[10px] font-black tracking-wider uppercase text-white focus:outline-none focus:border-accent-emerald/50"
+                        >
+                            <option value="">🏷️ TODAS AS ÁREAS</option>
+                            {uniqueAreas.map(a => (
+                                <option key={a} value={a}>{a}</option>
+                            ))}
+                        </select>
+                        <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-white/50">
+                            <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
+                        </div>
+                    </div>
+
+                    {/* Select de Status */}
+                    <div className="relative">
+                        <select
+                            value={statusFilter}
+                            onChange={(e) => { setStatusFilter(e.target.value as any); setDisplayLimit(10); }}
+                            className="h-[34px] appearance-none bg-black/40 border border-white/10 rounded-lg pl-3 pr-8 text-[10px] font-black tracking-wider uppercase text-white focus:outline-none focus:border-accent-emerald/50"
+                        >
+                            <option value="ALL">🔴 TODOS STATUS</option>
+                            <option value="ONLINE">✅ APENAS ONLINE</option>
+                            <option value="OFFLINE">❌ APENAS OFFLINE</option>
+                        </select>
+                        <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-white/50">
+                            <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
+                        </div>
+                    </div>
                 </div>
-            )}
+            </div>
 
             {/* Barra de Busca Rápida */}
             <div className="mb-6">
@@ -294,25 +365,32 @@ export default function CameraGrid() {
                         ))}
                     </div>
 
-                    {filteredCameras.length > displayLimit && (
+                    {totalCameras > displayLimit && (
                         <div className="mt-12 flex justify-center pb-12">
                             <button
                                 onClick={() => setDisplayLimit((prev) => prev + 10)}
                                 className="px-6 py-3 bg-white/[0.03] hover:bg-white/[0.08] border border-accent-amber/30 text-accent-amber hover:text-white font-black text-xs tracking-widest uppercase rounded-xl transition-all shadow-lg flex items-center gap-2"
                             >
-                                Carregar Mais Câmeras (+10) — Exibindo {displayedCameras.length} de {filteredCameras.length}
+                                Carregar Mais Câmeras (+10) — Exibindo {displayedCameras.length} de {totalCameras}
                             </button>
                         </div>
                     )}
                 </>
             )}
 
-            {!loading && !error && filteredCameras.length === 0 && (
+            {!loading && !error && cameras.length === 0 && (
                 <div className="text-muted italic text-sm">{t('cameras.no_cameras')}</div>
             )}
 
             <AnimatePresence>
-                {selected && <TacticalVideoPlayer camera={selected} onClose={handleClose} />}
+                {selected && (
+                    <TacticalVideoPlayer 
+                        camera={selected} 
+                        onClose={handleClose} 
+                        onNext={handleNext}
+                        onPrev={handlePrev}
+                    />
+                )}
             </AnimatePresence>
         </main>
     );

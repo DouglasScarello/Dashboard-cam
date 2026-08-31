@@ -14,7 +14,16 @@ def migrate():
         
     print(f"Criando banco SQLite em {DB_FILE}...")
     conn = sqlite3.connect(DB_FILE)
-    
+
+    # DROP explícito antes do schema: `CREATE TABLE IF NOT EXISTS` não
+    # altera uma tabela já existente — se o schema.sql ganhar uma coluna
+    # nova (aconteceu aqui: stream_format), a tabela antiga no disco fica
+    # desatualizada e todo INSERT subsequente quebra. Como o banco é
+    # sempre reconstruído do zero a partir do JSON mesmo, recriar do zero
+    # é seguro e não perde nada.
+    with conn:
+        conn.execute("DROP TABLE IF EXISTS cameras")
+
     with open(SCHEMA_FILE, "r") as f:
         conn.executescript(f.read())
         
@@ -40,9 +49,9 @@ def migrate():
     with conn:
         for c in cameras:
             conn.execute('''
-                INSERT OR REPLACE INTO cameras 
-                (id, nome, local, endereco, cidade, uf, tipo_area, setor, pais, thumbnail_url, url, video_id, lat, long, confirmed_dead, live_confirmed, live_status)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT OR REPLACE INTO cameras
+                (id, nome, local, endereco, cidade, uf, tipo_area, setor, pais, thumbnail_url, url, video_id, lat, long, confirmed_dead, live_confirmed, live_status, stream_format)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 c.get("id"),
                 c.get("nome"),
@@ -60,7 +69,8 @@ def migrate():
                 c.get("long"),
                 to_bool(c.get("confirmed_dead")),
                 to_bool(c.get("live_confirmed")),
-                c.get("live_status")
+                c.get("live_status"),
+                c.get("stream_format")
             ))
             count += 1
             

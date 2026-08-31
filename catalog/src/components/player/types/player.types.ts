@@ -107,6 +107,11 @@ export interface CameraData {
     video_id?: string;
     lat?: number | null;
     long?: number | null;
+    // "SNAPSHOT_JPEG" (Ontario 511, NZTA, ...) = imagem única que
+    // atualiza a cada request, não stream de vídeo contínuo — não pode
+    // ser aberta como manifesto HLS (achado real 2026-08-31: sem isso o
+    // player tentava tratar um .jpg puro como .m3u8 e falhava).
+    stream_format?: string | null;
 }
 
 export interface ForensicSnapshotData {
