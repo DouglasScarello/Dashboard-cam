@@ -248,6 +248,31 @@ repetir a pesquisa à toa):
   hoje devolve `403 Forbidden` mesmo com Referer — atrás de um WAF que
   bloqueia requisições fora de navegador real.
 
+## 04:10–04:35 — Revalidação periódica do HLS descobre bug real (auto-inflingido) + 121 mortas de verdade
+
+Rodei `hls_liveness.py` como parte da revalidação periódica prometida.
+Resultado chocou: 2525/6402 "mortas" (39%) — bem acima do esperado.
+Investigando: `is_hls_url()` só excluía URLs do YouTube, não excluía
+`stream_format == SNAPSHOT_JPEG` — então rodou a checagem de manifesto
+`.m3u8` contra as 2406 câmeras Ontario/NZTA/Islândia (que são imagem JPEG
+pura, não HLS), viu que a resposta não começava com `#EXTM3U` e marcou
+TODAS como mortas, **sobrescrevendo o estado correto** que
+`snapshot_liveness.py` tinha calculado direitinho antes. Bug meu, cometido
+ao escrever esse script mais cedo na noite — só não tinha aparecido antes
+porque essa era a primeira vez rodando `hls_liveness.py` depois de
+SNAPSHOT_JPEG existir no catálogo.
+
+**Corrigido**: `run()` agora também filtra `stream_format != "SNAPSHOT_JPEG"`
+antes de rodar a checagem HLS. Restaurado o estado correto rodando
+`snapshot_liveness.py` de novo (2403/2404 = 100% vivas, confirmando que
+o problema era mesmo o teste errado, não as câmeras). Depois disso, o
+número real de HLS mortas: **121 de 4002 (3%)** — plausível pra deriva
+normal ao longo da noite. Removidas. **6406 → 6285 câmeras (6281 pós-filtro).**
+
+Lição: sempre que um novo `stream_format` for adicionado ao catálogo,
+checar TODOS os scripts de liveness que fazem filtro próprio por URL/tipo,
+não só o script que foi escrito pra esse tipo novo.
+
 ## Próximos itens da fila (ordem que pretendo seguir)
 
 - [ ] Verificar thumbnail real numa amostra maior de câmeras (não só 1)

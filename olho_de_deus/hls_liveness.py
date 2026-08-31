@@ -112,7 +112,10 @@ def save_json(path: Path, data):
 
 def run(concurrency: int, limit: Optional[int]) -> Dict[str, Any]:
     cameras = load_json(CAMERAS_PATH, [])
-    hls_cameras = [c for c in cameras if is_hls_url(c.get("url"))]
+    hls_cameras = [
+        c for c in cameras
+        if is_hls_url(c.get("url")) and c.get("stream_format") != "SNAPSHOT_JPEG"
+    ]
     if limit:
         hls_cameras = hls_cameras[:limit]
 
