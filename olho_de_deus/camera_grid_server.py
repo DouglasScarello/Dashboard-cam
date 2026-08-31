@@ -512,28 +512,35 @@ async def list_cameras(
     geo: Optional[str] = "ALL"
 ):
     _reload_liveness_state_if_changed()
-    
-    db_result = db_manager.get_cameras(
-        limit=limit,
-        offset=offset,
-        country=country,
-        area=area,
-        status=status,
-        geo=geo,
-        search=search
-    )
-    sliced = db_result["cameras"]
-    
-    result = []
-    for cam in sliced:
+
+    # Achado real (2026-08-31): filtrar ONLINE/OFFLINE direto no SQL usava
+    # a coluna `confirmed_dead` do banco, que é só um resíduo do JSON de
+    # origem e não reflete `get_camera_liveness()` (a fonte de verdade
+    # real, calculada a partir de camera_liveness_state.json +
+    # manual_dead_override). Isso podia esconder do usuário câmeras
+    # genuinamente vivas cujo campo antigo no JSON estava desatualizado.
+    # Agora: filtros de metadado (país/área/geo/busca) continuam no SQL
+    # (são atributos estáticos, seguros de filtrar ali), mas
+    # ONLINE/OFFLINE e a paginação final acontecem em Python, depois de
+    # calcular a liveness de verdade pra cada câmera candidata.
+    candidates = db_manager.get_cameras_by_filters(country=country, area=area, geo=geo, search=search)
+
+    enriched = []
+    for cam in candidates:
         cam_id = str(cam.get("id"))
         source_url = cam.get("url", "")
         vid_id = cam.get("video_id")
         if not vid_id and source_url and "v=" in source_url:
             vid_id = source_url.split("v=")[1].split("&")[0]
-            
+
         liveness = get_camera_liveness(cam_id, cam)
-        result.append(
+
+        if status == "ONLINE" and liveness["confirmed_dead"]:
+            continue
+        if status == "OFFLINE" and not liveness["confirmed_dead"]:
+            continue
+
+        enriched.append(
             {
                 "id": cam_id,
                 "nome": cam.get("nome", ""),
@@ -560,7 +567,13 @@ async def list_cameras(
                 "live_checked_at": liveness["checked_at"],
             }
         )
-    return {"cameras": result, "total": db_result["total"]}
+
+    total = len(enriched)
+    if limit is not None:
+        result = enriched[offset:offset + limit]
+    else:
+        result = enriched[offset:]
+    return {"cameras": result, "total": total}
 
 @app.get("/api/cameras/map")
 async def list_cameras_map(north: float, south: float, east: float, west: float, limit: int = 1000):

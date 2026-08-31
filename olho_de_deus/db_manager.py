@@ -87,15 +87,71 @@ def get_cameras(
         "offset": offset
     }
 
+def get_cameras_by_filters(
+    country: str = None,
+    area: str = None,
+    geo: str = "ALL",
+    search: str = None,
+) -> List[Dict[str, Any]]:
+    """Igual a `get_cameras()`, mas SEM filtro de status e SEM
+    limit/offset — usado quando o chamador precisa aplicar o filtro
+    ONLINE/OFFLINE de verdade em cima da liveness computada (ver achado
+    no `get_cameras_in_bbox` acima: a coluna `confirmed_dead` do banco não
+    é dado confiável, só um resíduo do JSON de origem). Dataset atual
+    (milhares, não milhões) — trazer tudo que bate no filtro de metadado
+    e paginar em Python depois de calcular liveness é rápido o
+    suficiente, não precisa de índice/paginação SQL pra isso."""
+    conn = get_connection()
+    query = "SELECT * FROM cameras WHERE 1=1"
+    params = []
+
+    if country:
+        query += " AND (UPPER(pais) = ? OR UPPER(setor) = ?)"
+        params.extend([country.upper(), country.upper()])
+    if area:
+        query += " AND UPPER(tipo_area) = ?"
+        params.append(area.upper())
+    if geo == "WITH_GEO":
+        query += " AND lat IS NOT NULL AND long IS NOT NULL"
+    elif geo == "NO_GEO":
+        query += " AND (lat IS NULL OR long IS NULL)"
+    if search:
+        search_term = f"%{search.lower()}%"
+        query += """ AND (
+            LOWER(nome) LIKE ? OR
+            LOWER(endereco) LIKE ? OR
+            LOWER(local) LIKE ? OR
+            LOWER(cidade) LIKE ? OR
+            LOWER(tipo_area) LIKE ? OR
+            LOWER(pais) LIKE ?
+        )"""
+        params.extend([search_term] * 6)
+
+    query += " AND (video_id IS NOT NULL OR url IS NOT NULL AND url != '')"
+
+    cursor = conn.cursor()
+    cursor.execute(query, params)
+    rows = cursor.fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
+
+
 def get_cameras_in_bbox(north: float, south: float, east: float, west: float, limit: int = 1000) -> List[Dict[str, Any]]:
     conn = get_connection()
-    # Somente cameras ativas e reais
+    # Achado real (2026-08-31): a coluna `confirmed_dead` do banco vem de
+    # um campo do JSON que nunca é mantido com precisão de verdade (quem
+    # decide isso de fato é `get_camera_liveness()` em cima de
+    # camera_liveness_state.json + manual_dead_override, calculado no
+    # momento da consulta, não uma coluna estática). Filtrar aqui direto
+    # pela coluna crua podia excluir do mapa câmeras genuinamente vivas
+    # que só tinham esse campo desatualizado. Removido o filtro daqui —
+    # quem decide vivo/morto pro cliente é sempre `get_camera_liveness()`,
+    # chamado depois em camera_grid_server.py pra cada linha retornada.
     query = """
-        SELECT * FROM cameras 
-        WHERE confirmed_dead = 0 
-        AND lat IS NOT NULL AND long IS NOT NULL
+        SELECT * FROM cameras
+        WHERE lat IS NOT NULL AND long IS NOT NULL
         AND (video_id IS NOT NULL OR url IS NOT NULL AND url != '')
-        AND lat BETWEEN ? AND ? 
+        AND lat BETWEEN ? AND ?
         AND long BETWEEN ? AND ?
         LIMIT ?
     """
