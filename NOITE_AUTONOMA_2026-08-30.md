@@ -125,6 +125,48 @@ Pendência anotada, não mexida: worker de detecção de perigo ainda usa o
 filtro antigo — o próprio código já se auto-rotula "demo", deixado fora
 do escopo por ora.
 
+## 00:17–03:25 — Finlândia (Digitraffic): API real, mas achado importante de rate-limit
+
+Pesquisada a API oficial da Fintraffic/Digitraffic
+(`tie.digitraffic.fi/api/weathercam/v1/stations`), sem cadastro. Achado
+de integração: ela exige `Accept-Encoding: gzip` de verdade (responde
+`HTTP 406` sem isso, com mensagem explícita nesse sentido). 812 estações,
+cada uma com 1+ "presets" (ângulos de câmera) — mesmo padrão do Ontario
+511 (um ponto físico, várias views). Imagem de cada preset é servida
+direto em `https://weathercam.digitraffic.fi/{presetId}.jpg` — confirmado
+com curl real: JPEG 1280x720 genuíno, ~300KB.
+
+Criado `ingest_digitraffic.py` (mesmo padrão de `ingest_ontario511.py` /
+`ingest_nzta.py`). Carreguei 2258 presets novos (filtrando só
+`collectionStatus == GATHERING` e `preset.inCollection == true`).
+
+**Achado crítico**: ao rodar `snapshot_liveness.py` nessas 2258 câmeras,
+70% vieram "mortas" — mas o erro real era `HTTP 429 Too Many Requests`,
+não câmera fora do ar. O host `weathercam.digitraffic.fi` aplica
+rate-limit agressivo por IP. Tentei reduzir concorrência (40→15→5) e
+adicionar retry com backoff, mas o IP do servidor já estava banido — toda
+tentativa subsequente voltou 429, inclusive testes manuais isolados via
+curl bem depois. Confirmei que o bloqueio é específico desse host (câmera
+Ontario 511 buscada no mesmo instante devolveu 200 com imagem real de
+161KB normalmente).
+
+**Decisão**: como o princípio da noite inteira é nunca mostrar câmera
+"viva" que na prática carrega como placeholder OFFLINE pro usuário,
+removi TODAS as 1038 câmeras Digitraffic que tinham sido marcadas como
+`LIVE` (mesmo as que passaram no teste antes do bloqueio começar a valer
+— não dá pra confiar nesse resultado agora que sabemos que o rate-limit
+pode ter mascarado sucessos parciais no meio de um lote concorrente).
+Backup completo salvo em
+`database/digitraffic_confirmed_live_pending_ratelimit.json` (1038
+registros, pronto pra reintegrar). Dataset voltou ao estado limpo anterior:
+**5908 câmeras** (5904 pós-filtro de status na API).
+
+Pendência real, não fake: reintegrar Digitraffic assim que o rate-limit
+liberar (provavelmente janela de tempo, não permanente — é uma API
+pública documentada, não parece intencional bloquear ingestão pontual).
+Próxima tentativa: esperar accumulate um tempo maior sem bater no host,
+então rodar liveness com concorrência baixa (≤5) e delay entre lotes.
+
 ## Próximos itens da fila (ordem que pretendo seguir)
 
 - [ ] Verificar thumbnail real numa amostra maior de câmeras (não só 1)
