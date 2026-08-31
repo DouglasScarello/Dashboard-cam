@@ -208,6 +208,46 @@ se `ingest_iceland.py` parar de funcionar, é o primeiro lugar a checar
 (o script já busca o buildId atual dinamicamente do HTML, então só quebra
 se a estrutura da página mudar de framework).
 
+## 03:50–04:10 — Digitraffic definitivamente parqueado + rodada de fontes descartadas
+
+Tentei reintegrar Digitraffic depois do cooldown (confirmado: `curl` direto
+num preset voltou a dar `200`). Rodei o teste de novo, desta vez em lotes
+de 20 com concorrência 5 e pausa de 0.5s entre lotes — mesmo assim, 1748
+de 2258 (77%) voltaram `429` de novo. Pior: das 510 que passaram no teste
+de liveness, ao verificar UMA através do servidor rodando (que faz sua
+própria requisição HTTP pro host), voltou o placeholder OFFLINE — ou
+seja, mesmo as "confirmadas vivas" não renderizam de verdade pro usuário
+agora. Conclusão: o rate-limit da Digitraffic é bem mais agressivo/
+duradouro do que um simples burst — não vale a pena insistir mais essa
+noite, arriscando um banimento mais longo do IP. **Removidas todas as 510,
+guardadas em `digitraffic_confirmed_live_pending_ratelimit.json` (agora
+contém todas as tentativas, não só a primeira leva) pra uma tentativa
+futura bem mais espaçada** (ideal: sequencial, 1 req a cada poucos
+segundos, se possível numa sessão futura com IP diferente/mais tempo de
+cooldown). Dataset de volta a **6406 câmeras (6402 pós-filtro)**.
+
+Outras fontes pesquisadas e descartadas nesta rodada (documentando pra não
+repetir a pesquisa à toa):
+- **NSW Austrália** (`data.livetraffic.com/cameras/traffic-cam.json`): API
+  JSON ainda responde, mas o bucket de imagens (`webcams.transport.nsw.gov.au`)
+  foi desativado — toda URL devolve o mesmo objeto S3 de "page not found"
+  com `Last-Modified: 2023`. Dado morto de verdade, não é bug meu.
+- **Polônia (GDDKiA)**: mapa de câmeras carrega dados via JS não óbvio no
+  HTML estático — precisaria de automação de navegador real pra descobrir
+  o endpoint, fora do orçamento de tempo desta rodada.
+- **Suécia (Trafikverket)**: API aberta, mas exige cadastro + chave —
+  só o usuário pode fazer isso.
+- **Reino Unido**: England (National Highways) restringe câmeras a
+  "media partners" credenciados; Scotland e Wales também exigem
+  cadastro/aprovação pro feed de imagens (achei via busca que ambos
+  tinham "API aberta", mas na prática é só pra dados de trânsito, câmeras
+  precisam de credencial).
+- **Holanda (NDW)**: portal de dados abertos existe, mas é só
+  intensidade/velocidade/tempo de viagem — não expõe imagens de câmera.
+- **Utah (UDOT)**: endpoint documentado (`udottraffic.utah.gov/api/v2/get/cameras`)
+  hoje devolve `403 Forbidden` mesmo com Referer — atrás de um WAF que
+  bloqueia requisições fora de navegador real.
+
 ## Próximos itens da fila (ordem que pretendo seguir)
 
 - [ ] Verificar thumbnail real numa amostra maior de câmeras (não só 1)
