@@ -154,10 +154,34 @@ def run(concurrency: int, limit: Optional[int], attempt_recovery: bool) -> Dict[
     log.info(f"Checadas {len(results)} câmeras — LIVE: {live_count} | MORTA/ENCERRADA: {dead_count}")
 
     if attempt_recovery:
+        # Acha canais "agregadores" — um channel_url usado por MAIS DE UMA
+        # câmera distinta. Achado real (2026-08-30): canal do SkylineWebcams
+        # hospeda dezenas de vídeos de câmeras diferentes; recuperar via
+        # <canal>/live resolve pro ÚNICO vídeo em destaque do canal, então
+        # todas as câmeras "mortas" daquele canal viravam cópias umas das
+        # outras — 11 câmeras diferentes colapsaram na mesma live por causa
+        # disso antes desta checagem existir. Canal agregador nunca é usado
+        # pra recuperação: não dá pra saber qual vídeo específico do canal
+        # correspondia à câmera original.
+        channel_to_cams: Dict[str, set] = {}
+        for cid, r in results.items():
+            ch = r.get("channel_url")
+            if ch:
+                channel_to_cams.setdefault(ch, set()).add(cid)
+        for cid, entry in prev_state.items():
+            ch = entry.get("channel_url")
+            if ch:
+                channel_to_cams.setdefault(ch, set()).add(cid)
+        aggregator_channels = {ch for ch, cids in channel_to_cams.items() if len(cids) > 1}
+        if aggregator_channels:
+            log.info(f"{len(aggregator_channels)} canal(is) agregador(es) detectado(s) — recuperação desativada pra eles.")
+
         # Atualiza in-place dentro de full_cameras (lista completa), nunca
         # dentro do subconjunto `cameras` — ver comentário acima.
         full_by_id = {c["id"]: c for c in full_cameras}
         for cam_id, r in results.items():
+            if r.get("channel_url") in aggregator_channels:
+                continue
             if r["status"] == "LIVE" or not r.get("channel_url"):
                 continue
             new = resolve_channel_live(r["channel_url"])
