@@ -127,7 +127,13 @@ def save_json(path: Path, data):
 
 def run(concurrency: int, limit: Optional[int], apply_removal: bool) -> Dict[str, Any]:
     full_cameras = load_json(CAMERAS_PATH, [])
-    cameras = full_cameras[:limit] if limit else full_cameras
+    # Só faz sentido checar "é uma TV disfarçada de câmera?" pra câmeras
+    # que vêm de canal/vídeo (YouTube) — HLS direto e SNAPSHOT_JPEG são
+    # sempre feeds de sistemas DOT/511, não têm "channel"/"title" editorial
+    # pra checar, e rodar yt-dlp (mesmo via extrator genérico) contra
+    # milhares delas só desperdiça tempo sem achar nada.
+    youtube_cameras = [c for c in full_cameras if c.get("video_id")]
+    cameras = youtube_cameras[:limit] if limit else youtube_cameras
 
     def work(cam):
         return cam["id"], check_content(cam["url"])

@@ -273,6 +273,42 @@ Lição: sempre que um novo `stream_format` for adicionado ao catálogo,
 checar TODOS os scripts de liveness que fazem filtro próprio por URL/tipo,
 não só o script que foi escrito pra esse tipo novo.
 
+## 04:35–05:00 — 2 bugs reais a mais (achados por auditoria) + content_validation.py desperdiçava minutos à toa
+
+Pedi uma segunda auditoria focada na mesma classe de bug (suposição
+desatualizada de antes de uma mudança de arquitetura — SQLite ou o
+`stream_format` novo). Dois achados reais:
+
+1. **Inferência de `video_id` sequestrava câmera não-YouTube.** Em três
+   lugares de `camera_grid_server.py` (`list_cameras`, `get_camera_detail`,
+   `camera_live_url`), o código tentava extrair um `video_id` de QUALQUER
+   URL que contivesse a substring `"v="`, sem checar se era mesmo YouTube
+   nem se a câmera era `SNAPSHOT_JPEG`. Sistemas de câmera DOT/511 usam
+   `?v=` como cache-busting/versionamento com frequência — e o player do
+   frontend prioriza `video_id` sobre `stream_format`, então isso
+   silenciosamente trocaria o embed real por um iframe do YouTube inválido.
+   Corrigido: só infere `video_id` se a URL for `youtube.com` de verdade
+   e a câmera não for `SNAPSHOT_JPEG`.
+2. Confirmado (não mexido, já era conhecido e fora de escopo): o worker
+   de detecção de perigo ainda usa a coluna crua `confirmed_dead` via
+   `db_manager.get_cameras()` — mesma classe de bug já corrigida em outros
+   3 lugares, mas este já tinha sido deliberadamente deixado de lado antes
+   por já vir auto-rotulado "demo" no próprio código.
+
+Enquanto isso, rodei `content_validation.py` (detecção de TV disfarçada de
+câmera) como parte da revalidação periódica — ficou rodando mais de 10
+minutos gerando uma enxurrada de erros do yt-dlp tipo "No video/audio
+found". Investigando: **a função não filtrava candidatos por
+`video_id`** — rodava o extrator do yt-dlp (via fallback genérico) contra
+TODAS as 6281 câmeras do catálogo, inclusive HLS e SNAPSHOT_JPEG, que
+óbvio não têm "canal"/"título" editorial pra checar. Pior: como o YouTube
+foi removido inteiramente do catálogo mais cedo (decisão do usuário),
+**zero câmeras no dataset atual têm `video_id`** — ou seja, essa checagem
+inteira não tinha absolutamente nenhuma chance de achar nada, só
+desperdiçava minutos e gerava log inútil. Corrigido: agora filtra só
+`video_id`-based antes de rodar; verificado que completa em 0.0s com o
+catálogo atual (0 candidatas, como esperado).
+
 ## Próximos itens da fila (ordem que pretendo seguir)
 
 - [ ] Verificar thumbnail real numa amostra maior de câmeras (não só 1)
