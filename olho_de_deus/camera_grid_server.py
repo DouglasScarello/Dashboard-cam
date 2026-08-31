@@ -530,7 +530,7 @@ async def list_cameras(
         cam_id = str(cam.get("id"))
         source_url = cam.get("url", "")
         vid_id = cam.get("video_id")
-        if not vid_id and source_url and "v=" in source_url:
+        if not vid_id and source_url and cam.get("stream_format") != "SNAPSHOT_JPEG" and "youtube.com" in source_url and "v=" in source_url:
             vid_id = source_url.split("v=")[1].split("&")[0]
 
         liveness = get_camera_liveness(cam_id, cam)
@@ -619,7 +619,7 @@ async def get_camera_detail(camera_id: str):
 
     source_url = cam.get("url", "")
     vid_id = cam.get("video_id")
-    if not vid_id and source_url and "v=" in source_url:
+    if not vid_id and source_url and cam.get("stream_format") != "SNAPSHOT_JPEG" and "youtube.com" in source_url and "v=" in source_url:
         vid_id = source_url.split("v=")[1].split("&")[0]
 
     liveness = get_camera_liveness(camera_id, cam)
@@ -678,7 +678,7 @@ async def camera_live_url(camera_id: str):
     resolved = await resolve_stream_url(camera_id, source_url)
     
     video_id = cam.get("video_id")
-    if not video_id and "v=" in source_url:
+    if not video_id and cam.get("stream_format") != "SNAPSHOT_JPEG" and "youtube.com" in source_url and "v=" in source_url:
         video_id = source_url.split("v=")[1].split("&")[0]
         
     return {
