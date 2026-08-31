@@ -382,6 +382,21 @@ países, contagem por área, contagem por fonte). Verificado: total bate
 com `/api/cameras`, online=6233 (100%) bate com a revalidação de
 liveness feita minutos antes.
 
+## 06:35–06:50 — Noruega: confirmado de vez que está desativado (não só "precisa de cadastro")
+
+Reconsiderei a Noruega (Vegvesen), que tinha sido parqueada antes só por
+suposição ("precisa de acesso a nó DATEX"). Rastreei o bundle JS de
+`webkamera.atlas.vegvesen.no` até achar a API real
+(`kamera.atlas.vegvesen.no/api/images/{id}`), mas sem lista de IDs
+disponível. Abri a página de verdade num browser real pra ver as
+requisições de rede — a página carrega, mas o próprio texto confirma:
+**"Tjenesten «Webkamera på veiene» er lagt ned"** ("O serviço foi
+desativado"). Ou seja, não é uma questão de achar o endpoint certo — o
+serviço público de webcams da Noruega foi oficialmente encerrado, e eles
+mesmos direcionam pra Datex (cadastro) como única alternativa hoje.
+Confirmação definitiva, não mais uma suposição — Noruega fica parqueada
+de vez, sem necessidade de tentar de novo numa sessão futura.
+
 ## Próximos itens da fila (ordem que pretendo seguir)
 
 - [ ] Verificar thumbnail real numa amostra maior de câmeras (não só 1)
