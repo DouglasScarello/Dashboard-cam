@@ -367,6 +367,21 @@ mortas (1.2% de deriva em ~1h30, plausível). Snapshot: 100% vivas, zero
 deriva. Removidas as 48 HLS mortas. **6285 → 6237 câmeras (6233
 pós-filtro).**
 
+## 06:20–06:35 — Nova função: endpoint de estatísticas + Áustria parqueada
+
+Tentei mais uma fonte (Áustria/ASFINAG, 1267 webcams supostamente públicas
+em `asfinag.at/webcams`) — página principal bloqueia com `403` (WAF) e o
+portal de serviços legado (`services.asfinag.at`) nem responde
+(timeout/conexão recusada). Parqueada, mesmo padrão de outras tentativas
+européias desta noite.
+
+Adicionada uma função nova de verdade: `GET /api/metadata/stats` —
+resumo pronto pra uma futura tela de visão geral do dashboard (total,
+online/offline calculado via `get_camera_liveness` de verdade, top 20
+países, contagem por área, contagem por fonte). Verificado: total bate
+com `/api/cameras`, online=6233 (100%) bate com a revalidação de
+liveness feita minutos antes.
+
 ## Próximos itens da fila (ordem que pretendo seguir)
 
 - [ ] Verificar thumbnail real numa amostra maior de câmeras (não só 1)
