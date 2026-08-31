@@ -358,6 +358,15 @@ usar num dropdown). Verificado ponta a ponta pelo servidor rodando:
 `?source=Vegagerdin` devolve exatamente 500 (bate com a integração da
 Islândia), soma das fontes bate com o total geral.
 
+## 05:40–06:20 — Revalidação periódica (2ª rodada, ~1.5h depois)
+
+Rodei `hls_liveness.py` (agora com o filtro corrigido — 3877 checadas,
+batendo exatamente com o total de câmeras HLS puras) e `snapshot_liveness.py`
+de novo, como parte da revalidação contínua prometida. HLS: 48 novas
+mortas (1.2% de deriva em ~1h30, plausível). Snapshot: 100% vivas, zero
+deriva. Removidas as 48 HLS mortas. **6285 → 6237 câmeras (6233
+pós-filtro).**
+
 ## Próximos itens da fila (ordem que pretendo seguir)
 
 - [ ] Verificar thumbnail real numa amostra maior de câmeras (não só 1)
