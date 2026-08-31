@@ -1,0 +1,568 @@
+{
+  "Jackson Hole, WY, US": [
+    43.6087926,
+    -110.7380325
+  ],
+  "Chicago, IL, US": [
+    41.8755616,
+    -87.6244212
+  ],
+  "Niagara Falls, ON, CA": [
+    43.1065603,
+    -79.0639039
+  ],
+  "Madrid, Espanha, ES": [
+    40.416782,
+    -3.703507
+  ],
+  "Key West, FL, US": [
+    24.5548262,
+    -81.8020722
+  ],
+  "Santorini, Grécia, GR": [
+    36.4071112,
+    25.4566637
+  ],
+  "Munique, Alemanha, DE": [
+    48.1371079,
+    11.5753822
+  ],
+  "Alpes Suíços, Suíça, CH": [
+    -29.695085,
+    -52.402065
+  ],
+  "Osaka (Dotonbori), BR, JP": [
+    34.6690306,
+    135.5015715
+  ],
+  "Busan, BR, KR": [
+    35.1799528,
+    129.0752365
+  ],
+  "Hong Kong, BR, US": [
+    40.6814835,
+    -76.2539646
+  ],
+  "Seul (Seocho), BR, KR": [
+    37.4835,
+    127.0322
+  ],
+  "Seul (Gangnam), BR, KR": [
+    37.5177,
+    127.0473
+  ],
+  "Seul (Jung-gu), BR, KR": [
+    37.5636559,
+    126.9975097
+  ],
+  "Bangkok, BR, US": [
+    38.9505986,
+    -92.32808
+  ],
+  "Taipei, BR, US": [
+    40.7887466,
+    -73.85315
+  ],
+  "Phuket, BR, US": [
+    8.200496,
+    98.2975335
+  ],
+  "Jerusalém, BR, US": [
+    35.1133712,
+    -80.3076028
+  ],
+  "Istambul, BR, US": [
+    41.0228125,
+    28.9620681
+  ],
+  "Medina, BR, US": [
+    30.728209,
+    -97.757379
+  ],
+  "Sydney, BR, AU": [
+    -33.8698439,
+    151.2082848
+  ],
+  "Sydney (Bondi), BR, AU": [
+    -33.8930556,
+    151.2633333
+  ],
+  "Santos - Orla, SP, BR": [
+    -23.968439,
+    -46.3480412
+  ],
+  "Manaus, AM, BR": [
+    -3.1316333,
+    -59.9825041
+  ],
+  "Cuiabá / Pantanal, MT, BR": [
+    -15.5950796,
+    -55.9481041
+  ],
+  "Rede Clima ao Vivo, BR": null,
+  "Key West - Duval St, FL, US": [
+    24.5536478,
+    -81.7951973
+  ],
+  "Chicago - Riverwalk & Skyline, IL, US": [
+    41.8755616,
+    -87.6244212
+  ],
+  "New Orleans - Bourbon St, LA, US": [
+    29.9556978,
+    -90.0678169
+  ],
+  "Niagara Falls, NY/ON, US": [
+    39.9515564,
+    -85.9926894
+  ],
+  "Banff National Park, AB, INT": [
+    51.4881335,
+    -115.9380498
+  ],
+  "Toronto - CN Tower, ON, INT": [
+    43.6534817,
+    -79.3839347
+  ],
+  "Vancouver, BC, INT": [
+    49.2868378,
+    -123.1241904
+  ],
+  "Jackson Hole - Town Square, WY, US": [
+    37.5115171,
+    -88.6102995
+  ],
+  "Katmai National Park, AK, US": [
+    58.5049844,
+    -155.0896226
+  ],
+  "Washington, DC, US": [
+    38.8950982,
+    -77.0363849
+  ],
+  "Philadelphia, PA, US": [
+    39.9527237,
+    -75.1635262
+  ],
+  "Boston Harbor, MA, US": [
+    42.3417649,
+    -70.9661596
+  ],
+  "Grand Canyon National Park, AZ, US": [
+    36.3078548,
+    -112.292896
+  ],
+  "Monterey Bay Aquarium, CA, US": [
+    36.6180889,
+    -121.901672
+  ],
+  "San Diego Zoo, CA, US": [
+    32.7359874,
+    -117.1506542
+  ],
+  "Milão - Duomo, Itália, EU": [
+    45.4641943,
+    9.1896346
+  ],
+  "Florença - Ponte Vecchio, Itália, EU": [
+    43.7697955,
+    11.2556404
+  ],
+  "Madrid - Gran Vía, Espanha, EU": [
+    40.416782,
+    -3.703507
+  ],
+  "Amsterdã - Dam Square, Holanda, EU": [
+    52.3730796,
+    4.8924534
+  ],
+  "Munique - Marienplatz, Alemanha, EU": [
+    48.1371079,
+    11.5753822
+  ],
+  "Berlim - Portão de Brandemburgo, Alemanha, EU": [
+    52.5173885,
+    13.3951309
+  ],
+  "Praga - Ponte Carlos, Rep. Tcheca, EU": [
+    50.0874654,
+    14.4212535
+  ],
+  "Alpes Suíços - Matterhorn, Suíça, EU": [
+    -29.695085,
+    -52.402065
+  ],
+  "Dublin - Temple Bar, Irlanda, EU": [
+    53.3493795,
+    -6.2605593
+  ],
+  "Fiordes Noruegueses, Noruega, EU": [
+    62.1266102,
+    7.1658394
+  ],
+  "Reykjavík / Vulcão, Islândia, EU": [
+    64.145981,
+    -21.9422367
+  ],
+  "Kyoto, Japão, JP": [
+    35.0115754,
+    135.7681441
+  ],
+  "Seul - Myeongdong, Coreia do Sul, INT": [
+    37.5666791,
+    126.9782914
+  ],
+  "Seul - Namsan Tower, Coreia do Sul, INT": [
+    37.5666791,
+    126.9782914
+  ],
+  "Hong Kong - Victoria Harbour, BR, INT": [
+    22.3492155,
+    114.1857978
+  ],
+  "Phuket, Tailândia, INT": [
+    7.9366015,
+    98.3529292
+  ],
+  "Koh Samui, Tailândia, INT": [
+    9.5013945,
+    99.9956193
+  ],
+  "Bali, Indonésia, INT": [
+    -8.2271303,
+    115.1919203
+  ],
+  "Melbourne, Austrália, INT": [
+    -37.8142454,
+    144.9631732
+  ],
+  "Sydney - Bondi Beach, Austrália, INT": [
+    -33.8698439,
+    151.2082848
+  ],
+  "Auckland, Nova Zelândia, INT": [
+    -36.852095,
+    174.7631803
+  ],
+  "Santiago, Chile, INT": [
+    -33.3501735,
+    -70.5012543
+  ],
+  "Buenos Aires - Obelisco, Argentina, INT": [
+    -34.6095579,
+    -58.3887904
+  ],
+  "Cidade do México - Zócalo, México, INT": [
+    19.3207722,
+    -99.1514678
+  ],
+  "Cancún, México, INT": [
+    21.1527467,
+    -86.8425761
+  ],
+  "Cidade do Cabo, África do Sul, INT": [
+    -33.9288301,
+    18.4172197
+  ],
+  "Quênia - Reserva Animal, África, INT": [
+    0.2793165,
+    37.5164935
+  ],
+  "SkylineWebcams Global, BR, INT": null,
+  "Namíbia - Deserto Animal, África, INT": [
+    -23.2335499,
+    17.3231107
+  ],
+  "EarthCam Global, BR, INT": null,
+  "Ferrovias & Trens EUA, BR, US": null,
+  "Global Live Streams, BR, INT": null,
+  "Explore.org Animais & Natureza, BR, INT": null,
+  "Estação Espacial Internacional (NASA), BR, INT": null,
+  "Porto de Santos, SP, BR": [
+    -23.9311322,
+    -46.3479823
+  ],
+  "Campinas, SP, BR": [
+    -22.9056391,
+    -47.059564
+  ],
+  "São Carlos, SP, BR": [
+    -22.0180395,
+    -47.891154
+  ],
+  "São José dos Campos, SP, BR": [
+    -23.1867782,
+    -45.8854538
+  ],
+  "Ribeirão Preto, SP, BR": [
+    -21.1776315,
+    -47.8100983
+  ],
+  "Piracicaba, SP, BR": [
+    -22.725165,
+    -47.6493269
+  ],
+  "Franca, SP, BR": [
+    -20.5381768,
+    -47.4009795
+  ],
+  "Criciúma / Tubarão, SC, BR": [
+    -28.6722119,
+    -49.3930382
+  ],
+  "Santa Maria, RS, BR": [
+    -29.6860512,
+    -53.8069214
+  ],
+  "Key West - Sunset Pier, FL, US": [
+    24.5548262,
+    -81.8020722
+  ],
+  "Daytona Beach, FL, US": [
+    29.2108147,
+    -81.0228331
+  ],
+  "Panama City Beach, FL, US": [
+    30.1765914,
+    -85.805386
+  ],
+  "Clearwater Beach, FL, US": [
+    27.9774736,
+    -82.8279313
+  ],
+  "Fort Lauderdale, FL, US": [
+    26.1223084,
+    -80.1433786
+  ],
+  "St. Petersburg, FL, US": [
+    27.7712264,
+    -82.6340259
+  ],
+  "Pensacola Beach, FL, US": [
+    30.3342348,
+    -87.1350979
+  ],
+  "Destin, FL, US": [
+    30.3935337,
+    -86.4957834
+  ],
+  "Malibu Beach, CA, US": [
+    34.0327862,
+    -118.6884215
+  ],
+  "Huntington Beach, CA, US": [
+    33.6783336,
+    -118.000016
+  ],
+  "San Diego - Coronado, CA, US": [
+    32.6726082,
+    -117.162339
+  ],
+  "San Diego - Pacific Beach, CA, US": [
+    32.8043549,
+    -117.224913
+  ],
+  "Kauai, HI, US": [
+    22.0503838,
+    -159.5588624
+  ],
+  "Anchorage, AK, US": [
+    61.2163129,
+    -149.894852
+  ],
+  "Colorado Ski Resorts, CO, US": [
+    40.4551485,
+    -106.8058903
+  ],
+  "Denver, CO, US": [
+    39.7392364,
+    -104.984862
+  ],
+  "Galveston, TX, US": [
+    29.3872254,
+    -94.992736
+  ],
+  "Myrtle Beach, SC, US": [
+    33.6956461,
+    -78.8900409
+  ],
+  "Outer Banks, NC, US": [
+    35.5669037,
+    -75.4688367
+  ],
+  "Ocean City, MD, US": [
+    38.3315412,
+    -75.0874151
+  ],
+  "Atlantic City, NJ, US": [
+    39.3642852,
+    -74.4229351
+  ],
+  "Cape Cod, MA, US": [
+    41.7987588,
+    -69.9960655
+  ],
+  "Portland Head Light, ME, US": [
+    43.6231093,
+    -70.2078663
+  ],
+  "Whistler, BC, INT": [
+    50.1171903,
+    -122.9543022
+  ],
+  "Quebec City, QC, INT": [
+    46.7929701,
+    -71.3845987
+  ],
+  "Calgary, AB, INT": [
+    51.1222604,
+    -114.013541
+  ],
+  "Victoria, BC, INT": [
+    48.4196174,
+    -123.3407593
+  ],
+  "Cannes, França, EU": [
+    43.5515198,
+    7.0134418
+  ],
+  "Chamonix - Mont Blanc, França, EU": [
+    45.9230969,
+    6.8700009
+  ],
+  "Costa Amalfitana - Positano, Itália, EU": [
+    -27.5871137,
+    -48.5225961
+  ],
+  "Lago de Garda, Itália, EU": [
+    45.6624314,
+    10.6861569
+  ],
+  "Lago de Como, Itália, EU": [
+    45.9917589,
+    9.264881
+  ],
+  "Dolomitas, Itália, EU": [
+    43.2395478,
+    -3.3578231
+  ],
+  "Maiorca, Espanha, EU": [
+    39.613432,
+    2.8829185
+  ],
+  "Ibiza, Espanha, EU": [
+    38.9743901,
+    1.4197463
+  ],
+  "Gran Canária, Espanha, EU": [
+    27.9580004,
+    -15.6062305
+  ],
+  "Tenerife, Canárias, EU": [
+    28.4486067,
+    -16.4037046
+  ],
+  "Algarve - Albufeira, Portugal, EU": [
+    37.2449218,
+    -8.1959563
+  ],
+  "Madeira - Funchal, Portugal, EU": [
+    32.7517501,
+    -16.9817487
+  ],
+  "Amsterdã, Holanda, EU": [
+    52.3195254,
+    4.8576077
+  ],
+  "Roterdã, Holanda, EU": [
+    -2.9998974,
+    -59.9834719
+  ],
+  "Bruxelas - Grand Place, Bélgica, EU": [
+    50.8467372,
+    4.352493
+  ],
+  "Hamburgo - Porto, Alemanha, EU": [
+    53.5501721,
+    10.0013165
+  ],
+  "Genebra, Suíça, EU": [
+    46.2017559,
+    6.1466014
+  ],
+  "Praga, Rep. Tcheca, EU": [
+    50.0874654,
+    14.4212535
+  ],
+  "Noruega - Fiordes & Aurora, BR, EU": [
+    61.1529386,
+    8.7876653
+  ],
+  "Copenhague - Nyhavn, Dinamarca, EU": [
+    55.6867243,
+    12.5700724
+  ],
+  "Yokohama, Japão, JP": [
+    35.4503381,
+    139.6343802
+  ],
+  "Osaka - Dotonbori, Japão, JP": [
+    34.6937569,
+    135.5014539
+  ],
+  "Busan - Haeundae Beach, Coreia, INT": [
+    35.1799528,
+    129.0752365
+  ],
+  "Pattaya, Tailândia, INT": [
+    12.9366924,
+    100.8865002
+  ],
+  "Jerusalém - Muro das Lamentações, BR, INT": [
+    31.7788472,
+    35.2257856
+  ],
+  "Sydney - Opera House, Austrália, INT": [
+    -33.8698439,
+    151.2082848
+  ],
+  "Buenos Aires - Puerto Madero, Argentina, INT": [
+    -34.6095579,
+    -58.3887904
+  ],
+  "Viña del Mar / Valparaíso, Chile, INT": [
+    -33.0244535,
+    -71.5517636
+  ],
+  "Playa del Carmen, México, INT": [
+    20.6462848,
+    -87.0807866
+  ],
+  "Puerto Vallarta, México, INT": [
+    20.6407176,
+    -105.220306
+  ],
+  "Costa Rica, BR, INT": [
+    10.2735633,
+    -84.0739102
+  ],
+  "Durban, África do Sul, INT": [
+    -29.8618145,
+    31.009909
+  ],
+  "Quênia - Animais Selvagens, África, INT": [
+    0.2793165,
+    37.5164935
+  ],
+  "SkylineWebcams Global 24/7, BR, INT": null,
+  "Parque Kruger - Safári ao Vivo, África, INT": [
+    -27.375235,
+    153.0854793
+  ],
+  "Explore.org Animais & Oceanos, BR, INT": null,
+  "Railstream Trens EUA, BR, US": null,
+  "Virtual Railfan Ferrovias, BR, US": null,
+  "Plane Spotting Aeroportos, BR, INT": null,
+  "Aurora Boreal ao Vivo, BR, INT": null,
+  "Vulcões Ativos ao Vivo, BR, INT": null
+}
