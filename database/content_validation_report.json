@@ -1,0 +1,19 @@
+{
+  "checked_at": "2026-08-30T23:59:59.326436+00:00",
+  "total_checked": 704,
+  "flagged_count": 1,
+  "flagged": {
+    "cam_30": {
+      "nome": "CÂMERA DE MONITORAMENTO CURITIBA / FOZ DO IGUAÇU",
+      "title": "SBT Ao Vivo 2026-08-30 20:57",
+      "channel": "SBT",
+      "channel_url": "https://www.youtube.com/channel/UCR3TOnFWDeAlT-Ho6LueDmg",
+      "error": null,
+      "is_broadcaster": true,
+      "reasons": [
+        "canal na blocklist de emissoras: 'SBT'",
+        "título contém data (típico de transmissão editorial diária, não câmera fixa)"
+      ]
+    }
+  }
+}

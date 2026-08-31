@@ -198,24 +198,6 @@
     "is_real_stream": true
   },
   {
-    "id": "cam_30",
-    "nome": "CÂMERA DE MONITORAMENTO CURITIBA / FOZ DO IGUAÇU",
-    "endereco": "Av. Cândido de Abreu - Centro Cívico, Curitiba, PR",
-    "local": "Curitiba / Foz do Iguaçu, PR",
-    "cidade": "Curitiba / Foz do Iguaçu",
-    "uf": "PR",
-    "setor": "BR",
-    "pais": "BR",
-    "tipo_area": "PONTO TURÍSTICO / FRONTEIRA",
-    "thumbnail_url": "/api/cameras/cam_30/thumbnail.jpg",
-    "url": "https://www.youtube.com/watch?v=LLpNUqHVam8",
-    "video_id": "LLpNUqHVam8",
-    "lat": -25.4284,
-    "long": -49.2733,
-    "status": "LIVE",
-    "is_real_stream": true
-  },
-  {
     "id": "cam_31",
     "nome": "PEREQUÊ AÇU - CANTO DIREITO - UBATUBA",
     "endereco": "Av. Paulista / Região Metropolitana",
