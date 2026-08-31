@@ -92,6 +92,7 @@ def get_cameras_by_filters(
     area: str = None,
     geo: str = "ALL",
     search: str = None,
+    source: str = None,
 ) -> List[Dict[str, Any]]:
     """Igual a `get_cameras()`, mas SEM filtro de status e SEM
     limit/offset — usado quando o chamador precisa aplicar o filtro
@@ -111,6 +112,9 @@ def get_cameras_by_filters(
     if area:
         query += " AND UPPER(tipo_area) = ?"
         params.append(area.upper())
+    if source:
+        query += " AND UPPER(source) = ?"
+        params.append(source.upper())
     if geo == "WITH_GEO":
         query += " AND lat IS NOT NULL AND long IS NOT NULL"
     elif geo == "NO_GEO":
@@ -177,6 +181,14 @@ def get_unique_areas() -> List[str]:
     rows = cursor.fetchall()
     conn.close()
     return sorted([r[0] for r in rows if r[0]])
+
+def get_sources_with_counts() -> List[Dict[str, Any]]:
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT source, COUNT(*) FROM cameras WHERE source IS NOT NULL GROUP BY source ORDER BY COUNT(*) DESC")
+    rows = cursor.fetchall()
+    conn.close()
+    return [{"source": r[0], "count": r[1]} for r in rows]
 
 def get_camera_by_id(camera_id: str) -> Optional[Dict[str, Any]]:
     conn = get_connection()

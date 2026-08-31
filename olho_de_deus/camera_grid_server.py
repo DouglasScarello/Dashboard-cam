@@ -509,7 +509,8 @@ async def list_cameras(
     country: Optional[str] = None,
     area: Optional[str] = None,
     status: Optional[str] = "ALL",
-    geo: Optional[str] = "ALL"
+    geo: Optional[str] = "ALL",
+    source: Optional[str] = None
 ):
     _reload_liveness_state_if_changed()
 
@@ -523,7 +524,7 @@ async def list_cameras(
     # (são atributos estáticos, seguros de filtrar ali), mas
     # ONLINE/OFFLINE e a paginação final acontecem em Python, depois de
     # calcular a liveness de verdade pra cada câmera candidata.
-    candidates = db_manager.get_cameras_by_filters(country=country, area=area, geo=geo, search=search)
+    candidates = db_manager.get_cameras_by_filters(country=country, area=area, geo=geo, search=search, source=source)
 
     enriched = []
     for cam in candidates:
@@ -779,6 +780,13 @@ async def get_countries():
 @app.get("/api/metadata/areas")
 async def get_areas():
     return db_manager.get_unique_areas()
+
+@app.get("/api/metadata/sources")
+async def get_sources():
+    """Fontes de ingestão (Ontario511, NZTA, Vegagerdin, OpenTrafficCamMap,
+    etc) com contagem — câmeras da curadoria original anterior a esse
+    campo existir aparecem com source=null, não entram na lista."""
+    return db_manager.get_sources_with_counts()
 
 if __name__ == "__main__":
     reload_cameras()

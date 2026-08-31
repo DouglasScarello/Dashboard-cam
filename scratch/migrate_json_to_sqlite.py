@@ -50,8 +50,8 @@ def migrate():
         for c in cameras:
             conn.execute('''
                 INSERT OR REPLACE INTO cameras
-                (id, nome, local, endereco, cidade, uf, tipo_area, setor, pais, thumbnail_url, url, video_id, lat, long, confirmed_dead, live_confirmed, live_status, stream_format)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (id, nome, local, endereco, cidade, uf, tipo_area, setor, pais, thumbnail_url, url, video_id, lat, long, confirmed_dead, live_confirmed, live_status, stream_format, source)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 c.get("id"),
                 c.get("nome"),
@@ -70,7 +70,8 @@ def migrate():
                 to_bool(c.get("confirmed_dead")),
                 to_bool(c.get("live_confirmed")),
                 c.get("live_status"),
-                c.get("stream_format")
+                c.get("stream_format"),
+                c.get("source")
             ))
             count += 1
             
