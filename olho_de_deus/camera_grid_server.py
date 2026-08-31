@@ -576,6 +576,39 @@ async def list_cameras(
         result = enriched[offset:]
     return {"cameras": result, "total": total}
 
+
+@app.get("/api/metadata/stats")
+async def get_stats():
+    """Resumo pro dashboard: total, vivas/mortas (via get_camera_liveness,
+    a mesma fonte de verdade usada em /api/cameras — nunca a coluna crua
+    confirmed_dead), e top países/áreas. Custo aceitável: mesmo padrão de
+    calcular liveness pra todo o catálogo já usado em /api/cameras."""
+    _reload_liveness_state_if_changed()
+    all_cams = db_manager.get_cameras_by_filters()
+
+    online = 0
+    by_country: Dict[str, int] = {}
+    by_area: Dict[str, int] = {}
+    for cam in all_cams:
+        cam_id = str(cam.get("id"))
+        if not get_camera_liveness(cam_id, cam)["confirmed_dead"]:
+            online += 1
+        pais = (cam.get("pais") or "").upper() or "N/D"
+        by_country[pais] = by_country.get(pais, 0) + 1
+        area = (cam.get("tipo_area") or "").upper() or "N/D"
+        by_area[area] = by_area.get(area, 0) + 1
+
+    total = len(all_cams)
+    return {
+        "total": total,
+        "online": online,
+        "offline": total - online,
+        "by_country": dict(sorted(by_country.items(), key=lambda x: -x[1])[:20]),
+        "by_area": dict(sorted(by_area.items(), key=lambda x: -x[1])),
+        "by_source": db_manager.get_sources_with_counts(),
+    }
+
+
 @app.get("/api/cameras/map")
 async def list_cameras_map(north: float, south: float, east: float, west: float, limit: int = 1000):
     _reload_liveness_state_if_changed()
