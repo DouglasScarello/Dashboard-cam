@@ -339,6 +339,25 @@ trabalho numa sessão futura):
   UDOT (atrás de WAF), Espanha DGT (endpoint antigo desativado)
 - ❌ Sem dado de câmera (só fluxo/velocidade): Holanda NDW
 
+## 05:20–05:40 — Nova função: fonte de ingestão exposta na API
+
+Verificando o `tsc --noEmit` do frontend (limpo, 0 erros) antes de seguir
+pra mais uma função, percebi que `schema.sql` nunca teve uma coluna
+`source` — o campo existe em `live_cameras.json` (todo `ingest_*.py`
+desta noite seta ele: Ontario511/NZTA/Vegagerdin/OpenTrafficCamMap), mas
+a migração pro SQLite descartava ele silenciosamente porque nunca esteve
+no `INSERT`/schema. Resultado: a API nunca tinha como expor de onde cada
+câmera vem, mesmo eu tendo esse dado o tempo todo (só lendo o JSON
+direto pra fazer as contagens "por fonte" que apareceram nos logs desta
+noite).
+
+Corrigido e ampliado: coluna `source` adicionada ao schema + migração;
+novo filtro `?source=` em `GET /api/cameras`; novo endpoint
+`GET /api/metadata/sources` (contagem por fonte, pronto pra uma futura UI
+usar num dropdown). Verificado ponta a ponta pelo servidor rodando:
+`?source=Vegagerdin` devolve exatamente 500 (bate com a integração da
+Islândia), soma das fontes bate com o total geral.
+
 ## Próximos itens da fila (ordem que pretendo seguir)
 
 - [ ] Verificar thumbnail real numa amostra maior de câmeras (não só 1)
