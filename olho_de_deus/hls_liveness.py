@@ -9,12 +9,23 @@ reais (Delaware DOT, Maryland SHA, Virginia DOT, Caltrans, + alguns
 internacionais como Indonésia/Portugal/Rússia). Nunca foram validadas de
 verdade porque os scripts anteriores só sabem lidar com YouTube.
 
-Método de checagem (mais simples que yt-dlp, não precisa dele aqui):
+Método de checagem:
 1. HTTP GET direto na URL .m3u8 com timeout curto.
 2. Resposta 200 + conteúdo começa com "#EXTM3U" -> manifesto HLS válido.
 3. Contém "#EXT-X-ENDLIST" -> é uma gravação que já terminou (VOD), não um
    loop ao vivo -> não serve como "câmera ao vivo", tratado como morto.
 4. Qualquer erro (404, timeout, conexão recusada) -> morto.
+
+Achado real (2026-08-30, "efeito zumbi" reportado pelo usuário): algumas
+câmeras passavam nessa checagem (manifesto principal responde 200 e é HLS
+válido) mas ficavam com tela preta na prática — porque o manifesto
+PRINCIPAL é só uma "master playlist" que aponta pra sub-playlists
+("chunklists") por qualidade, e É A SUB-PLAYLIST que tem os segmentos de
+vídeo reais. Confirmado num caso real: master playlist 200 OK, chunklist
+referenciada dentro dela 404. Por isso agora, quando o manifesto é uma
+master playlist (tem `#EXT-X-STREAM-INF`), o checker segue pra primeira
+sub-playlist e só declara LIVE se ELA também for um manifesto HLS válido
+— não confia só no nível superior.
 
 Escreve no MESMO database/camera_liveness_state.json que o
 camera_liveness.py usa — camera_grid_server.py já sabe ler esse arquivo
@@ -26,6 +37,8 @@ import concurrent.futures
 import json
 import logging
 import time
+import urllib.error
+import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
@@ -46,20 +59,41 @@ def is_hls_url(url: str) -> bool:
     return bool(url) and "youtube.com" not in url and "youtu.be" not in url
 
 
-def check_one_hls(url: str) -> Dict[str, Any]:
+def _fetch_manifest(url: str) -> Optional[str]:
+    """GET simples; devolve o corpo (texto) ou None em qualquer erro."""
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    with urllib.request.urlopen(req, timeout=TIMEOUT_SECONDS) as resp:
+        if resp.status != 200:
+            raise urllib.error.HTTPError(url, resp.status, "não-200", None, None)
+        return resp.read(8192).decode("utf-8", errors="ignore")
+
+
+def check_one_hls(url: str, _depth: int = 0) -> Dict[str, Any]:
     try:
-        with urllib.request.urlopen(req, timeout=TIMEOUT_SECONDS) as resp:
-            if resp.status != 200:
-                return {"status": "DEAD", "is_live": False, "error": f"HTTP {resp.status}"}
-            body = resp.read(4096).decode("utf-8", errors="ignore")
-            if not body.lstrip().startswith("#EXTM3U"):
-                return {"status": "DEAD", "is_live": False, "error": "resposta não é um manifesto HLS válido"}
-            if "#EXT-X-ENDLIST" in body:
-                return {"status": "ENDED_BUT_EXISTS", "is_live": False, "error": None}
-            return {"status": "LIVE", "is_live": True, "error": None}
+        body = _fetch_manifest(url)
     except Exception as e:
         return {"status": "DEAD", "is_live": False, "error": f"{type(e).__name__}: {e}"[:300]}
+
+    if not body or not body.lstrip().startswith("#EXTM3U"):
+        return {"status": "DEAD", "is_live": False, "error": "resposta não é um manifesto HLS válido"}
+    if "#EXT-X-ENDLIST" in body:
+        return {"status": "ENDED_BUT_EXISTS", "is_live": False, "error": None}
+
+    if "#EXT-X-STREAM-INF" in body and _depth == 0:
+        # Master playlist — só aponta pra sub-playlists por qualidade, não
+        # tem segmento nenhum aqui. "Efeito zumbi" real (2026-08-30): esse
+        # nível responder 200 não prova nada, a câmera da rua já foi vista
+        # com o manifesto principal OK e a sub-playlist real dando 404.
+        first_variant = next((ln.strip() for ln in body.splitlines() if ln.strip() and not ln.startswith("#")), None)
+        if not first_variant:
+            return {"status": "DEAD", "is_live": False, "error": "master playlist sem nenhuma variante listada"}
+        sub_url = urllib.parse.urljoin(url, first_variant)
+        return check_one_hls(sub_url, _depth=1)
+
+    # Playlist de mídia (tem segmentos de verdade, ou é a sub-playlist que
+    # acabamos de seguir) — chegou até aqui com #EXTM3U válido e sem
+    # #EXT-X-ENDLIST, então é um loop ao vivo real.
+    return {"status": "LIVE", "is_live": True, "error": None}
 
 
 def load_json(path: Path, default):
