@@ -96,7 +96,7 @@ def _reload_liveness_state_if_changed() -> None:
         log.error(f"Falha ao ler {LIVENESS_STATE_PATH.name}: {e}")
 
 
-def get_camera_liveness(cam_id: str) -> Dict[str, Any]:
+def get_camera_liveness(cam_id: str, cam: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """Retorna {live_confirmed, confirmed_dead, live_status, checked_at}.
 
     Duas perguntas diferentes, de propósito:
@@ -105,9 +105,21 @@ def get_camera_liveness(cam_id: str) -> Dict[str, Any]:
       disse que não está ao vivo). É este campo que o frontend usa pra
       bloquear a abertura — nunca abrir o que sabemos que está morto.
 
+    Override manual: setar `"manual_dead_override": true` direto no objeto
+    da câmera em live_cameras.json mata ela na hora, sem esperar o próximo
+    scan do camera_liveness.py. Só isso tem efeito de verdade — escrever
+    `"confirmed_dead": true` direto no JSON NÃO funciona, porque esse campo
+    da resposta da API é sempre recalculado aqui, nunca lido do disco (bug
+    já confundiu alguém: editou o JSON, reiniciou o servidor, achou que
+    tinha resolvido, mas por coincidência a câmera já estava morta pelo
+    scan de qualquer forma).
+
     Sem checagem nenhuma ainda (cold start, ou checagem velha demais) os
     dois ficam False — não travamos a UI inteira só porque a varredura
     ainda não rodou; só bloqueamos quando há prova real de que morreu."""
+    if cam and cam.get("manual_dead_override"):
+        return {"live_confirmed": False, "confirmed_dead": True, "live_status": "MANUAL_OVERRIDE", "checked_at": None}
+
     entry = _liveness_state.get(cam_id)
     if not entry:
         return {"live_confirmed": False, "confirmed_dead": False, "live_status": "UNKNOWN", "checked_at": None}
@@ -532,7 +544,7 @@ async def list_cameras(
         if not vid_id and "v=" in source_url:
             vid_id = source_url.split("v=")[1].split("&")[0]
             
-        liveness = get_camera_liveness(cam_id)
+        liveness = get_camera_liveness(cam_id, cam)
         result.append(
             {
                 "id": cam_id,
