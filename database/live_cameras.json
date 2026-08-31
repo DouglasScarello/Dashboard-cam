@@ -4060,20 +4060,6 @@
     "url": "https://stream.mazury24.eu/m_sonata/index.m3u8"
   },
   {
-    "id": "global_6666ca6e5a46",
-    "nome": "PL - WĘGORZEWO - JEZIORO DOBSKIE FULEDA",
-    "local": "PL",
-    "pais": "PL",
-    "setor": "GLOBAL",
-    "tipo_area": "WATER",
-    "lat": 54.19,
-    "long": 21.72,
-    "status": "LIVE",
-    "is_real_stream": true,
-    "thumbnail_url": "",
-    "url": "https://stream.mazury24.eu/m_fuleda/index.m3u8"
-  },
-  {
     "id": "global_0ca538be94b0",
     "nome": "PL - ZDORKOWO - JEZIORO DARGIN PRZYSTAN ZDORKOWO",
     "local": "PL",
@@ -8820,20 +8806,6 @@
     "url": "https://stream.resortcams.com/live/boarsheadresort.stream/playlist.m3u8"
   },
   {
-    "id": "global_e60251a9fa27",
-    "nome": "BRYCE RESORT",
-    "local": "US",
-    "pais": "US",
-    "setor": "GLOBAL",
-    "tipo_area": "MOUNTAIN",
-    "lat": 38.8173,
-    "long": -78.7651,
-    "status": "LIVE",
-    "is_real_stream": true,
-    "thumbnail_url": "",
-    "url": "https://stream.resortcams.com/live/bryceresort.stream/playlist.m3u8"
-  },
-  {
     "id": "global_162acd1ac0c3",
     "nome": "DELAWARE 2ND ST @ KING ST",
     "local": "US",
@@ -9490,20 +9462,6 @@
     "is_real_stream": true,
     "thumbnail_url": "",
     "url": "https://video.deldot.gov:443/live/NCAM150.stream/playlist.m3u8"
-  },
-  {
-    "id": "global_c740ac7b8f75",
-    "nome": "DELAWARE DE 141 @ DE 100",
-    "local": "US",
-    "pais": "US",
-    "setor": "GLOBAL",
-    "tipo_area": "TRAFFIC",
-    "lat": 39.77308,
-    "long": -75.58732,
-    "status": "LIVE",
-    "is_real_stream": true,
-    "thumbnail_url": "",
-    "url": "https://video.deldot.gov:443/live/NCAM088.stream/playlist.m3u8"
   },
   {
     "id": "global_a1085f1c7cd7",
@@ -10738,20 +10696,6 @@
     "url": "https://video.deldot.gov:443/live/NCAM053.stream/playlist.m3u8"
   },
   {
-    "id": "global_c091c8267cfd",
-    "nome": "DELAWARE MILLTOWN RD @ MCKENNANS CHURCH RD",
-    "local": "US",
-    "pais": "US",
-    "setor": "GLOBAL",
-    "tipo_area": "TRAFFIC",
-    "lat": 39.73114,
-    "long": -75.66577,
-    "status": "LIVE",
-    "is_real_stream": true,
-    "thumbnail_url": "",
-    "url": "https://video.deldot.gov:443/live/NCAM281.stream/playlist.m3u8"
-  },
-  {
     "id": "global_c5d74fce8d0e",
     "nome": "DELAWARE NEW BURTON RD S @ WEST DOVER CONNECTOR",
     "local": "US",
@@ -10806,20 +10750,6 @@
     "is_real_stream": true,
     "thumbnail_url": "",
     "url": "https://video.deldot.gov:443/live/NCAM222.stream/playlist.m3u8"
-  },
-  {
-    "id": "global_a3eb23935e57",
-    "nome": "DELAWARE PHILADELPHIA PIKE @ GOV PRINTZ BLVD",
-    "local": "US",
-    "pais": "US",
-    "setor": "GLOBAL",
-    "tipo_area": "TRAFFIC",
-    "lat": 39.80093,
-    "long": -75.45991,
-    "status": "LIVE",
-    "is_real_stream": true,
-    "thumbnail_url": "",
-    "url": "https://video.deldot.gov:443/live/NCAM066.stream/playlist.m3u8"
   },
   {
     "id": "global_fbae2cba8c42",
@@ -10946,20 +10876,6 @@
     "is_real_stream": true,
     "thumbnail_url": "",
     "url": "https://video.deldot.gov:443/live/NCAM263.stream/playlist.m3u8"
-  },
-  {
-    "id": "global_b219c1da1fa1",
-    "nome": "DELAWARE US 113 @ AIRPORT RD / NW 10TH",
-    "local": "US",
-    "pais": "US",
-    "setor": "GLOBAL",
-    "tipo_area": "TRAFFIC",
-    "lat": 38.92771,
-    "long": -75.43307,
-    "status": "LIVE",
-    "is_real_stream": true,
-    "thumbnail_url": "",
-    "url": "https://video.deldot.gov:443/live/KCAM191.stream/playlist.m3u8"
   },
   {
     "id": "global_c529c089d693",
@@ -11116,20 +11032,6 @@
     "url": "https://video.deldot.gov:443/live/SCAM085.stream/playlist.m3u8"
   },
   {
-    "id": "global_192a743e5f10",
-    "nome": "DELAWARE US 113 SOUTHBOUND @ SR 20 INTE",
-    "local": "US",
-    "pais": "US",
-    "setor": "GLOBAL",
-    "tipo_area": "TRAFFIC",
-    "lat": 38.59996,
-    "long": -75.31848,
-    "status": "LIVE",
-    "is_real_stream": true,
-    "thumbnail_url": "",
-    "url": "https://video.deldot.gov:443/live/SCAM201.stream/playlist.m3u8"
-  },
-  {
     "id": "global_c92901f51268",
     "nome": "DELAWARE US 13 @ BAY RD",
     "local": "US",
@@ -11198,20 +11100,6 @@
     "is_real_stream": true,
     "thumbnail_url": "",
     "url": "https://video.deldot.gov:443/live/KCAM125.stream/playlist.m3u8"
-  },
-  {
-    "id": "global_0f2c9ea5569a",
-    "nome": "DELAWARE US 13 @ DE 14",
-    "local": "US",
-    "pais": "US",
-    "setor": "GLOBAL",
-    "tipo_area": "TRAFFIC",
-    "lat": 38.92385,
-    "long": -75.56633,
-    "status": "LIVE",
-    "is_real_stream": true,
-    "thumbnail_url": "",
-    "url": "https://video.deldot.gov:443/live/KCAM103.stream/playlist.m3u8"
   },
   {
     "id": "global_05166f98aad0",
@@ -11326,34 +11214,6 @@
     "url": "https://video.deldot.gov:443/live/KCAM086.stream/playlist.m3u8"
   },
   {
-    "id": "global_3b965162cbea",
-    "nome": "DELAWARE US 13 @ DUCK CREEK RD",
-    "local": "US",
-    "pais": "US",
-    "setor": "GLOBAL",
-    "tipo_area": "TRAFFIC",
-    "lat": 39.32495,
-    "long": -75.62198,
-    "status": "LIVE",
-    "is_real_stream": true,
-    "thumbnail_url": "",
-    "url": "https://video.deldot.gov:443/live/NCAM142.stream/playlist.m3u8"
-  },
-  {
-    "id": "global_34aaee13fdeb",
-    "nome": "DELAWARE US 13 @ HARRINGTON FAIR RD - HARRINGTON",
-    "local": "US",
-    "pais": "US",
-    "setor": "GLOBAL",
-    "tipo_area": "TRAFFIC",
-    "lat": 38.90817,
-    "long": -75.56973,
-    "status": "LIVE",
-    "is_real_stream": true,
-    "thumbnail_url": "",
-    "url": "https://video.deldot.gov:443/live/KCAM020.stream/playlist.m3u8"
-  },
-  {
     "id": "global_abff45383f9f",
     "nome": "DELAWARE US 13 @ HICKORY RIDGE RD",
     "local": "US",
@@ -11466,20 +11326,6 @@
     "url": "https://video.deldot.gov:443/live/NCAM096.stream/playlist.m3u8"
   },
   {
-    "id": "global_4417f69243cd",
-    "nome": "DELAWARE US 13 @ RD 534",
-    "local": "US",
-    "pais": "US",
-    "setor": "GLOBAL",
-    "tipo_area": "TRAFFIC",
-    "lat": 38.66103,
-    "long": -75.5942,
-    "status": "LIVE",
-    "is_real_stream": true,
-    "thumbnail_url": "",
-    "url": "https://video.deldot.gov:443/live/SCAM112.stream/playlist.m3u8"
-  },
-  {
     "id": "global_f214c7c621d9",
     "nome": "DELAWARE US 13 @ US 40",
     "local": "US",
@@ -11494,20 +11340,6 @@
     "url": "https://video.deldot.gov:443/live/NCAM019.stream/playlist.m3u8"
   },
   {
-    "id": "global_d1c4db8e94b8",
-    "nome": "DELAWARE US 13 BUS. @ 12TH ST",
-    "local": "US",
-    "pais": "US",
-    "setor": "GLOBAL",
-    "tipo_area": "TRAFFIC",
-    "lat": 39.7439,
-    "long": -75.5366,
-    "status": "LIVE",
-    "is_real_stream": true,
-    "thumbnail_url": "",
-    "url": "https://video.deldot.gov:443/live/NCAM063.stream/playlist.m3u8"
-  },
-  {
     "id": "global_d883b1eb519d",
     "nome": "DELAWARE US 13 BUS. @ HOLLY OAK RD",
     "local": "US",
@@ -11520,20 +11352,6 @@
     "is_real_stream": true,
     "thumbnail_url": "",
     "url": "https://video.deldot.gov:443/live/NCAM065.stream/playlist.m3u8"
-  },
-  {
-    "id": "global_909da2da5679",
-    "nome": "DELAWARE US 13 NB @ DE 16",
-    "local": "US",
-    "pais": "US",
-    "setor": "GLOBAL",
-    "tipo_area": "TRAFFIC",
-    "lat": 38.80613,
-    "long": -75.58396,
-    "status": "LIVE",
-    "is_real_stream": true,
-    "thumbnail_url": "",
-    "url": "https://video.deldot.gov:443/live/SCAM163.stream/playlist.m3u8"
   },
   {
     "id": "global_e07c0b8069d2",
@@ -11564,34 +11382,6 @@
     "url": "https://video.deldot.gov:443/live/SCAM215.stream/playlist.m3u8"
   },
   {
-    "id": "global_f2dd4e3564f9",
-    "nome": "DELAWARE US 13 SB @ WEST DOVER CONNECTOR",
-    "local": "US",
-    "pais": "US",
-    "setor": "GLOBAL",
-    "tipo_area": "TRAFFIC",
-    "lat": 39.12464,
-    "long": -75.53234,
-    "status": "LIVE",
-    "is_real_stream": true,
-    "thumbnail_url": "",
-    "url": "https://video.deldot.gov:443/live/KCAM003.stream/playlist.m3u8"
-  },
-  {
-    "id": "global_4490ee126f4d",
-    "nome": "DELAWARE US 202 @ MURPHY RD",
-    "local": "US",
-    "pais": "US",
-    "setor": "GLOBAL",
-    "tipo_area": "TRAFFIC",
-    "lat": 39.78507,
-    "long": -75.5464,
-    "status": "LIVE",
-    "is_real_stream": true,
-    "thumbnail_url": "",
-    "url": "https://video.deldot.gov:443/live/NCAM050.stream/playlist.m3u8"
-  },
-  {
     "id": "global_1ca9627f46a3",
     "nome": "DELAWARE US 202 @ NAAMANS RD",
     "local": "US",
@@ -11620,20 +11410,6 @@
     "url": "https://video.deldot.gov:443/live/NCAM049.stream/playlist.m3u8"
   },
   {
-    "id": "global_d1baa5a0fb88",
-    "nome": "DELAWARE US 301 @ JAMISONS CORNER RD",
-    "local": "US",
-    "pais": "US",
-    "setor": "GLOBAL",
-    "tipo_area": "TRAFFIC",
-    "lat": 39.52441,
-    "long": -75.6796,
-    "status": "LIVE",
-    "is_real_stream": true,
-    "thumbnail_url": "",
-    "url": "https://video.deldot.gov:443/live/NCAM171.stream/playlist.m3u8"
-  },
-  {
     "id": "global_9dac9d1086cd",
     "nome": "DELAWARE US 301 @ SOUTH OF DE 299 SPLIT - MD LINE WEIGH STATION",
     "local": "US",
@@ -11660,20 +11436,6 @@
     "is_real_stream": true,
     "thumbnail_url": "",
     "url": "https://video.deldot.gov:443/live/NCAM170.stream/playlist.m3u8"
-  },
-  {
-    "id": "global_7956c82db1b1",
-    "nome": "DELAWARE US 301 NB @ N. MIDDLETOWN",
-    "local": "US",
-    "pais": "US",
-    "setor": "GLOBAL",
-    "tipo_area": "TRAFFIC",
-    "lat": 39.4841,
-    "long": -75.72175,
-    "status": "LIVE",
-    "is_real_stream": true,
-    "thumbnail_url": "",
-    "url": "https://video.deldot.gov:443/live/NCAM174.stream/playlist.m3u8"
   },
   {
     "id": "global_eecf9ae131cc",
@@ -11760,34 +11522,6 @@
     "url": "https://video.deldot.gov:443/live/SCAM187.stream/playlist.m3u8"
   },
   {
-    "id": "global_5c6fc428f109",
-    "nome": "DELAWARE US 9 @ DE 5",
-    "local": "US",
-    "pais": "US",
-    "setor": "GLOBAL",
-    "tipo_area": "TRAFFIC",
-    "lat": 38.72501,
-    "long": -75.28542,
-    "status": "LIVE",
-    "is_real_stream": true,
-    "thumbnail_url": "",
-    "url": "https://video.deldot.gov:443/live/SCAM174.stream/playlist.m3u8"
-  },
-  {
-    "id": "global_311862b020bc",
-    "nome": "DELAWARE W NORTH ST @ WEST DOVER CONNECTOR",
-    "local": "US",
-    "pais": "US",
-    "setor": "GLOBAL",
-    "tipo_area": "TRAFFIC",
-    "lat": 39.15346,
-    "long": -75.54202,
-    "status": "LIVE",
-    "is_real_stream": true,
-    "thumbnail_url": "",
-    "url": "https://video.deldot.gov:443/live/KCAM002.stream/playlist.m3u8"
-  },
-  {
     "id": "global_972548dfc468",
     "nome": "DELAWARE WALNUT STREET @ SOUTH OF A STR",
     "local": "US",
@@ -11828,20 +11562,6 @@
     "is_real_stream": true,
     "thumbnail_url": "",
     "url": "https://wzmedia.dot.ca.gov/D6/180_Temperance.stream/playlist.m3u8"
-  },
-  {
-    "id": "global_bc362f202942",
-    "nome": "HOMESTEAD RESORT",
-    "local": "US",
-    "pais": "US",
-    "setor": "GLOBAL",
-    "tipo_area": "MOUNTAIN",
-    "lat": 37.9953,
-    "long": -79.8309,
-    "status": "LIVE",
-    "is_real_stream": true,
-    "thumbnail_url": "",
-    "url": "https://stream.resortcams.com/live/homestead.stream/playlist.m3u8"
   },
   {
     "id": "global_340b4d738653",
@@ -19054,20 +18774,6 @@
     "url": "https://media-sfs1.vdotcameras.com:443/rtplive/HamptonRoadsWF104/playlist.m3u8"
   },
   {
-    "id": "global_49e065cf8e0f",
-    "nome": "VIRGINIA I-164 / MM 4.5 / EB",
-    "local": "US",
-    "pais": "US",
-    "setor": "GLOBAL",
-    "tipo_area": "TRAFFIC",
-    "lat": 36.8681,
-    "long": -76.36031,
-    "status": "LIVE",
-    "is_real_stream": true,
-    "thumbnail_url": "",
-    "url": "https://media-sfs2.vdotcameras.com:443/rtplive/HamptonRoadsWF105/playlist.m3u8"
-  },
-  {
     "id": "global_fd5631cc9c56",
     "nome": "VIRGINIA I-164 / MM 6 / EB",
     "local": "US",
@@ -19810,20 +19516,6 @@
     "url": "https://media-sfs8.vdotcameras.com:443/rtplive/FairfaxVideo0640/playlist.m3u8"
   },
   {
-    "id": "global_83fefa881445",
-    "nome": "VIRGINIA I-395 / MM 4 / SB",
-    "local": "US",
-    "pais": "US",
-    "setor": "GLOBAL",
-    "tipo_area": "TRAFFIC",
-    "lat": 38.83,
-    "long": -77.1143,
-    "status": "LIVE",
-    "is_real_stream": true,
-    "thumbnail_url": "",
-    "url": "https://media-sfs5.vdotcameras.com:443/rtplive/FairfaxVideo3610/playlist.m3u8"
-  },
-  {
     "id": "global_b730056d7074",
     "nome": "VIRGINIA I-395 / MM 5 /NB",
     "local": "US",
@@ -19836,20 +19528,6 @@
     "is_real_stream": true,
     "thumbnail_url": "",
     "url": "https://media-sfs2.vdotcameras.com:443/rtplive/NO0037/playlist.m3u8"
-  },
-  {
-    "id": "global_1bd55f3400e5",
-    "nome": "VIRGINIA I-395 / MM 6.2 / NB",
-    "local": "US",
-    "pais": "US",
-    "setor": "GLOBAL",
-    "tipo_area": "TRAFFIC",
-    "lat": 38.8403,
-    "long": -77.08408,
-    "status": "LIVE",
-    "is_real_stream": true,
-    "thumbnail_url": "",
-    "url": "https://media-sfs5.vdotcameras.com:443/rtplive/FairfaxVideo0680/playlist.m3u8"
   },
   {
     "id": "global_53cf3518e28b",
@@ -25704,20 +25382,6 @@
     "url": "https://media-sfs6.vdotcameras.com:443/rtplive/SalemI81MM924/playlist.m3u8"
   },
   {
-    "id": "global_5fcebd2a8b87",
-    "nome": "VIRGINIA I-81 / MM 94.3 / SB",
-    "local": "US",
-    "pais": "US",
-    "setor": "GLOBAL",
-    "tipo_area": "TRAFFIC",
-    "lat": 37.02655,
-    "long": -80.72975,
-    "status": "LIVE",
-    "is_real_stream": true,
-    "thumbnail_url": "",
-    "url": "https://media-sfs3.vdotcameras.com:443/rtplive/SalemI81MM943/playlist.m3u8"
-  },
-  {
     "id": "global_830c959d2d07",
     "nome": "VIRGINIA I-81 / MM 95.7 / NB",
     "local": "US",
@@ -26586,20 +26250,6 @@
     "url": "https://media-sfs3.vdotcameras.com:443/rtplive/FairfaxVideo3030/playlist.m3u8"
   },
   {
-    "id": "global_e4375e079f08",
-    "nome": "VIRGINIA I-95 / MM 177.6 / NB",
-    "local": "US",
-    "pais": "US",
-    "setor": "GLOBAL",
-    "tipo_area": "TRAFFIC",
-    "lat": 38.79368,
-    "long": -77.0486,
-    "status": "LIVE",
-    "is_real_stream": true,
-    "thumbnail_url": "",
-    "url": "https://media-sfs8.vdotcameras.com:443/rtplive/FairfaxVideo3000/playlist.m3u8"
-  },
-  {
     "id": "global_83a3163bba52",
     "nome": "VIRGINIA I-95 / MM 45.5 / SB",
     "local": "US",
@@ -27146,20 +26796,6 @@
     "url": "https://media-sfs1.vdotcameras.com:443/rtplive/RichmondCS95SB826/playlist.m3u8"
   },
   {
-    "id": "global_5fd4610d558f",
-    "nome": "VIRGINIA I-95 / MM 83.4 / SB",
-    "local": "US",
-    "pais": "US",
-    "setor": "GLOBAL",
-    "tipo_area": "TRAFFIC",
-    "lat": 37.63533,
-    "long": -77.45203,
-    "status": "LIVE",
-    "is_real_stream": true,
-    "thumbnail_url": "",
-    "url": "https://media-sfs3.vdotcameras.com:443/rtplive/RichmondCS95SB834/playlist.m3u8"
-  },
-  {
     "id": "global_2eb68166ec84",
     "nome": "VIRGINIA I-95 / MM 84 / NB / AT I-295",
     "local": "US",
@@ -27510,20 +27146,6 @@
     "url": "https://media-sfs5.vdotcameras.com:443/rtplive/vabeachcam025/playlist.m3u8"
   },
   {
-    "id": "global_76edec64c114",
-    "nome": "VIRGINIA LYNNHAVEN PKWY AND HOLLAND RD",
-    "local": "US",
-    "pais": "US",
-    "setor": "GLOBAL",
-    "tipo_area": "TRAFFIC",
-    "lat": 36.8002,
-    "long": -76.0859,
-    "status": "LIVE",
-    "is_real_stream": true,
-    "thumbnail_url": "",
-    "url": "https://media-sfs4.vdotcameras.com:443/rtplive/vabeachcam024/playlist.m3u8"
-  },
-  {
     "id": "global_040bd43eefbb",
     "nome": "VIRGINIA MLK FWY EXIT TO MIDTOWN TUNNEL",
     "local": "US",
@@ -27566,20 +27188,6 @@
     "url": "https://media-sfs7.vdotcameras.com:443/rtplive/woo142er76h7fvpp9ga6oj23np11xd34/playlist.m3u8"
   },
   {
-    "id": "global_794d2e05a082",
-    "nome": "VIRGINIA MAIN ST AND OAK ST",
-    "local": "US",
-    "pais": "US",
-    "setor": "GLOBAL",
-    "tipo_area": "TRAFFIC",
-    "lat": 38.85018,
-    "long": -77.3175,
-    "status": "LIVE",
-    "is_real_stream": true,
-    "thumbnail_url": "",
-    "url": "https://media-sfs4.vdotcameras.com:443/rtplive/p6u5dt9ftu61fkyfm7jmd3mdruc246fj/playlist.m3u8"
-  },
-  {
     "id": "global_905a18453c17",
     "nome": "VIRGINIA MAIN ST AND TEDRICH BLVD",
     "local": "US",
@@ -27592,20 +27200,6 @@
     "is_real_stream": true,
     "thumbnail_url": "",
     "url": "https://media-sfs5.vdotcameras.com:443/rtplive/ef3y7pfa6ts498f5gddyrdmxh3w5fzsp/playlist.m3u8"
-  },
-  {
-    "id": "global_2d60a9ba43ae",
-    "nome": "VIRGINIA MAIN ST AND WEST ST",
-    "local": "US",
-    "pais": "US",
-    "setor": "GLOBAL",
-    "tipo_area": "TRAFFIC",
-    "lat": 38.84651,
-    "long": -77.30774,
-    "status": "LIVE",
-    "is_real_stream": true,
-    "thumbnail_url": "",
-    "url": "https://media-sfs4.vdotcameras.com:443/rtplive/cdf5p46v9ebvsn4gno251kg6tlr46h4f/playlist.m3u8"
   },
   {
     "id": "global_2a0011929561",
@@ -28698,48 +28292,6 @@
     "is_real_stream": true,
     "thumbnail_url": "",
     "url": "https://media-sfs6.vdotcameras.com:443/rtplive/RI0129/playlist.m3u8"
-  },
-  {
-    "id": "global_d4dffa31f642",
-    "nome": "VIRGINIA US-1 / NB / FURNACE RD.",
-    "local": "US",
-    "pais": "US",
-    "setor": "GLOBAL",
-    "tipo_area": "TRAFFIC",
-    "lat": 38.6703,
-    "long": -77.2375,
-    "status": "LIVE",
-    "is_real_stream": true,
-    "thumbnail_url": "",
-    "url": "https://media-sfs5.vdotcameras.com:443/rtplive/NO0429/playlist.m3u8"
-  },
-  {
-    "id": "global_fc2935aafb06",
-    "nome": "VIRGINIA US-1 / NB / PINE BLUFF DR.",
-    "local": "US",
-    "pais": "US",
-    "setor": "GLOBAL",
-    "tipo_area": "TRAFFIC",
-    "lat": 38.5808,
-    "long": -77.311,
-    "status": "LIVE",
-    "is_real_stream": true,
-    "thumbnail_url": "",
-    "url": "https://media-sfs5.vdotcameras.com:443/rtplive/NO0426/playlist.m3u8"
-  },
-  {
-    "id": "global_b7bfcd8762a2",
-    "nome": "VIRGINIA US-1 / NB / PORT POTOMAC AVE.",
-    "local": "US",
-    "pais": "US",
-    "setor": "GLOBAL",
-    "tipo_area": "TRAFFIC",
-    "lat": 38.6015,
-    "long": -77.2945,
-    "status": "LIVE",
-    "is_real_stream": true,
-    "thumbnail_url": "",
-    "url": "https://media-sfs5.vdotcameras.com:443/rtplive/NO0427/playlist.m3u8"
   },
   {
     "id": "global_476350ac2276",
@@ -30436,20 +29988,6 @@
     "url": "https://media-sfs3.vdotcameras.com:443/rtplive/SalemUS460MM1263/playlist.m3u8"
   },
   {
-    "id": "global_36c6e60fcc85",
-    "nome": "VIRGINIA US-460 / MM 210.2 / M",
-    "local": "US",
-    "pais": "US",
-    "setor": "GLOBAL",
-    "tipo_area": "TRAFFIC",
-    "lat": 37.38602,
-    "long": -79.07278,
-    "status": "LIVE",
-    "is_real_stream": true,
-    "thumbnail_url": "",
-    "url": "https://media-sfs7.vdotcameras.com:443/rtplive/SalemUS460MM2102M/playlist.m3u8"
-  },
-  {
     "id": "global_316c2c4816c9",
     "nome": "VIRGINIA US-460 / MM 223.9/ W  WENDYS",
     "local": "US",
@@ -31260,20 +30798,6 @@
     "is_real_stream": true,
     "thumbnail_url": "",
     "url": "https://media-sfs5.vdotcameras.com:443/rtplive/SalemUS58US29Sydenham/playlist.m3u8"
-  },
-  {
-    "id": "global_73a02fbce8c4",
-    "nome": "VIRGINIA US-58 / WB / US-501 - SOUTH BOSTON",
-    "local": "US",
-    "pais": "US",
-    "setor": "GLOBAL",
-    "tipo_area": "TRAFFIC",
-    "lat": 36.68753,
-    "long": -78.90025,
-    "status": "LIVE",
-    "is_real_stream": true,
-    "thumbnail_url": "",
-    "url": "https://media-sfs3.vdotcameras.com:443/rtplive/SalemUS58US501Phillpot/playlist.m3u8"
   },
   {
     "id": "global_609c0ce1608a",
@@ -32676,20 +32200,6 @@
     "url": "https://media-sfs5.vdotcameras.com:443/rtplive/NO0404/playlist.m3u8"
   },
   {
-    "id": "global_3b343a48fa28",
-    "nome": "VIRGINIA VA-7 / MM 59 / WB",
-    "local": "US",
-    "pais": "US",
-    "setor": "GLOBAL",
-    "tipo_area": "TRAFFIC",
-    "lat": 38.92839,
-    "long": -77.24119,
-    "status": "LIVE",
-    "is_real_stream": true,
-    "thumbnail_url": "",
-    "url": "https://media-sfs5.vdotcameras.com:443/rtplive/NO0405/playlist.m3u8"
-  },
-  {
     "id": "global_0a733ad35125",
     "nome": "VIRGINIA VA-7 / MM 60.1 / WB",
     "local": "US",
@@ -32730,20 +32240,6 @@
     "is_real_stream": true,
     "thumbnail_url": "",
     "url": "https://media-sfs6.vdotcameras.com:443/rtplive/FairfaxVideo3615/playlist.m3u8"
-  },
-  {
-    "id": "global_9655d142d2b6",
-    "nome": "VIRGINIA VA-7 / MM 65 / WB",
-    "local": "US",
-    "pais": "US",
-    "setor": "GLOBAL",
-    "tipo_area": "TRAFFIC",
-    "lat": 38.87244,
-    "long": -77.15616,
-    "status": "LIVE",
-    "is_real_stream": true,
-    "thumbnail_url": "",
-    "url": "https://media-sfs5.vdotcameras.com:443/rtplive/NO0412/playlist.m3u8"
   },
   {
     "id": "global_71e1440de01e",
@@ -37160,26 +36656,6 @@
     "is_real_stream": true,
     "thumbnail_url": "",
     "url": "https://wzmedia.dot.ca.gov/D4/S880_at_JCT_92.stream/playlist.m3u8",
-    "video_id": null,
-    "source": "OpenTrafficCamMap",
-    "encoding": "H.264",
-    "stream_format": "M3U8"
-  },
-  {
-    "id": "otcm_ed5b90a5def7",
-    "nome": "California / Alameda - TV103 -- SR-24 : W24 JEO JCT 980",
-    "local": "Alameda, California",
-    "cidade": "Alameda",
-    "uf": "California",
-    "pais": "USA",
-    "setor": "GLOBAL",
-    "tipo_area": "TRAFFIC",
-    "lat": 37.82904,
-    "long": -122.26748,
-    "status": "LIVE",
-    "is_real_stream": true,
-    "thumbnail_url": "",
-    "url": "https://wzmedia.dot.ca.gov/D4/W24_JEO_JCT_980.stream/playlist.m3u8",
     "video_id": null,
     "source": "OpenTrafficCamMap",
     "encoding": "H.264",
@@ -43026,26 +42502,6 @@
     "stream_format": "M3U8"
   },
   {
-    "id": "otcm_142254116a35",
-    "nome": "California / El Dorado - Hwy 50 at Meyers",
-    "local": "El Dorado, California",
-    "cidade": "El Dorado",
-    "uf": "California",
-    "pais": "USA",
-    "setor": "GLOBAL",
-    "tipo_area": "TRAFFIC",
-    "lat": 38.850899,
-    "long": -120.022959,
-    "status": "LIVE",
-    "is_real_stream": true,
-    "thumbnail_url": "",
-    "url": "https://wzmedia.dot.ca.gov/D3/50_Meyers_ED50_WB.stream/playlist.m3u8",
-    "video_id": null,
-    "source": "OpenTrafficCamMap",
-    "encoding": "H.264",
-    "stream_format": "M3U8"
-  },
-  {
     "id": "otcm_702e44121752",
     "nome": "California / El Dorado - Hwy 50 at Hwy 89",
     "local": "El Dorado, California",
@@ -44120,26 +43576,6 @@
     "is_real_stream": true,
     "thumbnail_url": "",
     "url": "https://wzmedia.dot.ca.gov/D3/80_Soda_Springs_NEV80_EB.stream/playlist.m3u8",
-    "video_id": null,
-    "source": "OpenTrafficCamMap",
-    "encoding": "H.264",
-    "stream_format": "M3U8"
-  },
-  {
-    "id": "otcm_e26650653d02",
-    "nome": "California / Nevada - Hwy 80 at Old Ag Sta",
-    "local": "Nevada, California",
-    "cidade": "Nevada",
-    "uf": "California",
-    "pais": "USA",
-    "setor": "GLOBAL",
-    "tipo_area": "TRAFFIC",
-    "lat": 39.323597,
-    "long": -120.219099,
-    "status": "LIVE",
-    "is_real_stream": true,
-    "thumbnail_url": "",
-    "url": "https://wzmedia.dot.ca.gov/D3/80_AG_Station_NEV80_EB.stream/playlist.m3u8",
     "video_id": null,
     "source": "OpenTrafficCamMap",
     "encoding": "H.264",
@@ -45620,26 +45056,6 @@
     "is_real_stream": true,
     "thumbnail_url": "",
     "url": "https://wzmedia.dot.ca.gov/D12/NB5Cresent.stream/playlist.m3u8",
-    "video_id": null,
-    "source": "OpenTrafficCamMap",
-    "encoding": "H.264",
-    "stream_format": "M3U8"
-  },
-  {
-    "id": "otcm_23803f6f4bfc",
-    "nome": "California / Orange - I-5 : (116) Brookhurst Street",
-    "local": "Orange, California",
-    "cidade": "Orange",
-    "uf": "California",
-    "pais": "USA",
-    "setor": "GLOBAL",
-    "tipo_area": "TRAFFIC",
-    "lat": 33.84586,
-    "long": -117.95856,
-    "status": "LIVE",
-    "is_real_stream": true,
-    "thumbnail_url": "",
-    "url": "https://wzmedia.dot.ca.gov/D12/NB5Brookhurst.stream/playlist.m3u8",
     "video_id": null,
     "source": "OpenTrafficCamMap",
     "encoding": "H.264",
@@ -56926,26 +56342,6 @@
     "stream_format": "M3U8"
   },
   {
-    "id": "otcm_49e416f95dd9",
-    "nome": "California / Contra Costa - TV817 -- I-680 : Sourth of SR-242",
-    "local": "Contra Costa, California",
-    "cidade": "Contra Costa",
-    "uf": "California",
-    "pais": "USA",
-    "setor": "GLOBAL",
-    "tipo_area": "TRAFFIC",
-    "lat": 37.956922,
-    "long": -122.052452,
-    "status": "LIVE",
-    "is_real_stream": true,
-    "thumbnail_url": "",
-    "url": "https://wzmedia.dot.ca.gov/D4/N680_JSO_JCT_242.stream/playlist.m3u8",
-    "video_id": null,
-    "source": "OpenTrafficCamMap",
-    "encoding": "H.264",
-    "stream_format": "M3U8"
-  },
-  {
     "id": "otcm_ecf9ce66ceec",
     "nome": "California / Contra Costa - TV826 -- SR-242 : AT CONCORD AV",
     "local": "Contra Costa, California",
@@ -57980,26 +57376,6 @@
     "is_real_stream": true,
     "thumbnail_url": "",
     "url": "https://wzmedia.dot.ca.gov/D4/W37_EOF_JCT_29.stream/playlist.m3u8",
-    "video_id": null,
-    "source": "OpenTrafficCamMap",
-    "encoding": "H.264",
-    "stream_format": "M3U8"
-  },
-  {
-    "id": "otcm_a1f9dbd7b978",
-    "nome": "California / Marin - TVE73 -- US-101 : Spencer Avenue",
-    "local": "Marin, California",
-    "cidade": "Marin",
-    "uf": "California",
-    "pais": "USA",
-    "setor": "GLOBAL",
-    "tipo_area": "TRAFFIC",
-    "lat": 37.85081,
-    "long": -122.48975,
-    "status": "LIVE",
-    "is_real_stream": true,
-    "thumbnail_url": "",
-    "url": "https://wzmedia.dot.ca.gov/D4/N101_at_Spencer_Av.stream/playlist.m3u8",
     "video_id": null,
     "source": "OpenTrafficCamMap",
     "encoding": "H.264",
