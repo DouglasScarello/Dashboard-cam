@@ -706,10 +706,7 @@ async def camera_snapshot_native(camera_id: str):
             cam = db_manager.get_camera_by_id(raw_id)
 
     if not cam:
-        if _cameras:
-            cam = _cameras[0]
-        else:
-            return Response(content=_PLACEHOLDER_JPEG, media_type="image/jpeg")
+        return Response(content=_PLACEHOLDER_JPEG, media_type="image/jpeg")
 
     real_id = str(cam.get("id", camera_id))
     source_url = cam.get("url", "")
@@ -723,8 +720,6 @@ async def camera_snapshot_native(camera_id: str):
             "X-Capture-Timestamp": datetime.utcnow().isoformat() + "Z",
         },
     )
-
-    return Response(content=_PLACEHOLDER_JPEG, media_type="image/jpeg")
 
 
 
