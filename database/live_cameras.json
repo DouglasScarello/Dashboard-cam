@@ -36992,7 +36992,6 @@
   },
   {
     "id": "global_2cf0421a3be7",
-    "confirmed_dead": true,
     "nome": "MOUNTAIN HIGH RESORT",
     "local": "US",
     "pais": "US",
@@ -37004,7 +37003,8 @@
     "is_real_stream": true,
     "thumbnail_url": "",
     "video_id": "dyjqN3NezH0",
-    "url": "https://www.youtube.com/watch?v=dyjqN3NezH0"
+    "url": "https://www.youtube.com/watch?v=dyjqN3NezH0",
+    "manual_dead_override": true
   },
   {
     "id": "global_90e9610b90fb",

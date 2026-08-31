@@ -285,6 +285,28 @@ def reload_cameras() -> None:
     _cameras_by_id = {str(c.get("id")): c for c in cameras}
 
 
+_cameras_mtime: float = 0.0
+
+
+def _reload_cameras_if_changed() -> None:
+    """Recarrega live_cameras.json sozinho se o arquivo mudou no disco —
+    mesmo padrão do hot-reload do camera_liveness_state.json. Sem isso,
+    qualquer edição manual (ex: `manual_dead_override`) só surtia efeito
+    depois de matar e religar o processo na mão toda vez — foi exatamente
+    o que aconteceu aqui (2026-08-30) e gerou confusão sobre se o campo
+    de override tinha funcionado ou não."""
+    global _cameras_mtime
+    try:
+        mtime = LIVE_CAMERAS_PATH.stat().st_mtime
+    except FileNotFoundError:
+        return
+    if mtime == _cameras_mtime:
+        return
+    reload_cameras()
+    _cameras_mtime = mtime
+    log.info(f"live_cameras.json recarregado sozinho ({len(_cameras)} câmeras).")
+
+
 # --------------------------------------------------------------------------
 # Placeholder JPEG (câmera offline / falha de captura)
 # --------------------------------------------------------------------------
@@ -516,6 +538,7 @@ async def list_cameras(
     country: Optional[str] = None,
     sector: Optional[str] = None
 ):
+    _reload_cameras_if_changed()
     _reload_liveness_state_if_changed()
     filtered = _cameras
 
