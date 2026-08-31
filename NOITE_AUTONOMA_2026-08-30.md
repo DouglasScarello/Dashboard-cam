@@ -480,3 +480,72 @@ manifesto HLS de 2 níveis, nunca só HTTP 200).
 - [ ] Revisar/testar features que a outra sessão está construindo em
   paralelo (CameraMap.tsx, HlsVideoPlayer.tsx) sem pisar no trabalho dela
 - [ ] Qualquer bug que aparecer nos logs do servidor
+
+---
+
+## 🏁 Fechamento — resumo executivo da noite (23:32 → ~09:55 BRT)
+
+> [!NOTE]
+> Encerrando a rodada de tarefas por volta das 10h combinadas. Servidor
+> segue rodando saudável sob o supervisor (`while true`), sem intervenção
+> manual necessária. Bom dia — segue o resumo do que mudou.
+
+### Números
+
+| | Início da noite | Fechamento |
+|---|---|---|
+| Câmeras no catálogo | 2516 (só HLS, pós-remoção do YouTube) | **8309** (verificadas, sem YouTube) |
+| Fontes ativas | 1 (curadoria original) | 6 (+ OpenTrafficCamMap, Ontario 511, NZTA, Islândia, Finlândia) |
+| Thumbnail real funcionando | ❌ (100% quebrado) | ✅ (verificado em todas as fontes) |
+
+### 8 commits de bug fix (todos com causa raiz documentada + verificação ponta a ponta)
+1. Captura de thumbnail 100% quebrada (URL YouTube forçada + return corrompido)
+2. `/api/cameras/map` — `NameError` (`db_result` indefinido) + coluna de banco não confiável
+3. Filtro `ONLINE/OFFLINE` e bbox do mapa usavam coluna `confirmed_dead` crua
+4. `NameError` no endpoint de snapshot forense (`_cameras` indefinida)
+5. `hls_liveness.py` corrompia o estado de câmeras `SNAPSHOT_JPEG`
+6. Inferência de `video_id` podia sequestrar câmera não-YouTube pro player errado
+7. `content_validation.py` rodava yt-dlp à toa contra o catálogo inteiro
+8. **`snapshot_liveness.py` tratava `HTTP 429` como câmera morta** (o mais crítico — quase apagou a integração da Finlândia horas depois de ela ter dado certo)
+
+### 5 fontes de câmera reais integradas (todas sem cadastro/API key)
+OpenTrafficCamMap, Ontario 511, NZTA (Nova Zelândia), Vegagerdin (Islândia),
+Digitraffic (Finlândia — essa exigiu 3 tentativas até descobrir que só
+tolera tráfego sequencial, nunca concorrente).
+
+### 2 funções novas na API
+`?source=` (filtro) + `GET /api/metadata/sources` (contagem por fonte),
+e `GET /api/metadata/stats` (resumo pro dashboard: total/online/offline/
+países/áreas/fontes).
+
+### ~15 fontes pesquisadas e descartadas/parqueadas (motivo documentado
+acima em cada seção, pra não repetir a pesquisa numa sessão futura):
+NSW Austrália (dado morto), Utah UDOT (WAF), Espanha DGT (endpoint
+desativado), Polônia GDDKiA (JS não-óbvio), Quebec 511 (Cloudflare no
+host de vídeo), Suécia/UK-Escócia/UK-Wales/Coreia do Sul (exigem
+cadastro), Noruega Vegvesen (confirmado: serviço desativado de vez),
+Áustria ASFINAG (WAF/timeout), Holanda NDW (só tem dado de fluxo).
+
+### O que ficou pra uma sessão futura, com contexto pra retomar rápido
+- Fontes com API real mas exigindo cadastro do usuário (Trafikverket,
+  511NY/GA/NC/WI/AZ/UT/LA, Traffic Scotland/Wales) — só o usuário pode
+  se cadastrar, não é algo que dá pra automatizar.
+- Quebec 511: dados de metadado (675 câmeras reais, coordenadas certas)
+  já verificados via `ws.mapserver.transports.gouv.qc.ca` — só falta um
+  jeito de contornar o Cloudflare no host de vídeo (precisaria de
+  automação de browser real, tipo Playwright com stealth).
+- Polônia GDDKiA: a página carrega dados via JS não-óbvio — precisaria
+  inspecionar requisições de rede reais (como fiz com sucesso pra
+  Islândia e Noruega) em vez de só grep no HTML estático.
+- Considerar migrar `hls_liveness.py`/`camera_liveness.py` (YouTube) pro
+  mesmo padrão `RATE_LIMITED` que `snapshot_liveness.py` ganhou hoje —
+  qualquer host que aplicar rate-limit no futuro teria o mesmo bug.
+
+### Verificação final (09:55 BRT)
+Servidor rodando há 10h+ sem crash, 0 erros nos logs recentes, dataset
+consistente entre JSON/SQLite/API (8309/8309/8309), 100% das câmeras
+online segundo `/api/metadata/stats`, frontend confirmado funcionando
+via browser real (grade de câmeras, filtros de país/área/status, mapa).
+31 commits ao todo esta noite, todos pequenos e com mensagem descrevendo
+causa raiz + verificação — sem nenhum realizado sem antes confirmar
+ponta a ponta pelo servidor rodando.
