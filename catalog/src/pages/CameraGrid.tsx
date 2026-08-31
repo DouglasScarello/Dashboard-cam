@@ -408,9 +408,18 @@ const CameraTile = React.memo(function CameraTile({
     onClick: () => void;
 }) {
     const { t } = useTranslation();
-    const defaultThumb = camera.thumbnail_url 
-        ? `${API_BASE}${camera.thumbnail_url}?t=${tick}`
-        : camera.video_id 
+    // Achado real (2026-08-31): `tick` muda a cada 5s (mesmo ritmo do
+    // polling de alertas), mas o backend só gera uma thumbnail nova a
+    // cada 30s (THUMBNAIL_TTL em camera_grid_server.py) — trocar a `src`
+    // da imagem 6x mais rápido do que ela pode mudar de verdade
+    // interrompe o carregamento antes de terminar (mesma classe de bug
+    // do player HLS que reiniciava a cada 5s e nunca terminava de
+    // bufferizar). `thumbTick` arredonda pra um "balde" de 30s — a URL só
+    // muda quando a imagem por trás dela genuinamente pode ter mudado.
+    const thumbTick = Math.floor(tick / 6);
+    const defaultThumb = camera.thumbnail_url
+        ? `${API_BASE}${camera.thumbnail_url}?t=${thumbTick}`
+        : camera.video_id
             ? `https://img.youtube.com/vi/${camera.video_id}/hqdefault.jpg`
             : '';
 
@@ -418,11 +427,11 @@ const CameraTile = React.memo(function CameraTile({
 
     useEffect(() => {
         if (camera.thumbnail_url) {
-            setImgSrc(`${API_BASE}${camera.thumbnail_url}?t=${tick}`);
+            setImgSrc(`${API_BASE}${camera.thumbnail_url}?t=${thumbTick}`);
         } else if (camera.video_id) {
             setImgSrc(`https://img.youtube.com/vi/${camera.video_id}/hqdefault.jpg`);
         }
-    }, [camera.thumbnail_url, camera.video_id, tick]);
+    }, [camera.thumbnail_url, camera.video_id, thumbTick]);
 
     const alertLabel = alert
         ? alert.type === 'WEAPON'
@@ -452,7 +461,6 @@ const CameraTile = React.memo(function CameraTile({
                     }}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                     alt={camera.nome}
-                    loading="lazy"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-80" />
 
