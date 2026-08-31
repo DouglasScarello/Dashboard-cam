@@ -167,6 +167,47 @@ pública documentada, não parece intencional bloquear ingestão pontual).
 Próxima tentativa: esperar accumulate um tempo maior sem bater no host,
 então rodar liveness com concorrência baixa (≤5) e delay entre lotes.
 
+## 03:25–03:50 — Bug real encontrado por auditoria + Islândia (Vegagerðin): +498 câmeras reais
+
+Pedi uma varredura focada no mesmo padrão de bug de copy-paste já
+corrigido duas vezes esta noite. Achado real: `camera_snapshot_native`
+(endpoint `/api/cameras/{id}/snapshot`, usado pro crop forense de
+placa/rosto) referenciava `_cameras`, variável nunca definida — resíduo
+de uma versão pré-SQLite. Qualquer `camera_id` desconhecido (ex: um id
+digitado errado num link de alerta) derrubava o endpoint com
+`NameError` em vez de cair no placeholder. Corrigido pra simplesmente
+devolver o placeholder quando a câmera não é encontrada; removido também
+um `return` morto/inalcançável logo depois do return real. Verificado:
+`GET /api/cameras/id_inexistente/snapshot` agora responde `200` com o
+placeholder em vez de `500`.
+
+Enquanto isso, pesquisei mais fontes sem cadastro. **NSW (Austrália)**
+tinha uma API JSON pública (`data.livetraffic.com/cameras/traffic-cam.json`)
+mas o bucket de imagens real foi desativado em 2023 (toda URL devolve o
+mesmo placeholder de 307 bytes "page not found", `Last-Modified: 2023`)
+— fonte descartada, dado morto.
+
+**Islândia (Vegagerðin)** funcionou: não tem API REST documentada, mas o
+JSON de pré-renderização Next.js da página oficial `umferdin.is/en/cameras`
+(`/_next/data/{buildId}/en/cameras.json`) expõe 165 estações reais com
+coordenadas e até 4 ângulos cada (500 imagens no total), servidas direto
+em `vegagerdin.is/vgdata/vefmyndavelar/{slug}_{n}.jpg`. Criado
+`ingest_iceland.py` (mesmo padrão SNAPSHOT_JPEG dos outros). Liveness
+checado com concorrência baixa (10, aprendendo com o erro do Digitraffic)
+— **500/500 vivas (99.9%, únicas 2 mortas eram de Ontario, não-relacionadas
+e já removidas)**. Verificado ponta a ponta: câmera "Hellisheiði" retorna
+imagem JPEG real de 76KB pelo servidor rodando. **5908 → 6406 câmeras.**
+
+Achado secundário (cosmético, corrigido no mesmo commit): meu primeiro
+`.strip(" -()")` no nome da câmera removia o parêntese de fechamento
+legítimo (ex: "IS - Hellisheiði (Hringvegur" sem fechar) — trocado por
+uma montagem condicional que não usa strip sobre parênteses.
+
+Nota pra amanhã: `buildId` do Next.js muda a cada deploy do umferdin.is —
+se `ingest_iceland.py` parar de funcionar, é o primeiro lugar a checar
+(o script já busca o buildId atual dinamicamente do HTML, então só quebra
+se a estrutura da página mudar de framework).
+
 ## Próximos itens da fila (ordem que pretendo seguir)
 
 - [ ] Verificar thumbnail real numa amostra maior de câmeras (não só 1)
