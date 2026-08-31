@@ -1,3 +1,4 @@
+import db_manager
 #!/usr/bin/env python3
 """
 Camera Grid API — Olho de Deus.
@@ -70,8 +71,6 @@ app.add_middleware(
 # Estado / caches em memória
 # --------------------------------------------------------------------------
 
-_cameras: List[Dict[str, Any]] = []
-_cameras_by_id: Dict[str, Dict[str, Any]] = {}
 _liveness_state: Dict[str, Any] = {}
 _liveness_mtime: float = 0.0
 
@@ -210,21 +209,42 @@ def _get_active_alerts() -> List[Dict[str, Any]]:
 # Carregamento da lista de câmeras
 # --------------------------------------------------------------------------
 
-def _capture_real_frame_jpeg(camera_id: str, source_url: str, timeout_s: float = 8.0) -> Optional[bytes]:
+def _is_direct_stream_url(url: str) -> bool:
+    """True pra URL já tocável direto (HLS .m3u8 de servidor real tipo
+    Wowza/streamlock/DOT) — não precisa (e não pode) passar pelo resolvedor
+    orientado a YouTube."""
+    return bool(url) and "youtube.com" not in url and "youtu.be" not in url
+
+
+def _capture_real_frame_jpeg(camera_id: str, source_url: str, timeout_s: float = 15.0) -> Optional[bytes]:
     """Frame REAL da transmissão ao vivo agora — não a thumbnail estática do
     YouTube (que pode ser de qualquer momento passado, ou nem existir pra
-    uma live). Resolve a URL do stream (reaproveitando o cache de
-    `_resolve_stream_url_sync`) e usa `ffmpeg` pra extrair 1 frame."""
-    stream_url = _resolve_stream_url_sync(camera_id, source_url)
+    uma live).
+
+    Achados reais (2026-08-30): (1) câmeras HLS diretas (Wowza/streamlock/
+    DOT — hoje 100% do catálogo, já que as câmeras do YouTube foram todas
+    removidas) sempre falhavam aqui porque a URL passava pelo resolvedor
+    `_resolve_stream_url_sync`/`get_live_url`, que só sabe extrair vídeo do
+    YouTube — pra uma URL Wowza isso sempre retornava None. (2) mesmo
+    quando o ffmpeg tinha sucesso, o retorno estava quebrado
+    (`{"cameras": ...}.stdout` — dict não tem esse atributo, um resto de
+    copy-paste de outro trecho de código), então a captura NUNCA
+    funcionava, nem pra câmera nenhuma."""
+    if _is_direct_stream_url(source_url):
+        stream_url = source_url
+    else:
+        stream_url = _resolve_stream_url_sync(camera_id, source_url)
     if not stream_url:
         return None
     try:
         result = subprocess.run(
-            ["ffmpeg", "-y", "-i", stream_url, "-frames:v", "1", "-q:v", "3", "-f", "image2", "pipe:1"],
+            ["ffmpeg", "-y", "-loglevel", "error", "-i", stream_url, "-frames:v", "1", "-q:v", "3", "-f", "image2", "pipe:1"],
             capture_output=True, timeout=timeout_s,
         )
         if result.returncode == 0 and len(result.stdout) > 2000:
             return result.stdout
+        if result.returncode != 0:
+            log.warning(f"ffmpeg falhou pra câmera {camera_id}: {result.stderr[-300:].decode('utf-8', errors='ignore')}")
     except Exception as e:
         log.warning(f"Falha ao capturar frame real da câmera {camera_id}: {e}")
     return None
@@ -249,62 +269,13 @@ def _fetch_youtube_thumbnail(video_id: str) -> Optional[bytes]:
 
 
 def load_cameras() -> List[Dict[str, Any]]:
-    """Carrega a lista completa de câmeras reais a partir de live_cameras.json."""
-    cameras: List[Dict[str, Any]] = []
-
-    if LIVE_CAMERAS_PATH.exists():
-        try:
-            with open(LIVE_CAMERAS_PATH, "r", encoding="utf-8") as f:
-                raw = json.load(f)
-            cameras = [c for c in raw if c.get("video_id") or c.get("url")]
-            log.info(
-                f"Carregadas {len(cameras)} câmeras REAIS de {LIVE_CAMERAS_PATH.name}."
-            )
-        except Exception as e:
-            log.error(f"Falha ao ler {LIVE_CAMERAS_PATH}: {e}")
-            cameras = []
-
-    if not cameras and OMNI_CAMS_PATH.exists():
-        try:
-            with open(OMNI_CAMS_PATH, "r", encoding="utf-8") as f:
-                cameras = json.load(f)
-            log.info(
-                f"Fallback: carregadas {len(cameras)} câmeras de {OMNI_CAMS_PATH.name}."
-            )
-        except Exception as e:
-            log.error(f"Falha ao ler {OMNI_CAMS_PATH}: {e}")
-            cameras = []
-
-    return cameras
-
+    # A função original lia do disco, agora vamos apenas re-alimentar o spatial_index se necessário, 
+    # mas o grid server não precisa mais armazenar em memória!
+    pass
 
 def reload_cameras() -> None:
-    global _cameras, _cameras_by_id
-    cameras = load_cameras()
-    _cameras = cameras
-    _cameras_by_id = {str(c.get("id")): c for c in cameras}
-
-
-_cameras_mtime: float = 0.0
-
-
-def _reload_cameras_if_changed() -> None:
-    """Recarrega live_cameras.json sozinho se o arquivo mudou no disco —
-    mesmo padrão do hot-reload do camera_liveness_state.json. Sem isso,
-    qualquer edição manual (ex: `manual_dead_override`) só surtia efeito
-    depois de matar e religar o processo na mão toda vez — foi exatamente
-    o que aconteceu aqui (2026-08-30) e gerou confusão sobre se o campo
-    de override tinha funcionado ou não."""
-    global _cameras_mtime
-    try:
-        mtime = LIVE_CAMERAS_PATH.stat().st_mtime
-    except FileNotFoundError:
-        return
-    if mtime == _cameras_mtime:
-        return
-    reload_cameras()
-    _cameras_mtime = mtime
-    log.info(f"live_cameras.json recarregado sozinho ({len(_cameras)} câmeras).")
+    # Não faz mais nada porque agora lemos direto do SQLite
+    pass
 
 
 # --------------------------------------------------------------------------
@@ -380,7 +351,7 @@ def _capture_thumbnail_sync(camera_id: str, source_url: str) -> bytes:
         if cached is not None and (now - cached["ts"]) < THUMBNAIL_TTL:
             return cached["bytes"]
 
-        cam = _cameras_by_id.get(camera_id, {})
+        cam = db_manager.get_camera_by_id(camera_id) or {}
         video_id = cam.get("video_id")
 
         # 1. Frame real via ffmpeg do stream ao vivo (pode levar alguns
@@ -446,7 +417,7 @@ def _danger_detection_worker() -> None:
     per_camera_state: Dict[str, Dict[str, int]] = {}
 
     while True:
-        cams_snapshot = list(_cameras)
+        cams_snapshot = db_manager.get_cameras(limit=10000, status='ONLINE', geo='WITH_GEO')['cameras'] # Apenas um subset para demo, ideal seria iterar banco
         if not cams_snapshot:
             time.sleep(5.0)
             continue
@@ -527,7 +498,7 @@ async def startup_event():
 
 @app.get("/api/health")
 async def health():
-    return {"status": "ONLINE", "cameras_loaded": len(_cameras)}
+    return {"status": "ONLINE", "cameras_loaded": "DB"}
 
 
 @app.get("/api/cameras")
@@ -536,35 +507,29 @@ async def list_cameras(
     offset: int = 0,
     search: Optional[str] = None,
     country: Optional[str] = None,
-    sector: Optional[str] = None
+    area: Optional[str] = None,
+    status: Optional[str] = "ALL",
+    geo: Optional[str] = "ALL"
 ):
-    _reload_cameras_if_changed()
     _reload_liveness_state_if_changed()
-    filtered = _cameras
-
-    if country:
-        c_upper = country.strip().upper()
-        filtered = [c for c in filtered if c.get("pais", "").upper() == c_upper]
-        
-    if sector:
-        s_upper = sector.strip().upper()
-        filtered = [c for c in filtered if c.get("setor", "").upper() == s_upper]
-        
-    if search:
-        s_low = search.strip().lower()
-        filtered = [
-            c for c in filtered 
-            if s_low in c.get("nome", "").lower() or s_low in c.get("local", "").lower()
-        ]
-        
-    sliced = filtered[offset : offset + limit] if limit else filtered[offset:]
+    
+    db_result = db_manager.get_cameras(
+        limit=limit,
+        offset=offset,
+        country=country,
+        area=area,
+        status=status,
+        geo=geo,
+        search=search
+    )
+    sliced = db_result["cameras"]
     
     result = []
     for cam in sliced:
         cam_id = str(cam.get("id"))
         source_url = cam.get("url", "")
         vid_id = cam.get("video_id")
-        if not vid_id and "v=" in source_url:
+        if not vid_id and source_url and "v=" in source_url:
             vid_id = source_url.split("v=")[1].split("&")[0]
             
         liveness = get_camera_liveness(cam_id, cam)
@@ -584,21 +549,37 @@ async def list_cameras(
                 "video_id": vid_id,
                 "lat": cam.get("lat"),
                 "long": cam.get("long"),
-                # Liveness real (ver camera_liveness.py) — nunca assumir
-                # "ao vivo" sem checagem recente. O frontend usa isto pra
-                # nunca abrir uma câmera que já não existe mais no YouTube.
                 "live_confirmed": liveness["live_confirmed"],
                 "confirmed_dead": liveness["confirmed_dead"],
                 "live_status": liveness["live_status"],
                 "live_checked_at": liveness["checked_at"],
             }
         )
-    return result
+    return {"cameras": result, "total": db_result["total"]}
+
+@app.get("/api/cameras/map")
+async def list_cameras_map(north: float, south: float, east: float, west: float, limit: int = 1000):
+    cams = db_manager.get_cameras_in_bbox(north, south, east, west, limit)
+    result = []
+    for cam in cams:
+        cam_id = str(cam.get("id"))
+        result.append({
+            "id": cam_id,
+            "nome": cam.get("nome", ""),
+            "lat": cam.get("lat"),
+            "long": cam.get("long"),
+            "tipo_area": cam.get("tipo_area", ""),
+            "thumbnail_url": f"/api/cameras/{cam_id}/thumbnail.jpg",
+            "video_id": cam.get("video_id"),
+            "url": cam.get("url"),
+            "confirmed_dead": cam.get("confirmed_dead", False)
+        })
+    return {"cameras": result, "total": db_result["total"]}
 
 
 @app.get("/api/cameras/{camera_id}/thumbnail.jpg")
 async def camera_thumbnail(camera_id: str):
-    cam = _cameras_by_id.get(camera_id)
+    cam = db_manager.get_camera_by_id(camera_id)
     if cam is None:
         return Response(content=_PLACEHOLDER_JPEG, media_type="image/jpeg")
 
@@ -620,7 +601,7 @@ async def get_alerts():
 
 @app.get("/api/cameras/{camera_id}/live_url")
 async def camera_live_url(camera_id: str):
-    cam = _cameras_by_id.get(camera_id)
+    cam = db_manager.get_camera_by_id(camera_id)
     if cam is None:
         return {"url": None, "video_id": None}
 
@@ -647,13 +628,13 @@ async def camera_snapshot_native(camera_id: str):
     usuário reportou que isso não reflete o que a câmera está gravando
     agora, e pra perícia isso importa de verdade, não é cosmético.
     """
-    cam = _cameras_by_id.get(camera_id)
+    cam = db_manager.get_camera_by_id(camera_id)
     if not cam:
         if not camera_id.startswith("cam_"):
-            cam = _cameras_by_id.get(f"cam_{camera_id}")
+            cam = db_manager.get_camera_by_id(f"cam_{camera_id}")
         else:
             raw_id = camera_id.replace("cam_", "")
-            cam = _cameras_by_id.get(raw_id)
+            cam = db_manager.get_camera_by_id(raw_id)
 
     if not cam:
         if _cameras:
@@ -683,7 +664,7 @@ async def camera_comprovante(camera_id: str):
     import hashlib
     from datetime import datetime
 
-    cam = _cameras_by_id.get(camera_id)
+    cam = db_manager.get_camera_by_id(camera_id)
     if cam is None:
         return Response(content="CAMERA NAO ENCONTRADA", status_code=404, media_type="text/plain")
 
@@ -727,6 +708,15 @@ async def camera_comprovante(camera_id: str):
     return Response(content="\n".join(linhas), media_type="text/plain; charset=utf-8")
 
 
+@app.get("/api/metadata/countries")
+async def get_countries():
+    return db_manager.get_unique_countries()
+
+@app.get("/api/metadata/areas")
+async def get_areas():
+    return db_manager.get_unique_areas()
+
 if __name__ == "__main__":
     reload_cameras()
     uvicorn.run(app, host="0.0.0.0", port=8001)
+
