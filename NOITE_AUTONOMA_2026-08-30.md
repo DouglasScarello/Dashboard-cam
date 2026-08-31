@@ -111,6 +111,20 @@ supervisor por engano (o padrão batia na linha de comando do supervisor
 inteiro) — agora mato só o PID exato do processo Python, nunca por
 padrão de texto.
 
+## 00:12–00:17 — Filtro ONLINE/OFFLINE e mapa usavam coluna de banco não confiável
+
+Mesma classe de problema: `status=ONLINE/OFFLINE` na listagem principal e
+`get_cameras_in_bbox` (mapa) filtravam pela coluna `confirmed_dead` do
+SQLite, que é só resíduo do JSON de origem, nunca mantida com precisão.
+Movido o filtro de status pra Python, calculado com `get_camera_liveness()`
+de verdade (a mesma fonte que já governa a grade principal). Metadado
+(país/área/geo/busca) continua filtrando no SQL, que é seguro. Verificado:
+`?status=ONLINE` retorna as 5904 atuais corretamente.
+
+Pendência anotada, não mexida: worker de detecção de perigo ainda usa o
+filtro antigo — o próprio código já se auto-rotula "demo", deixado fora
+do escopo por ora.
+
 ## Próximos itens da fila (ordem que pretendo seguir)
 
 - [ ] Verificar thumbnail real numa amostra maior de câmeras (não só 1)
