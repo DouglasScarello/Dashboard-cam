@@ -709,12 +709,23 @@ async def camera_live_url(camera_id: str):
         return {"url": None, "video_id": None}
 
     source_url = cam.get("url", "")
-    resolved = await resolve_stream_url(camera_id, source_url)
-    
+    # Achado real (2026-08-31, reportado pelo usuário: câmera com HLS
+    # direto confirmado funcionando via curl mostrava tela preta no
+    # player): igual ao bug já corrigido em `_capture_real_frame_jpeg`,
+    # `resolve_stream_url` sempre chamava `get_live_url` (yt-dlp) mesmo
+    # pra URL HLS direta — que não é vídeo do YouTube, então o yt-dlp
+    # falha silenciosamente e devolve None. O frontend recebia
+    # `{"url": null}` e o player nunca tinha uma URL real pra carregar,
+    # mesmo a câmera estando genuinamente ao vivo (confirmado via curl).
+    if _is_direct_stream_url(source_url):
+        resolved = source_url
+    else:
+        resolved = await resolve_stream_url(camera_id, source_url)
+
     video_id = cam.get("video_id")
     if not video_id and cam.get("stream_format") != "SNAPSHOT_JPEG" and "youtube.com" in source_url and "v=" in source_url:
         video_id = source_url.split("v=")[1].split("&")[0]
-        
+
     return {
         "url": resolved,
         "video_id": video_id,
