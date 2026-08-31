@@ -449,6 +449,27 @@ generalização real, não gambiarra específica. Verificado: rodando de novo,
 0 mortas, 1519 corretamente em quarentena (preservando o estado anterior),
 Digitraffic continua 2258/2258 online pela API.
 
+## 08:15–08:22 — Revalidação periódica + estado atual consolidado
+
+Mais uma rodada de `hls_liveness.py`: 80 mortas de 3787 (2.1%, dentro do
+esperado). Removidas. **8453 → 8373 câmeras (8369 pós-filtro).**
+
+### Estado consolidado às 08:22 BRT
+
+| Fonte | Câmeras | Tipo | Cadastro? |
+|---|---|---|---|
+| Curadoria original (pré-noite) | ~2380 | HLS/misto | — |
+| OpenTrafficCamMap | ~1470 | HLS | Não |
+| Ontario 511 | ~1584 | SNAPSHOT_JPEG | Não |
+| NZTA (Nova Zelândia) | 319 | SNAPSHOT_JPEG | Não |
+| Vegagerdin (Islândia) | 500 | SNAPSHOT_JPEG | Não |
+| Digitraffic (Finlândia) | 2258 | SNAPSHOT_JPEG | Não |
+| **Total** | **~8369** | | |
+
+Todas as fontes verificadas ponta a ponta pelo servidor rodando (não só
+teoricamente), com liveness real (magic bytes JPEG ou validação de
+manifesto HLS de 2 níveis, nunca só HTTP 200).
+
 ## Próximos itens da fila (ordem que pretendo seguir)
 
 - [ ] Verificar thumbnail real numa amostra maior de câmeras (não só 1)
