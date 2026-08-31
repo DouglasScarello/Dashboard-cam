@@ -18,6 +18,7 @@ import argparse
 import concurrent.futures
 import json
 import time
+import urllib.error
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
@@ -37,6 +38,13 @@ def is_snapshot_camera(cam: Dict[str, Any]) -> bool:
 
 
 def check_one_snapshot(url: str) -> Dict[str, Any]:
+    """Achado real (2026-08-31): alguns hosts (ex: weathercam.digitraffic.fi)
+    aplicam rate-limit agressivo por IP — sob concorrência alta, várias
+    câmeras genuinamente vivas voltam HTTP 429 ao mesmo tempo. Tratar 429
+    como "morta" apagaria centenas de câmeras reais só por causa de
+    etiqueta de rede, não porque a câmera parou de existir. Por isso 429
+    vira um status PRÓPRIO (RATE_LIMITED) — nem confirma viva nem confirma
+    morta; `run()` nunca deixa isso sobrescrever um LIVE anterior."""
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     try:
         with urllib.request.urlopen(req, timeout=TIMEOUT_SECONDS) as resp:
@@ -46,6 +54,10 @@ def check_one_snapshot(url: str) -> Dict[str, Any]:
             if not head.startswith(JPEG_MAGIC):
                 return {"status": "DEAD", "is_live": False, "error": "resposta não é um JPEG válido"}
             return {"status": "LIVE", "is_live": True, "error": None}
+    except urllib.error.HTTPError as e:
+        if e.code == 429:
+            return {"status": "RATE_LIMITED", "is_live": None, "error": "HTTP 429 — inconclusivo, não é prova de morte"}
+        return {"status": "DEAD", "is_live": False, "error": f"HTTPError: {e.code}"}
     except Exception as e:
         return {"status": "DEAD", "is_live": False, "error": f"{type(e).__name__}: {e}"[:300]}
 
@@ -85,12 +97,24 @@ def run(concurrency: int, limit: Optional[int]) -> Dict[str, Any]:
         for cam_id, r in ex.map(work, snap_cameras):
             results[cam_id] = r
 
+    rate_limited = sum(1 for r in results.values() if r["status"] == "RATE_LIMITED")
     live = sum(1 for r in results.values() if r["status"] == "LIVE")
-    print(f"Checadas {len(results)} câmeras snapshot — LIVE: {live} ({live/max(1,len(results))*100:.1f}%) | MORTAS: {len(results)-live}")
+    dead = sum(1 for r in results.values() if r["status"] == "DEAD")
+    print(
+        f"Checadas {len(results)} câmeras snapshot — LIVE: {live} "
+        f"({live/max(1,len(results))*100:.1f}%) | MORTAS: {dead} | "
+        f"RATE-LIMITED (inconclusivo, estado anterior preservado): {rate_limited}"
+    )
 
-    state.update(results)
+    # RATE_LIMITED nunca sobrescreve o estado anterior — é inconclusivo,
+    # não prova nem vida nem morte. Só grava se ainda não havia nada pra
+    # essa câmera (cold start honesto: fica UNKNOWN até uma checagem real).
+    for cam_id, r in results.items():
+        if r["status"] == "RATE_LIMITED" and cam_id in state:
+            continue
+        state[cam_id] = r
     save_json(STATE_PATH, state)
-    return {"checked": len(results), "live": live, "dead": len(results) - live}
+    return {"checked": len(results), "live": live, "dead": dead, "rate_limited": rate_limited}
 
 
 if __name__ == "__main__":
