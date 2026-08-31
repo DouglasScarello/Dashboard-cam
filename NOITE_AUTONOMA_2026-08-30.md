@@ -397,6 +397,37 @@ mesmos direcionam pra Datex (cadastro) como única alternativa hoje.
 Confirmação definitiva, não mais uma suposição — Noruega fica parqueada
 de vez, sem necessidade de tentar de novo numa sessão futura.
 
+## 06:47–07:56 — Digitraffic reintegrado de verdade: 3ª tentativa, sequencial, 100% vivas
+
+Testei de novo se o rate-limit tinha liberado (sim). Desta vez, em vez de
+concorrência baixa + pausa entre lotes (que ainda tinha dado 429 duas
+vezes antes), fui radicalmente mais conservador: **totalmente
+sequencial, 1 requisição por segundo, sem nenhuma concorrência**. Rodei
+uma amostra de 50 primeiro (50/50 OK) pra confirmar o ritmo antes de
+comprometer o catálogo inteiro. Depois rodei as 2258 câmeras completas em
+background (usando o `Monitor` pra não ficar checando manualmente) —
+demorou ~67 minutos (mais que o estimado, por causa de timeouts
+individuais ocasionais), mas terminou com **2258/2258 vivas, ZERO
+rate-limit**. Lição confirmada: esse host tolera tráfego sequencial lento
+sem problema, só não tolera qualquer nível de paralelismo, mesmo baixo.
+
+Achado extra, desta vez um bug MEU (no script ad-hoc de checagem, não no
+código do projeto): capturei a variável `now` (timestamp) UMA VEZ antes
+do loop de ~1h, então todo resultado saiu gravado com o mesmo instante
+do INÍCIO da checagem, não do momento real de cada teste. Como
+`get_camera_liveness()` trata qualquer `checked_at` com mais de 30min
+como "stale" (por design — não quer mostrar como viva uma câmera checada
+há muito tempo), quando finalmente integrei os resultados no catálogo o
+timestamp já tinha "vencido" o próprio threshold de frescor, mesmo a
+checagem real tendo sido bem-sucedida minutos antes de eu integrar.
+Corrigido regravando `checked_at` com o momento real da integração — a
+câmera já tinha prova de vida válida, só a data registrada estava errada.
+
+Verificado ponta a ponta: 5 câmeras aleatórias da Finlândia retornam
+thumbnails reais (175KB a 2.4MB) pelo servidor rodando, `live_confirmed:
+true`. **6195 → 8453 câmeras (8449 pós-filtro).** Fonte que passou a
+noite inteira sendo tentativa/erro finalmente entregue de verdade.
+
 ## Próximos itens da fila (ordem que pretendo seguir)
 
 - [ ] Verificar thumbnail real numa amostra maior de câmeras (não só 1)
