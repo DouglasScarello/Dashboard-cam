@@ -56,6 +56,16 @@ avisa na hora.
    mais de um rosto — recuperei 5 que eram claramente 1 pessoa +
    artefato pequeno, mantive 4 de fora que são fotos genuínas de 2
    pessoas nomeadas juntas
+6. Achei que o CLIP errava a categoria "foto borrada" (16 de 17 tinham
+   rosto detectável de verdade) — corrigido, +6 pessoas recuperadas
+7. Testei em escala final (500 pessoas, threshold de produção real):
+   **97.3% de acerto**. Tentei achar um jeito automático de pegar os
+   poucos casos de confusão que sobram (nitidez, tamanho do rosto) — não
+   achei nada confiável o suficiente pra implementar sem risco de piorar
+   as coisas, documentei a tentativa em vez de forçar uma solução fraca
+8. Considerei usar o Person Re-ID pra manter identificação de alguém
+   quando o rosto some (pessoa vira de costas) — decidi NÃO implementar
+   sem você poder ver funcionando ao vivo, documentei a ideia pra depois
 
 ### Uma coisa que descobri e não posso resolver sozinho
 O **Redis não está instalado** nessa máquina (`redis-server` não existe) —
@@ -77,14 +87,21 @@ sem uma pessoa confirmando antes.**
 
 ### Números atuais (rodando `health_check.py` você vê isso ao vivo)
 - 1.242 pessoas cadastradas (FBI Wanted)
-- 1.042 rostos reais reconhecíveis (subiu de 1.036 — achei que o CLIP
-  errava a categoria "borrada" e recuperei mais gente de verdade, ver
-  abaixo)
+- 1.042 rostos reais reconhecíveis
+- **97.3% de acerto** no reconhecimento, testado em 500 pessoas reais
 - 8.198 câmeras públicas reais no catálogo
 - 39 fotos de tatuagem/veículo indexadas por similaridade
+- 16 commits organizados no git, cada um com explicação do porquê
 
-*(continua sendo atualizado abaixo conforme eu for trabalhando — última
-atualização: 03:11)*
+### Status às 03:20 — verificação final desta rodada de trabalho
+Rodei tudo de novo do zero pra confirmar: **11/11 testes passando,
+health_check 100% verde, git limpo** (só meus arquivos, nada do seu
+trabalho em andamento foi tocado). A partir daqui vou continuar de forma
+mais espaçada — verificando periodicamente e fazendo mais melhorias
+pontuais se aparecerem, em vez de mudanças grandes de uma vez. Qualquer
+coisa nova vai aparecer daqui pra baixo com horário.
+
+*(continua sendo atualizado conforme eu for trabalhando)*
 
 ---
 
