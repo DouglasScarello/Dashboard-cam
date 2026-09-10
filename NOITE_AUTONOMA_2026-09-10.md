@@ -24,7 +24,7 @@ confiar em mim:
 cd ~/dashboard-cam/olho_de_deus
 poetry run python3 health_check.py
 poetry run python3 -m pytest tests/ -v       # 18 testes
-cd ../intelligence && poetry run python3 -m pytest tests/ -v   # +9 testes (novo, 04:11)
+cd ../intelligence && poetry run python3 -m pytest tests/ -v   # +10 testes (novo, 04:11)
 ```
 O primeiro dá um relatório em português de tudo (banco, câmeras, os 3
 sistemas de reconhecimento). O segundo roda 11 testes automáticos que
@@ -631,3 +631,30 @@ agora bate com o salvo (pelo menos uma palavra em comum), provando
 reprodutibilidade. **18/18 testes** agora, cobrindo as 3 modalidades de
 visão computacional novas desta sessão: OCR, busca visual CLIP e
 Person Re-ID, além do reconhecimento facial em si.
+
+## Check-in ~08:06 — achado real de novo: 19 registros com contagem errada
+
+Reverifiquei tudo (18/18 + health_check 100% + 9/9 no `intelligence`) —
+disco parado em 25GB. Desta vez achei um bug de dados de verdade, não
+só lacuna de teste: comparando duas formas diferentes de contar "quantos
+têm rosto reconhecível" no código, achei que batiam números diferentes —
+`health_check.py` conta `face_embeddings.embedding_blob` direto (1042,
+a fonte da verdade), mas `stats()` em `intelligence_db.py` — a função
+que a API/dashboard usa — conta uma flag separada,
+`individuals.has_embedding` (1023, **19 a menos**).
+
+Investiguei a causa: `save_embedding()` (grava o blob) e
+`mark_embedded()` (liga a flag) são chamadas separadas mas sempre juntas
+em `delta_embedder.py`, sem nada de errado no código atual — a
+divergência parece resquício de alguma execução interrompida no
+passado (não consegui confirmar exatamente qual). Confirmei que era
+só num sentido (0 casos de flag=1 sem embedding real, só o contrário),
+então reconciliei com um UPDATE direto — seguro, só sincroniza um
+número que já devia bater. `stats()['with_biometrics']` agora mostra
+1042, igual ao `health_check.py`.
+
+Adicionei `intelligence/tests/test_data_integrity.py` — checa essa
+invariante nos dois sentidos, pra isso nunca mais divergir sem avisar.
+**10/10 testes** em `intelligence/tests` agora — **28 testes
+automáticos no total** entre os dois projetos (18 em `olho_de_deus` +
+10 em `intelligence`).
