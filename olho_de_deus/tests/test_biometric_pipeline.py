@@ -333,6 +333,50 @@ def test_non_violent_fraud_does_not_get_armed_dangerous_score(db_conn):
     )
 
 
+# ─── WEIGHTS de score_engine.py não cobriam vocabulário real da FBI ────────────
+# Achado em 2026-09-10: a categoria real da FBI "ViCAP Homicides and Sexual
+# Assaults" (38 indivíduos no catálogo, incluindo casos de homicídio de
+# verdade) tirava nota 1.0 — o mínimo, igual a uma pessoa desaparecida sem
+# nenhum crime — porque a keyword "HOMICIDIO" (português) nunca batia com
+# "HOMICIDES" (inglês, plural, grafia diferente). "Crimes Against Children"
+# (10 indivíduos) tinha o mesmo problema. Corrigido adicionando keywords em
+# inglês que batem com as categorias reais da API da FBI (ver
+# NOITE_AUTONOMA_2026-09-10.md pro levantamento completo das 137 pessoas
+# afetadas). Testa contra os 3 casos reais que motivaram o achado.
+
+def test_fbi_violent_categories_no_longer_score_at_floor(db_conn):
+    from intelligence_db import DB
+    from score_engine import ThreatScorer
+
+    cases = [
+        ("ViCAP Homicides and Sexual Assaults", 9.0),
+        ("Crimes Against Children", 9.0),
+        ("Additional Violent Crimes", 9.0),
+    ]
+    db = DB()
+    try:
+        tested = 0
+        for crime_label, min_score in cases:
+            row = db_conn.execute(
+                "SELECT DISTINCT i.id FROM individuals i JOIN crimes c ON c.individual_id = i.id "
+                "WHERE c.crime = ? LIMIT 1",
+                (crime_label,),
+            ).fetchone()
+            if not row:
+                continue
+            tested += 1
+            score = ThreatScorer(db).calculate_individual_score(row[0])
+            assert score >= min_score, (
+                f"categoria real da FBI '{crime_label}' deveria pontuar >= {min_score} "
+                f"(é uma categoria de crime violento), veio {score} — WEIGHTS em "
+                f"score_engine.py pode ter perdido a keyword que cobre esse texto"
+            )
+        if tested == 0:
+            pytest.skip("nenhuma das categorias violentas de teste está no banco atual")
+    finally:
+        db.close()
+
+
 # ─── Catálogo real de câmeras: seleção de modo de captura (Workstream 2) ──────
 # monitor_camera.py liga o LivePipeline numa câmera de database/live_cameras.db
 # (8198 câmeras reais) mas nunca tinha teste — só foi verificado manualmente

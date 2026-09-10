@@ -28,10 +28,22 @@ WEIGHTS = {
     "MURDER": 1.0,
     "HOMICIDIO": 1.0,
     "LATROCINIO": 1.0,
+    # "HOMICIDE"/"HOMICIDES" (inglês, sem acento) — achado em 2026-09-10:
+    # a categoria real da FBI "ViCAP Homicides and Sexual Assaults" (38
+    # indivíduos, incluindo casos de homicídio de verdade) tirava nota 1.0
+    # (a mínima, igual a "desaparecido sem nenhum crime") porque "HOMICIDIO"
+    # (português) nunca batia com "HOMICIDES" (inglês) — são grafias
+    # diferentes, não é a mesma palavra em maiúscula/minúscula.
+    "HOMICIDE": 1.0,
     "RAPE": 0.9,
     "ESTUPRO": 0.9,
+    "SEXUAL ASSAULT": 0.9,
     "KIDNAPPING": 0.9,
     "SEQUESTRO": 0.9,
+    "HUMAN TRAFFICKING": 0.9,
+    "CRIMES AGAINST CHILDREN": 0.9,
+    "ENDANGERED CHILD": 0.8,
+    "ADDITIONAL VIOLENT CRIMES": 0.8,
     "DRUGS": 0.8,
     "TRAFICO": 0.8,
     "NARCOTICS": 0.8,
