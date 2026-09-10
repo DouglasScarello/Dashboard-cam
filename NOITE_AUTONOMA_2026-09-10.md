@@ -57,6 +57,17 @@ avisa na hora.
    artefato pequeno, mantive 4 de fora que são fotos genuínas de 2
    pessoas nomeadas juntas
 
+### Uma coisa que descobri e não posso resolver sozinho
+O **Redis não está instalado** nessa máquina (`redis-server` não existe) —
+por isso todo log da noite mostra "modo degradado". O projeto já lida bem
+com isso sem quebrar (foi feito assim de propósito), mas sem Redis: os
+alertas ao vivo não têm debounce (podem repetir), e eu não consegui testar
+visualmente se o aviso "ARMADO E PERIGOSO" que adicionei na tela realmente
+aparece bonito (confirmei por leitura de código que o dado chega certinho
+até o frontend, só não vi com meus olhos rodando de ponta a ponta).
+Instalar resolve: `sudo pacman -S redis` e depois `sudo systemctl enable --now redis` —
+não fiz isso porque exige `sudo`, que não uso sem você.
+
 ### Limitação importante que você precisa saber (não escondi isso)
 Reconhecimento facial não é perfeito — testei em escala (400+ pessoas
 reais) e a taxa de confusão genuína (reconhecer a pessoa errada) é
