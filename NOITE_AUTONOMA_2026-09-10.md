@@ -658,3 +658,19 @@ invariante nos dois sentidos, pra isso nunca mais divergir sem avisar.
 **10/10 testes** em `intelligence/tests` agora — **28 testes
 automáticos no total** entre os dois projetos (18 em `olho_de_deus` +
 10 em `intelligence`).
+
+## Check-in ~08:42 — tudo verde, nada novo pra corrigir desta vez
+
+Reverifiquei tudo (18/18 + health_check 100% + 10/10 no `intelligence`)
+— disco parado em 25GB. Procurei mais uma rodada por esse mesmo tipo de
+bug (contagem/flag desnormalizada divergindo da fonte real) — achei que
+o endpoint que o frontend de verdade usa (`GET /api/catalog/stats` em
+`api_server.py`) faz a MESMA query `has_embedding=1` que corrigi no
+check-in anterior, então já se beneficia do conserto de lá (era o card
+de estatística que o dashboard mostra pro usuário, não só uma função
+interna — bom confirmar o alcance real do que já foi corrigido).
+Também conferi `threat_scores.factors_json` (1242/1242 é JSON válido)
+e a soma das categorias do CLIP (886+165+38+28+26+17+11+5 = 1176,
+bate exatamente com "com foto local baixada" — sem lacuna de
+classificação). Não achei nada novo genuíno pra corrigir desta vez —
+não vou forçar. Status: saudável, 28/28 testes passando.
