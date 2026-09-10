@@ -361,6 +361,34 @@ Padrão que se repetiu a noite toda: nunca confiar que uma ferramenta
 plausível que fotos de caso antigas do FBI sejam borradas), só que
 testando de verdade a maioria não estava.
 
+## Ideia considerada e propositalmente NÃO implementada: Re-ID mantendo identidade quando o rosto some
+
+Pensei em usar o Person ReID (que já constrói e testei) pra uma coisa
+específica: quando uma pessoa É reconhecida pelo rosto, mas alguns
+segundos depois vira de costas ou sai de quadro e volta (o rastreador
+perde o "track_id" e cria um novo), usar a semelhança de roupa/corpo pra
+"lembrar" que é a mesma pessoa sem precisar ver o rosto de novo.
+
+**Por que decidi NÃO fazer isso agora, mesmo tendo tempo:** isso mexe na
+lógica de rastreamento da câmera AO VIVO, que já está testada e funcionando
+(rodei de verdade contra câmera real). Validar direito essa mudança exigiria
+assistir vídeo de verdade acontecendo (alguém andando, virando de costas,
+saindo e voltando de quadro) — não dá pra confirmar isso sozinho sem
+imagem ao vivo de uma pessoa se movendo, e é exatamente o tipo de mudança
+onde "parece que funciona no código" e "funciona de verdade" podem ser
+coisas bem diferentes. Prefiro documentar bem a ideia pra você (ou eu, com
+sua supervisão depois) implementar com calma, a arriscar entregar uma
+mudança na parte mais crítica do sistema sem poder testar direito.
+
+**Como eu faria, se for pra frente:** quando um "track" perdido tinha um
+match de rosto confirmado, guardar o embedding de aparência (Person ReID)
+dele numa lista curta ("perdidos recentes", expira em 30-60s). Quando um
+track NOVO aparece, comparar a aparência dele contra essa lista antes de
+tentar reconhecimento facial do zero — se a roupa/corpo bater muito bem,
+herda a identidade sem gastar ArcFace de novo. Os dois lugares que
+precisariam mudar são `_process_frame_bytetrack` e `_process_frame_iou`
+em `biometric_processor.py`.
+
 ## Decisão sobre "pesquisar como proceder" (contexto pra IA)
 
 O usuário pediu pra eu pesquisar como evitar perder contexto numa sessão
