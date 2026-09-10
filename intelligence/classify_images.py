@@ -36,8 +36,14 @@ LABELS = [
     "a photo of a vehicle, building, or location without a person",
 ]
 
-# Só essas duas categorias valem a pena mandar pro ArcFace/RetinaFace.
-USABLE_LABELS = {LABELS[0], LABELS[1]}
+# Categorias que valem a pena mandar pro ArcFace/RetinaFace.
+# "blurry" testado manualmente (2026-09-10): 16 de 17 imagens que o CLIP rotulou
+# como "borrada/baixa qualidade" TINHAM rosto detectável de verdade pelo
+# RetinaFace — CLIP não é confiável pra prever detectabilidade de rosto, só
+# serve pra filtrar o que claramente NÃO é rosto (documento/veículo/tatuagem/
+# esboço/cartaz). Deixar passar e o RetinaFace (com enforce_detection=True)
+# já decide de verdade — ver NOITE_AUTONOMA_2026-09-10.md pro teste completo.
+USABLE_LABELS = {LABELS[0], LABELS[1], "a blurry, unclear, or very low quality photo"}
 
 
 def classify_all(limit: int | None = None, batch_size: int = 16):
