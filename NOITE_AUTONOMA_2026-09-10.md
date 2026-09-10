@@ -23,7 +23,7 @@ confiar em mim:
 ```
 cd ~/dashboard-cam/olho_de_deus
 poetry run python3 health_check.py
-poetry run python3 -m pytest tests/ -v       # 14 testes
+poetry run python3 -m pytest tests/ -v       # 16 testes
 cd ../intelligence && poetry run python3 -m pytest tests/ -v   # +9 testes (novo, 04:11)
 ```
 O primeiro dá um relatório em português de tudo (banco, câmeras, os 3
@@ -578,3 +578,21 @@ tipos, buscadas de verdade no catálogo (`database/live_cameras.db`).
 **14/14 testes** agora. Nenhum bug novo encontrado aqui — era lacuna
 de cobertura, não erro; mas antes disso, se alguém mudasse essa lógica
 sem querer, nada avisaria.
+
+## Check-in ~06:24 — +2 testes pro cadastro manual da watchlist (16/16)
+
+Reverifiquei tudo (14/14 + health_check 100% + 9/9 no `intelligence`) —
+disco parado em 25GB, sem instalar nada. Achei mais uma lacuna real:
+`enroll_person.py` — o **pedido original do usuário**, antes de pivotar
+pra usar a lista do FBI (cadastro manual de gente autorizada,
+`category="watchlist"`) — nunca teve teste nenhum, apesar de continuar
+disponível e funcional.
+
+2 testes novos, contra o banco real (com limpeza automática pra não
+sujar o banco de produção): (1) cadastro de verdade grava
+`category="watchlist"`/`source="manual"`, copia a foto pro lugar certo;
+(2) `RESERVED_CATEGORIES` rejeita `"wanted"`/`"missing"` com
+`SystemExit` — a trava que impede cadastrar alguém autorizado sem
+querer numa categoria do FBI. Confirmei manualmente que a limpeza
+funcionou (nenhum resíduo de teste ficou no banco nem em
+`watchlist_photos/`). **16/16 testes** agora em `olho_de_deus/tests`.
