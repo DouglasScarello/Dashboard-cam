@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { useTranslation } from 'react-i18next';
 import { translateBlock, translateArray, translateLocations } from './services/translate';
-import { Search, Info, Download, X, User, ChevronDown, Fingerprint, MapPin, Briefcase, Globe } from 'lucide-react';
+import { Search, Info, Download, X, User, ChevronDown, Fingerprint, MapPin, Briefcase, Globe, AlertTriangle, ShieldAlert, ScanText } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -10,6 +10,15 @@ import { twMerge } from 'tailwind-merge';
 // Helper de classes
 function cn(...inputs: ClassValue[]) {
     return twMerge(clsx(inputs));
+}
+
+// Mesma faixa de score_engine.py: >=9 é piso "armado e perigoso"/crime grave,
+// 5-9 é intermediário, abaixo disso é baixa periculosidade (ou sem dado real).
+function threatColor(score: number | null | undefined): string {
+    if (score == null) return 'text-muted border-white/10 bg-white/5';
+    if (score >= 9) return 'text-red-500 border-red-500/50 bg-red-500/20';
+    if (score >= 5) return 'text-accent-amber border-accent-amber/50 bg-accent-amber/20';
+    return 'text-accent-emerald border-accent-emerald/40 bg-accent-emerald/10';
 }
 
 const API_URL = 'http://localhost:8000';
@@ -25,6 +34,8 @@ interface Individual {
     has_embedding: number;
     reward?: string;
     ingested_at?: string;
+    image_content_type?: string;
+    threat_score?: number | null;
 }
 
 interface Stats {
@@ -53,10 +64,33 @@ interface IndividualDetail extends Individual {
     eye_color?: string;
     hair_color?: string;
     occupation?: string;
-    images: Array<{ img_url?: string; img_path?: string; is_primary: number }>;
+    ocr_text?: string;
+    armed_and_dangerous?: boolean;
+    images: Array<{
+        img_url?: string;
+        img_path?: string;
+        is_primary: number;
+        image_content_type?: string | null;
+        ocr_text?: string | null;
+    }>;
     crimes: string[];
     locations: Location[];
 }
+
+// Rótulos do CLIP (classify_images.py/classify_gallery_images.py) → chave i18n
+// curta + se conta como "rosto utilizável" — mesmo critério de USABLE_LABELS
+// no backend, pra badge da galeria bater com o que o reconhecimento facial
+// realmente usa.
+const IMAGE_TYPE_MAP: Record<string, { key: string; isFace: boolean }> = {
+    "a clear photo of one single person's face": { key: "face_clear", isFace: true },
+    "a mugshot photo of one person": { key: "mugshot", isFace: true },
+    "a poster or collage showing multiple different people": { key: "poster", isFace: false },
+    "a sketch or artist's drawing of a face": { key: "sketch", isFace: false },
+    "a photo of a tattoo, scar, or body part without a visible face": { key: "tattoo", isFace: false },
+    "a photo of a document, text, or logo": { key: "document", isFace: false },
+    "a blurry, unclear, or very low quality photo": { key: "blurry", isFace: true },
+    "a photo of a vehicle, building, or location without a person": { key: "vehicle", isFace: false },
+};
 
 // ─── API Client (Dual-Mode: Tauri Desktop ou Web Browser) ─────────────────────
 
@@ -453,15 +487,25 @@ function IndividualCard({ person, onClick }: { person: Individual, onClick: () =
                             <span>RECOMPENSA</span>
                         </div>
                     )}
+                    {person.threat_score != null && person.threat_score >= 9 && (
+                        <div className="w-7 h-7 rounded-full bg-red-500 text-black flex items-center justify-center shadow-lg shadow-red-500/30 border border-black animate-pulse" title={t('dossier.armed_dangerous_warning')}>
+                            <ShieldAlert className="w-3.5 h-3.5" />
+                        </div>
+                    )}
                 </div>
 
-                <div className="absolute top-3 right-3">
+                <div className="absolute top-3 right-3 flex flex-col items-end gap-1.5">
                     <span className={cn(
                         "text-[9px] font-black px-2 py-1 rounded border",
                         person.category === 'wanted' ? "border-red-500/50 bg-red-500/20 text-red-500" : "border-accent-amber/50 bg-accent-amber/20 text-accent-amber"
                     )}>
                         {t(`filters.${person.category.toLowerCase()}`).toUpperCase()}
                     </span>
+                    {person.threat_score != null && (
+                        <span className={cn("text-[9px] font-mono font-black px-2 py-0.5 rounded border", threatColor(person.threat_score))}>
+                            {t('dossier.threat_score')}: {person.threat_score.toFixed(1)}
+                        </span>
+                    )}
                 </div>
 
                 {/* Info */}
@@ -486,6 +530,7 @@ function IndividualCard({ person, onClick }: { person: Individual, onClick: () =
 function DossierModal({ detail, onClose }: { detail: IndividualDetail, onClose: () => void }) {
     const { t, i18n } = useTranslation();
     const [activeImg, setActiveImg] = useState<string | null>(null);
+    const [activeImgMeta, setActiveImgMeta] = useState<{ content_type?: string | null; ocr_text?: string | null }>({});
     const currentLang = i18n.language?.substring(0, 2) || 'pt';
 
     // Estado para conteúdo traduzido
@@ -502,7 +547,8 @@ function DossierModal({ detail, onClose }: { detail: IndividualDetail, onClose: 
         } else if (detail.img_path && (window as any).__TAURI_INTERNALS__) {
             invoke<string>('get_image_base64', { imgPath: detail.img_path }).then(setActiveImg);
         }
-    }, [detail.img_path, detail.img_url]);
+        setActiveImgMeta({ content_type: detail.image_content_type, ocr_text: detail.ocr_text });
+    }, [detail.img_path, detail.img_url, detail.image_content_type, detail.ocr_text]);
 
     // Traduz texto livre quando o idioma muda
     useEffect(() => {
@@ -607,10 +653,11 @@ function DossierModal({ detail, onClose }: { detail: IndividualDetail, onClose: 
 
                         {/* Gallery */}
                         <div>
-                            <h4 className="text-[10px] font-black text-muted tracking-widest uppercase mb-4">{t('dossier.forensic_gallery')}</h4>
+                            <h4 className="text-[10px] font-black text-muted tracking-widest uppercase mb-4">{t('dossier.forensic_gallery')} ({detail.images.length})</h4>
                             <div className="grid grid-cols-4 gap-2">
                                 {detail.images.map((img, i) => (
-                                    <GalleryThumb key={i} path={img.img_path} url={img.img_url} active={(img.img_url || img.img_path) === activeImg} onClick={() => {
+                                    <GalleryThumb key={i} path={img.img_path} url={img.img_url} contentType={img.image_content_type} active={(img.img_url || img.img_path) === activeImg} onClick={() => {
+                                        setActiveImgMeta({ content_type: img.image_content_type, ocr_text: img.ocr_text });
                                         if (img.img_url) setActiveImg(img.img_url);
                                         else if (img.img_path && (window as any).__TAURI_INTERNALS__) {
                                             invoke<string>('get_image_base64', { imgPath: img.img_path }).then(setActiveImg);
@@ -619,16 +666,40 @@ function DossierModal({ detail, onClose }: { detail: IndividualDetail, onClose: 
                                 ))}
                             </div>
                         </div>
+
+                        {/* Texto extraído por OCR, só aparece pra fotos classificadas como documento */}
+                        {activeImgMeta.content_type === 'a photo of a document, text, or logo' && activeImgMeta.ocr_text && (
+                            <div className="bg-accent-blue/5 border border-accent-blue/20 rounded-lg p-4">
+                                <h4 className="flex items-center gap-2 text-[10px] font-black text-accent-blue tracking-widest uppercase mb-2">
+                                    <ScanText className="w-3.5 h-3.5" /> {t('dossier.extracted_text')}
+                                </h4>
+                                <p className="text-xs text-white/70 font-mono leading-relaxed break-words">{activeImgMeta.ocr_text}</p>
+                            </div>
+                        )}
                     </aside>
 
                     {/* CONTENT */}
                     <main className="flex-1 p-8 lg:p-12">
-                        <div className={cn(
-                            "text-[10px] font-black px-2 py-1 rounded inline-block mb-4",
-                            detail.category === 'wanted' ? "bg-red-500/10 text-red-500 border border-red-500/20" : "bg-accent-amber/10 text-accent-amber border border-accent-amber/20"
-                        )}>
-                            {detail.category === 'wanted' ? t('dossier.investigation_active') : t('dossier.missing_alert')}
+                        <div className="flex items-center gap-3 mb-4">
+                            <div className={cn(
+                                "text-[10px] font-black px-2 py-1 rounded inline-block",
+                                detail.category === 'wanted' ? "bg-red-500/10 text-red-500 border border-red-500/20" : "bg-accent-amber/10 text-accent-amber border border-accent-amber/20"
+                            )}>
+                                {detail.category === 'wanted' ? t('dossier.investigation_active') : t('dossier.missing_alert')}
+                            </div>
+                            {detail.threat_score != null && (
+                                <div className={cn("text-[10px] font-mono font-black px-2 py-1 rounded border flex items-center gap-1.5", threatColor(detail.threat_score))}>
+                                    <ShieldAlert className="w-3 h-3" /> {t('dossier.threat_score')}: {detail.threat_score.toFixed(1)}/10
+                                </div>
+                            )}
                         </div>
+
+                        {detail.armed_and_dangerous && (
+                            <div className="bg-red-500/10 border border-red-500/40 rounded-xl px-5 py-4 mb-6 flex items-center gap-3 animate-pulse">
+                                <AlertTriangle className="w-6 h-6 text-red-500 shrink-0" />
+                                <span className="text-sm font-black text-red-500 tracking-wide uppercase">{t('dossier.armed_dangerous_warning')}</span>
+                            </div>
+                        )}
 
                         <h2 className="text-4xl font-extrabold tracking-tight mb-2 leading-tight uppercase">{detail.name}</h2>
                         <div className="flex flex-wrap gap-2 mb-6">
@@ -864,7 +935,8 @@ function parseBold(text: string) {
     });
 }
 
-function GalleryThumb({ path, url: externalUrl, active, onClick }: { path?: string, url?: string, active: boolean, onClick: () => void }) {
+function GalleryThumb({ path, url: externalUrl, contentType, active, onClick }: { path?: string, url?: string, contentType?: string | null, active: boolean, onClick: () => void }) {
+    const { t } = useTranslation();
     const [url, setUrl] = useState<string | null>(externalUrl || null);
     useEffect(() => {
         if (externalUrl) {
@@ -874,17 +946,32 @@ function GalleryThumb({ path, url: externalUrl, active, onClick }: { path?: stri
         }
     }, [path, externalUrl]);
 
+    // Classificação CLIP por imagem (classify_gallery_images.py) — antes de
+    // 2026-09-10 a galeria não tinha como distinguir rosto de tatuagem/
+    // documento/veículo sem abrir cada foto manualmente.
+    const typeInfo = contentType ? IMAGE_TYPE_MAP[contentType] : null;
+    const typeLabel = typeInfo ? t(`dossier.image_type.${typeInfo.key}`) : (contentType === undefined ? null : t('dossier.gallery_type_unknown'));
+
     return (
         <div
             onClick={onClick}
+            title={typeLabel || undefined}
             className={cn(
-                "aspect-square rounded border cursor-pointer overflow-hidden transition-all",
+                "aspect-square rounded border cursor-pointer overflow-hidden transition-all relative",
                 active ? "border-accent-amber scale-95" : "border-white/10 hover:border-white/30"
             )}
         >
             {url ? <img src={url} className="w-full h-full object-cover" /> : (
                 <div className="w-full h-full bg-neutral-900 flex items-center justify-center opacity-30">
                     <User className="w-6 h-6" />
+                </div>
+            )}
+            {typeLabel && (
+                <div className={cn(
+                    "absolute bottom-0 left-0 right-0 px-1 py-0.5 text-[7px] font-black uppercase tracking-wider text-center truncate",
+                    typeInfo?.isFace ? "bg-accent-emerald/80 text-black" : "bg-black/80 text-accent-amber"
+                )}>
+                    {typeLabel}
                 </div>
             )}
         </div>

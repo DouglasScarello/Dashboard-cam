@@ -54,6 +54,10 @@
         "collected_at": "COLETADO EM",
         "no_charges": "Nenhuma acusação detalhada.",
         "no_description": "Nenhuma descrição adicional disponível.",
+        "threat_score": "SCORE DE PERICULOSIDADE",
+        "armed_dangerous_warning": "ARMADO E PERIGOSO — considerado uma ameaça física confirmada pela fonte oficial",
+        "extracted_text": "Texto extraído do documento (OCR)",
+        "gallery_type_unknown": "Tipo não classificado",
         "fields": {
             "gender": "Gênero",
             "birth": "Nascimento",
@@ -64,6 +68,16 @@
             "eyes": "Olhos",
             "hair": "Cabelo",
             "not_recorded": "INFORMAÇÃO_NR"
+        },
+        "image_type": {
+            "face_clear": "Rosto",
+            "mugshot": "Mugshot",
+            "poster": "Cartaz (várias pessoas)",
+            "sketch": "Esboço",
+            "tattoo": "Tatuagem / Marca",
+            "document": "Documento",
+            "blurry": "Baixa qualidade",
+            "vehicle": "Veículo / Local"
         }
     },
     "briefing": {

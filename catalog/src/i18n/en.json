@@ -54,6 +54,10 @@
         "collected_at": "COLLECTED AT",
         "no_charges": "No detailed charges.",
         "no_description": "No additional description available.",
+        "threat_score": "THREAT SCORE",
+        "armed_dangerous_warning": "ARMED AND DANGEROUS — confirmed physical threat per official source",
+        "extracted_text": "Text extracted from document (OCR)",
+        "gallery_type_unknown": "Unclassified type",
         "fields": {
             "gender": "Gender",
             "birth": "Birth Date",
@@ -64,6 +68,16 @@
             "eyes": "Eyes",
             "hair": "Hair",
             "not_recorded": "DATA_NR"
+        },
+        "image_type": {
+            "face_clear": "Face",
+            "mugshot": "Mugshot",
+            "poster": "Poster (multiple people)",
+            "sketch": "Sketch",
+            "tattoo": "Tattoo / Mark",
+            "document": "Document",
+            "blurry": "Low quality",
+            "vehicle": "Vehicle / Location"
         }
     },
     "briefing": {
