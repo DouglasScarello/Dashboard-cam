@@ -505,3 +505,39 @@ sem perder nada. Complemento com: (1) task list (`TaskCreate`/`TaskUpdate`)
 sempre atualizada, (2) commits git incrementais com mensagens claras
 (histórico = memória externa), (3) qualquer decisão não-óbvia registrada
 aqui com o "porquê", não só o "o quê".
+
+## Check-in ~04:42 — tudo verificado de novo, 1 investigação sem ação
+
+Rodei os 3 conjuntos de teste de novo do zero: `olho_de_deus/tests`
+(11/11), `health_check.py` (100%, agora até 12/12 = 100% no teste de
+reconhecimento real, antes era 11/12), `intelligence/tests` (9/9, o
+conjunto novo do check-in anterior). Disco estável em 25GB livres — não
+rodei nenhuma instalação grande, só investiguei código, seguindo o
+aviso desta rodada.
+
+**Investigação:** ao conferir se `c2_agentic_engine.py`/`spatial_engine.py`
+(módulo de handover cross-câmera, usa `h3`/`scipy`) também sofriam do
+mesmo problema de dependência não declarada corrigido no check-in
+anterior — não sofrem, porque `api_server.py` (que é quem realmente usa
+esses dois arquivos, via `sys.path.insert` pra dentro de
+`intelligence/`) roda com o interpretador do `olho_de_deus`, que já tem
+`h3`/`scipy` declarados. Falso alarme, confirmado por leitura + teste
+antes de "consertar" algo que não estava quebrado.
+
+**Achado real, decisão de não agir:** `intelligence/fbi_ingestion.py` e
+`intelligence/global_ingestion.py` não importam mais — `tensorflow.python`
+sumiu (`ModuleNotFoundError`), provavelmente um resquício do disco cheio
+de ontem à noite (instalação de tensorflow interrompida a meio, mas o
+poetry não percebeu porque o diretório já existia parcialmente). Antes
+de mexer, confirmei: **nenhum dos dois é o caminho realmente usado hoje**
+— existe uma versão mais nova de `fbi_ingestion.py` dentro de
+`olho_de_deus/` (mesmo nome, arquivo diferente) que é a que
+`run_global_intelligence.py`/`populate_db.py` de lá referenciam, e que
+já roda com tensorflow funcionando (testado a noite toda). As cópias em
+`intelligence/` parecem ser versão anterior, não mais chamada pelo
+`pipeline_ingestao.py` de 8 passos que é o caminho documentado/testado
+hoje. **Decisão: não reinstalar tensorflow agora** — arriscaria repetir
+o quase-cheio de disco de ontem por um ganho que é zero (conserta código
+morto, não o caminho real). Fica registrado pra quem no futuro decidir
+que vale a pena limpar/remover essas duas cópias antigas de verdade, em
+vez de só religar o import.
