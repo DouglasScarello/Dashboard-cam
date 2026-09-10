@@ -23,7 +23,7 @@ confiar em mim:
 ```
 cd ~/dashboard-cam/olho_de_deus
 poetry run python3 health_check.py
-poetry run python3 -m pytest tests/ -v       # 17 testes
+poetry run python3 -m pytest tests/ -v       # 18 testes
 cd ../intelligence && poetry run python3 -m pytest tests/ -v   # +9 testes (novo, 04:11)
 ```
 O primeiro dá um relatório em português de tudo (banco, câmeras, os 3
@@ -615,3 +615,19 @@ própria imagem de uma entrada já indexada, confirma que ela mesma
 volta como melhor resultado (cosseno ~1.000) e que a ordenação por
 similaridade está certa (segundo lugar tem score bem mais baixo, ~0.63,
 não empatado nem invertido). **17/17 testes** agora.
+
+## Check-in ~07:32 — +1 teste pro OCR de documentos, 18/18
+
+Reverifiquei tudo (17/17 + health_check 100% + 9/9 no `intelligence`) —
+disco parado em 25GB. Mesmo padrão de lacuna dos 2 check-ins anteriores:
+`ocr_documents.py` (EasyOCR nos 38 documentos classificados pelo CLIP)
+só tinha contagem no `health_check.py`, nunca teve teste que roda o OCR
+de verdade e confere que o texto saiu certo (não vazio/lixo).
+
+Peguei uma imagem já processada em produção (o resultado salvo tem
+"BUREAU" legível, meio de um selo do FBI estilizado) e rodei o
+`easyocr.Reader` do zero contra ela — confirma que o texto extraído
+agora bate com o salvo (pelo menos uma palavra em comum), provando
+reprodutibilidade. **18/18 testes** agora, cobrindo as 3 modalidades de
+visão computacional novas desta sessão: OCR, busca visual CLIP e
+Person Re-ID, além do reconhecimento facial em si.
