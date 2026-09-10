@@ -389,6 +389,37 @@ herda a identidade sem gastar ArcFace de novo. Os dois lugares que
 precisariam mudar são `_process_frame_bytetrack` e `_process_frame_iou`
 em `biometric_processor.py`.
 
+## Validação final em escala (500 amostras, índice já com todos os fixes)
+
+Com threshold de produção correto (0.6, não o 0.7 padrão da classe):
+**438 corretos, 12 "errados", 9 sem rosto, 41 sem match — 97.3% de acerto**
+entre os que deram algum match. A maioria dos 12 "errados" continua sendo
+o mesmo padrão já documentado (entradas tipo "caso"/"suspeito
+desconhecido" sem identidade única, ou duplicata de foto entre registro
+de grupo e membro nomeado).
+
+**Tentei achar um filtro automático de qualidade pra pegar os casos raros
+de confusão genuína** (fotos de câmera de segurança com rosto mascarado/
+mal iluminado, tipo o caso "JEWELRY STORE ROBBERIES" que apareceu como
+"atrator" de falso-positivo duas vezes com pessoas diferentes):
+- Nitidez (variância do Laplaciano) no recorte do rosto: **não separou**
+  — caso correto teve nitidez MENOR que os problemáticos.
+- Confiança de detecção do RetinaFace (`face_confidence`): **inútil**,
+  vem 1.0 tanto pros bons quanto pros problemáticos (mede "isso é um
+  rosto", não "esse rosto está claro o suficiente pra reconhecer").
+- Tamanho da área do rosto detectado: **correlação real mas suja** — os
+  3 casos problemáticos testados tinham área pequena (2.726 a 17.013 px²),
+  mas também achei um caso correto com área parecida (10.502 px²) que
+  nunca apareceu como errado. Não dá pra cortar sem risco de excluir
+  gente que reconhece bem só porque a foto é pequena.
+
+**Decisão: não implementei nenhum filtro automático de qualidade.** Prefiro
+deixar a taxa de 97.3% documentada e honesta a forçar uma "solução" com
+critério fraco que pode excluir gente válida sem realmente eliminar o
+risco residual. Fica registrado como possível trabalho futuro se alguém
+quiser investigar mais a fundo (talvez combinando os 2-3 sinais, ou usando
+um classificador de qualidade dedicado em vez de heurística simples).
+
 ## Decisão sobre "pesquisar como proceder" (contexto pra IA)
 
 O usuário pediu pra eu pesquisar como evitar perder contexto numa sessão
