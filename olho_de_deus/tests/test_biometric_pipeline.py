@@ -352,6 +352,10 @@ def test_fbi_violent_categories_no_longer_score_at_floor(db_conn):
         ("ViCAP Homicides and Sexual Assaults", 9.0),
         ("Crimes Against Children", 9.0),
         ("Additional Violent Crimes", 9.0),
+        # sigla da mesma categoria acima, gravada abreviada na maioria dos
+        # casos reais — achada em seguida à correção original (mesma classe
+        # de bug: "ENDANGERED CHILD" sozinho não cobria "ECAP").
+        ("ECAP", 5.0),
     ]
     db = DB()
     try:

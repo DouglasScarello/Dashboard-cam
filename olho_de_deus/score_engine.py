@@ -43,6 +43,13 @@ WEIGHTS = {
     "HUMAN TRAFFICKING": 0.9,
     "CRIMES AGAINST CHILDREN": 0.9,
     "ENDANGERED CHILD": 0.8,
+    # "ECAP" = sigla da FBI pro mesmo programa "Endangered Child Alert
+    # Program" acima — achado logo depois da correção de HOMICIDE/CHILDREN
+    # (mesma classe de bug): a categoria vem gravada abreviada em 10 dos 13
+    # casos no banco, então "ENDANGERED CHILD" sozinho não cobria. Um deles
+    # (JOHN DOE 5) tem descrição explícita de abuso infantil e tirava 1.0.
+    "ECAP": 0.8,
+
     "ADDITIONAL VIOLENT CRIMES": 0.8,
     "DRUGS": 0.8,
     "TRAFICO": 0.8,
