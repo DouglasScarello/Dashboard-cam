@@ -23,7 +23,7 @@ confiar em mim:
 ```
 cd ~/dashboard-cam/olho_de_deus
 poetry run python3 health_check.py
-poetry run python3 -m pytest tests/ -v       # 18 testes
+poetry run python3 -m pytest tests/ -v       # 19 testes
 cd ../intelligence && poetry run python3 -m pytest tests/ -v   # +10 testes (novo, 04:11)
 ```
 O primeiro dá um relatório em português de tudo (banco, câmeras, os 3
@@ -102,7 +102,18 @@ sem uma pessoa confirmando antes.**
 - **97.3% de acerto** no reconhecimento, testado em 500 pessoas reais
 - 8.198 câmeras públicas reais no catálogo
 - 39 fotos de tatuagem/veículo indexadas por similaridade
-- 16 commits organizados no git, cada um com explicação do porquê
+- 29 testes automáticos (19 em `olho_de_deus` + 10 em `intelligence`)
+- ~25 commits organizados no git, cada um com explicação do porquê
+
+### Atualização importante (~09:15): score de periculosidade estava errado
+Achei e corrigi um bug sério: **137 pessoas procuradas (categoria
+"wanted") tiravam a nota MÍNIMA de periculosidade (1.0)** — a mesma
+nota de alguém só desaparecido, sem crime nenhum — porque o sistema só
+reconhecia palavras-chave em português ("HOMICIDIO", "ESTUPRO") e as
+categorias reais que a FBI usa são em inglês ("Homicides and Sexual
+Assaults", "Crimes Against Children"). 38 pessoas com categoria real
+de homicídio tiravam nota 1.0. Corrigido e recalculado pra todo mundo —
+detalhes completos na seção "Check-in ~09:15" mais abaixo.
 
 ### Atualização às ~04:30 — achado real depois do check-in pausado
 Voltando pra reverificar (health_check + pytest continuavam 100% verdes),
@@ -674,3 +685,35 @@ e a soma das categorias do CLIP (886+165+38+28+26+17+11+5 = 1176,
 bate exatamente com "com foto local baixada" — sem lacuna de
 classificação). Não achei nada novo genuíno pra corrigir desta vez —
 não vou forçar. Status: saudável, 28/28 testes passando.
+
+## Check-in ~09:15 — achado sério: score de crime violento tirava nota mínima
+
+Reverifiquei tudo (18/18 + health_check 100% + 10/10 no `intelligence`)
+— disco parado em 25GB. Continuando a linha do check-in de 08:06
+(contagens/flags que divergem da realidade), desta vez olhei a
+DISTRIBUIÇÃO dos scores de periculosidade: **369 dos 1242 indivíduos
+(30%) tiravam a nota mínima (1.0)** — a mesma nota de alguém
+simplesmente desaparecido sem nenhum crime. Filtrando por categoria:
+232 eram "missing" (faz sentido, sem crime mesmo) mas **137 eram
+"wanted"** — gente procurada tirando a nota mais baixa possível.
+
+Investigando os 137 caso a caso pelas categorias reais de crime que a
+API da FBI usa, achei o problema: `WEIGHTS` em `score_engine.py` tinha
+"HOMICIDIO"/"ESTUPRO" (português) mas a categoria real da FBI é
+"ViCAP Homicides and Sexual Assaults" (**38 pessoas**, incluindo casos
+confirmados de assassinato) — inglês, grafia diferente, o substring
+nunca batia. Mesma coisa com "Crimes Against Children" (**10 pessoas**)
+e "Additional Violent Crimes" (**7 pessoas**). Ou seja: pessoas
+procuradas por homicídio, agressão sexual e crimes contra criança
+apareciam no sistema com a MESMA prioridade que alguém sem nenhum
+histórico — o oposto do que o score deveria mostrar.
+
+Corrigido: adicionei as keywords em inglês que batem com o vocabulário
+real da FBI (`HOMICIDE`, `SEXUAL ASSAULT`, `HUMAN TRAFFICKING`,
+`CRIMES AGAINST CHILDREN`, `ENDANGERED CHILD`, `ADDITIONAL VIOLENT
+CRIMES`) e recalculei o score de todos os 1242 indivíduos com a tabela
+corrigida — **126 scores mudaram**, o piso de "wanted" caiu de 137 pra
+89 pessoas. Conferido: LISA ANN CARNES (homicídio) foi de 1.0 pra
+**10.0**; ADAN A. SAUCEDO-AVILA (crime contra criança) foi de 1.0 pra
+**9.0**. Testado contra as 3 categorias reais que motivaram o achado.
+**19/19 testes** em `olho_de_deus/tests` agora.
