@@ -23,7 +23,7 @@ confiar em mim:
 ```
 cd ~/dashboard-cam/olho_de_deus
 poetry run python3 health_check.py
-poetry run python3 -m pytest tests/ -v       # 13 testes
+poetry run python3 -m pytest tests/ -v       # 14 testes
 cd ../intelligence && poetry run python3 -m pytest tests/ -v   # +9 testes (novo, 04:11)
 ```
 O primeiro dá um relatório em português de tudo (banco, câmeras, os 3
@@ -559,3 +559,22 @@ que o piso de 9.0 NÃO aparece pra todo mundo — sem esse segundo teste,
 um bug que sempre retornasse >= 9.0 passaria despercebido). **13/13
 testes** agora em `olho_de_deus/tests`, todos passando contra dados de
 produção reais.
+
+## Check-in ~05:50 — +1 teste pro catálogo real de câmeras (14/14)
+
+Reverifiquei tudo (13/13 + health_check 100% + 9/9 no `intelligence`) —
+disco parado em 25GB, sem instalar nada. Procurando mais lacuna de
+teste real (não hipotética), achei que `monitor_camera.py` — o script
+que liga o reconhecimento facial numa câmera de verdade do catálogo de
+8198 câmeras (Workstream 2) — só tinha sido verificado manualmente
+**uma vez**, contra 1 câmera HLS da Caltrans, e nunca tinha teste
+automático nenhum pra lógica que decide entre os dois modos de captura
+reais que existem no catálogo: M3U8/HLS contínuo (1348 câmeras) vs
+SNAPSHOT_JPEG por polling HTTP (4641 câmeras — a maioria!).
+
+Extraí essa decisão pra uma função isolada (`resolve_source_type`, sem
+mudar comportamento nenhum) e testei contra amostras reais dos dois
+tipos, buscadas de verdade no catálogo (`database/live_cameras.db`).
+**14/14 testes** agora. Nenhum bug novo encontrado aqui — era lacuna
+de cobertura, não erro; mas antes disso, se alguém mudasse essa lógica
+sem querer, nada avisaria.
