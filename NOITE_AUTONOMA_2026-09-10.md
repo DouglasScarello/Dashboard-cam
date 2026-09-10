@@ -717,3 +717,22 @@ corrigida — **126 scores mudaram**, o piso de "wanted" caiu de 137 pra
 **10.0**; ADAN A. SAUCEDO-AVILA (crime contra criança) foi de 1.0 pra
 **9.0**. Testado contra as 3 categorias reais que motivaram o achado.
 **19/19 testes** em `olho_de_deus/tests` agora.
+
+## Check-in ~09:53 — mesmo achado, um caso que escapou (ECAP)
+
+Reverifiquei tudo (19/19 + health_check 100% + 10/10 no `intelligence`)
+— disco parado em 25GB. Segui a sugestão de olhar se a mesma classe de
+bug (palavra-chave em português não bate com categoria real em inglês
+da FBI) tinha mais casos escondidos — achei um: a categoria "Endangered
+Child Alert Program" (que já cobri com a keyword `ENDANGERED CHILD`)
+vem gravada **abreviada** (`"ECAP"`) em 10 dos 13 casos reais no banco
+— só 3 estavam por extenso. `ENDANGERED CHILD` não cobre `ECAP` (siglas
+diferentes de string).
+
+Um desses 10 casos (`JOHN DOE 5`) tem descrição explícita: *"Images of
+this person abusing young children were found on the Internet"* — e
+tirava nota 1.0, a mínima. Adicionei `ECAP` ao `WEIGHTS` (peso 0.8) e
+recalculei tudo de novo — 12 scores mudaram, `JOHN DOE 5` foi de 1.0
+pra 8.0, piso de "wanted" caiu de 89 pra **80**. Testado (estendi o
+teste do check-in anterior em vez de duplicar). **19/19 testes** ainda
+(mesmo teste, mais um caso coberto).
