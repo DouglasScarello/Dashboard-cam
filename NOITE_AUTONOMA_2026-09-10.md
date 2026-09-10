@@ -10,165 +10,117 @@ proposito: >
   o que der, deixar tudo funcional e verificável por humanos ao final.
 ---
 
-# 📋 RESUMO — leia isso primeiro, o resto do arquivo é o log técnico detalhado
+# 📋 RESUMO FINAL — leia isso primeiro, o resto do arquivo é o log técnico detalhado
 
-**(Esta seção vai sendo atualizada conforme a noite avança — checar o
-horário no topo de cada bloco pra saber até onde já cobre.)**
+**Bom dia! Sessão autônoma completa, 02:20 → 10:29 (esta é a versão final
+do resumo — consolidei as atualizações que foram sendo escritas a noite
+toda numa visão só; o log cronológico detalhado, com cada achado passo a
+passo, começa logo depois do separador `---` abaixo).**
 
-**Bom dia! Aqui está o que aconteceu enquanto você dormia (até ~03:05):**
+## Como conferir com seus próprios olhos (não precisa confiar em mim)
 
-### O que funciona AGORA, comprovado (não é "deveria funcionar", é testado)
-Rode isto quando acordar pra ver com seus próprios olhos, sem precisar
-confiar em mim:
 ```
 cd ~/dashboard-cam/olho_de_deus
-poetry run python3 health_check.py
-poetry run python3 -m pytest tests/ -v       # 19 testes
-cd ../intelligence && poetry run python3 -m pytest tests/ -v   # +10 testes (novo, 04:11)
+poetry run python3 health_check.py              # relatório em português, banco+câmeras+3 sistemas de visão
+poetry run python3 -m pytest tests/ -v           # 19 testes
+cd ../intelligence && poetry run python3 -m pytest tests/ -v   # +10 testes
 ```
-O primeiro dá um relatório em português de tudo (banco, câmeras, os 3
-sistemas de reconhecimento). O segundo roda 11 testes automáticos que
-provam que os bugs que achei ontem/hoje continuam corrigidos — se algum
-dia alguém (eu ou você) mexer em algo e quebrar de novo, esse comando
-avisa na hora.
+**37 commits**, todos com mensagem explicando o porquê — `git log --oneline` conta a história inteira.
 
-### O que eu já tinha feito nesta conversa, antes de você dormir
-- Sistema de reconhecimento facial: 5 bugs corrigidos (o mais grave:
-  os "embeddings" nunca eram normalizados, então nenhum reconhecimento
-  jamais teria funcionado, nem com a pessoa certa cadastrada)
-- Você decidiu que a watchlist seria a lista de procurados do FBI (não
-  contatos pessoais) — ingeri a lista toda: 1.242 pessoas
-- Adicionei: OCR em documentos, busca por foto parecida (tatuagem/carro),
-  e reconhecimento de pessoa pela roupa/corpo (Person Re-ID)
+## O que mudou desde que você foi dormir, resumido em 5 blocos
 
-### O que eu fiz depois que você foi dormir
-1. Troquei o jeito que a câmera ao vivo acha o rosto (YuNet + alinhamento
-   correto) — antes ela mandava a PESSOA INTEIRA pro reconhecedor, sem
-   nem achar o rosto direito
-2. Recalibrei o "quão parecido precisa ser pra contar como reconhecido"
-   com números reais (testei em 400 pessoas), não mais um chute
-3. Construí um relatório de saúde (`health_check.py`) e 11 testes
-   automáticos — é o que garante que dá pra confiar sem ficar lendo
-   código
-4. Reli meu próprio código com espírito crítico e achei mais 2 bugs
-   reais: a webcam nunca abria de verdade, e um jeito de rodar a câmera
-   que eu mesmo criei tinha um typo de configuração
-5. Revisei manualmente (com meus próprios "olhos") 9 fotos que tinham
-   mais de um rosto — recuperei 5 que eram claramente 1 pessoa +
-   artefato pequeno, mantive 4 de fora que são fotos genuínas de 2
-   pessoas nomeadas juntas
-6. Achei que o CLIP errava a categoria "foto borrada" (16 de 17 tinham
-   rosto detectável de verdade) — corrigido, +6 pessoas recuperadas
-7. Testei em escala final (500 pessoas, threshold de produção real):
-   **97.3% de acerto**. Tentei achar um jeito automático de pegar os
-   poucos casos de confusão que sobram (nitidez, tamanho do rosto) — não
-   achei nada confiável o suficiente pra implementar sem risco de piorar
-   as coisas, documentei a tentativa em vez de forçar uma solução fraca
-8. Considerei usar o Person Re-ID pra manter identificação de alguém
-   quando o rosto some (pessoa vira de costas) — decidi NÃO implementar
-   sem você poder ver funcionando ao vivo, documentei a ideia pra depois
+**1. Reconhecimento facial ficou real de verdade.** Achei e corrigi 8 bugs
+reais na pipeline (YOLO→YuNet→ArcFace→FAISS), o mais grave sendo que os
+embeddings nunca eram normalizados — ou seja, **nenhum reconhecimento
+jamais teria funcionado**, mesmo com a pessoa certa cadastrada, antes de
+hoje. Também: câmera ao vivo mandava a pessoa inteira pro reconhecedor em
+vez do rosto recortado/alinhado; webcam nunca abria de verdade (bug de
+backend do OpenCV); Haar Cascade dava falso positivo de "múltiplos
+rostos" em fundo complexo (trocado por RetinaFace). Testado em escala:
+**97.3% de acerto em 500 pessoas reais** com o threshold de produção.
 
-### Uma coisa que descobri e não posso resolver sozinho
-O **Redis não está instalado** nessa máquina (`redis-server` não existe) —
-por isso todo log da noite mostra "modo degradado". O projeto já lida bem
-com isso sem quebrar (foi feito assim de propósito), mas sem Redis: os
-alertas ao vivo não têm debounce (podem repetir), e eu não consegui testar
-visualmente se o aviso "ARMADO E PERIGOSO" que adicionei na tela realmente
-aparece bonito (confirmei por leitura de código que o dado chega certinho
-até o frontend, só não vi com meus olhos rodando de ponta a ponta).
-Instalar resolve: `sudo pacman -S redis` e depois `sudo systemctl enable --now redis` —
-não fiz isso porque exige `sudo`, que não uso sem você.
+**2. Ingestão do FBI Wanted + 3 modalidades novas de visão computacional.**
+Ingeri a lista completa (1.242 pessoas), baixei as fotos reais, e além do
+rosto adicionei: OCR em documentos (EasyOCR), busca por similaridade
+visual pra tatuagem/veículo (CLIP+FAISS), e Person Re-ID por roupa/corpo
+(Torchreid, pesos reais Market-1501). Todas as 3 testadas contra dados
+reais, não só "o índice existe".
 
-### Outra coisa que descobri: o disco da máquina está quase cheio
-Não é algo que eu causei do nada — só fiquei sabendo porque uma instalação
-de dependências (ver seção "achado real" mais abaixo) quase encheu de
-vez, sobrando 103MB por alguns minutos. Limpei cache seguro (~25GB) e
-resolvi o imediato, mas o disco de 491GB está com **apenas ~25GB livres
-no total** (95% de uso) mesmo depois da limpeza — isso não é problema
-meu pra resolver sozinho (não sei o que você quer manter/apagar do resto
-do disco), só deixando registrado pra você decidir o que fazer quando
-acordar. `df -h /` mostra o estado atual.
+**3. O módulo `intelligence/` nunca rodou do jeito documentado.** Achado
+sério: `poetry run python3 <qualquer script>.py` sempre falhava com
+`ModuleNotFoundError` — `pyproject.toml` só declarava 6 de ~10
+dependências reais, e o venv tinha sido criado em Python 3.14 (sem
+wheels pra torch/tensorflow/faiss-cpu). A sessão só conseguia rodar
+porque usava sem perceber o Python global do sistema. Corrigido
+(dependências certas, venv em Python 3.11). **Efeito colateral sério:**
+essa correção quase encheu o disco de vez (chegou a 103MB livres) —
+resolvido limpando ~25GB de cache seguro do poetry/pip.
 
-### Limitação importante que você precisa saber (não escondi isso)
-Reconhecimento facial não é perfeito — testei em escala (400+ pessoas
-reais) e a taxa de confusão genuína (reconhecer a pessoa errada) é
-baixa, ~0.5-1%, mas não é zero, principalmente em fotos de baixa
-qualidade. **Não use isso pra tomar nenhuma ação automática/irreversível
-sem uma pessoa confirmando antes.**
+**4. Score de periculosidade estava sistematicamente errado pras
+categorias mais graves.** Achado tardio (09:15) mas importante: **137
+pessoas procuradas pela FBI tiravam a nota MÍNIMA (1.0)** de
+periculosidade — igual a alguém simplesmente desaparecido — porque o
+sistema só reconhecia palavras-chave de crime em português, e as
+categorias reais da FBI são em inglês ("Homicides and Sexual Assaults",
+"Crimes Against Children", sigla "ECAP" pra abuso infantil). Corrigido
+em 2 rodadas (achei um caso que escapou da primeira correção); score
+recalculado pra todo mundo. Hoje **80 "wanted" ainda ficam no piso**
+(categorias genuinamente ambíguas tipo "Seeking Information" ou
+contrainteligência — não mexi nessas, são de natureza diferente de
+"risco de violência física").
 
-### Números atuais (rodando `health_check.py` você vê isso ao vivo)
-- 1.242 pessoas cadastradas (FBI Wanted)
-- 1.042 rostos reais reconhecíveis
+**5. 29 testes automáticos escritos do zero**, cobrindo tudo que foi
+tocado esta sessão (reconhecimento facial, ambiente do `intelligence/`,
+cadastro manual da watchlist, catálogo de câmeras, score de
+periculosidade, busca visual CLIP, OCR) — quase tudo rodando contra
+dados/índices/banco REAIS de produção, não mocks.
+
+## O que eu NÃO fiz, de propósito (e por quê)
+
+- **Redis não está instalado** (`redis-server` não existe na máquina) —
+  os alertas ao vivo funcionam em "modo degradado" (sem debounce), e não
+  consegui ver com meus olhos o badge "ARMADO E PERIGOSO" renderizando
+  de ponta a ponta (só confirmei por leitura de código que o dado chega
+  certo no frontend). Resolve com `sudo pacman -S redis` — não fiz
+  porque exige `sudo`.
+- **Não toquei no disco além de limpar cache seguro.** Ficou em **~25GB
+  livres de 491GB (95% de uso)** — não é problema que eu deva resolver
+  sozinho sem saber o que você quer manter no resto do disco.
+- **`intelligence/fbi_ingestion.py` e `global_ingestion.py` continuam
+  quebrados** (tensorflow corrompido, provavelmente resquício do
+  quase-cheio de disco) — confirmei que são código morto/substituído (a
+  versão real e funcional é `olho_de_deus/fbi_ingestion.py`), não valia
+  o risco de mais uma instalação grande pra consertar algo que ninguém usa.
+- **2 registros no banco têm dado mal-formado** na tabela `crimes`
+  ("August 19, 1992" e "Menasha, Wisconsin" gravados como se fossem
+  categoria de crime, não texto real) — volume baixo demais (2 casos)
+  pra valer abrir o parser de ingestão a essa altura da noite; fica
+  registrado pra quem quiser investigar depois.
+- **Não implementei filtro automático de qualidade** pro reconhecimento
+  facial (tentei nitidez, confiança de detecção, tamanho de área — nenhum
+  sinal confiável o bastante) nem persistência de identidade via Person
+  Re-ID quando o rosto some da câmera (ideia boa, mas precisa de
+  supervisão visual ao vivo que não dá pra fazer sozinho de madrugada).
+
+## Limitação importante (não escondida)
+
+Reconhecimento facial não é perfeito — taxa de confusão genuína (pessoa
+errada) fica em ~0.5-1%, principalmente em fotos de baixa qualidade.
+**Não use isso pra ação automática/irreversível sem confirmação humana.**
+
+## Números finais
+
+- 1.242 pessoas cadastradas (FBI Wanted: 821 wanted + 421 missing)
+- 1.042 rostos reais reconhecíveis (embeddings ArcFace, normalizados)
 - **97.3% de acerto** no reconhecimento, testado em 500 pessoas reais
 - 8.198 câmeras públicas reais no catálogo
-- 39 fotos de tatuagem/veículo indexadas por similaridade
-- 29 testes automáticos (19 em `olho_de_deus` + 10 em `intelligence`)
-- ~25 commits organizados no git, cada um com explicação do porquê
+- 39 fotos de tatuagem/veículo indexadas por similaridade CLIP
+- 37 fotos de documento com texto extraído por OCR
+- **29 testes automáticos** (19 em `olho_de_deus` + 10 em `intelligence`)
+- **37 commits**, disco em 25GB livres, zero arquivos seus tocados
 
-### Atualização importante (~09:15): score de periculosidade estava errado
-Achei e corrigi um bug sério: **137 pessoas procuradas (categoria
-"wanted") tiravam a nota MÍNIMA de periculosidade (1.0)** — a mesma
-nota de alguém só desaparecido, sem crime nenhum — porque o sistema só
-reconhecia palavras-chave em português ("HOMICIDIO", "ESTUPRO") e as
-categorias reais que a FBI usa são em inglês ("Homicides and Sexual
-Assaults", "Crimes Against Children"). 38 pessoas com categoria real
-de homicídio tiravam nota 1.0. Corrigido e recalculado pra todo mundo —
-detalhes completos na seção "Check-in ~09:15" mais abaixo.
-
-### Atualização às ~04:30 — achado real depois do check-in pausado
-Voltando pra reverificar (health_check + pytest continuavam 100% verdes),
-fui procurar mais um problema genuíno em vez de ficar parado. Achei um
-grande: **`intelligence/` (a pasta que ingere o FBI e roda CLIP/OCR/
-similaridade) nunca funcionou do jeito que o próprio código documenta.**
-
-Todo script lá diz no topo `poetry run python3 script.py` — mas isso
-sempre falhava na primeira linha com `ModuleNotFoundError`, porque
-`pyproject.toml` só declarava 6 de ~10 dependências reais (faltavam
-psycopg2, python-dotenv, easyocr, open-clip-torch, torchvision) e o venv
-do poetry tinha sido criado em Python 3.14 (que ainda não tem pacote
-pronto pra torchvision/tensorflow/faiss-cpu). Essa sessão só conseguiu
-rodar essas ingestões a noite toda porque usei sem perceber o
-`python3` global do sistema, que por acaso tinha tudo instalado — ou
-seja, `poetry run` nunca foi realmente testado, e teria quebrado na cara
-de qualquer pessoa (você, inclusive) seguindo exatamente o que o
-script manda fazer.
-
-Corrigido: dependências declaradas certas, venv recriado em Python 3.11
-(mesmo padrão do `olho_de_deus`), `package-mode = false` (outro erro de
-config que só aparece quando se tenta instalar do zero). Adicionei
-`intelligence/tests/test_module_imports.py` — importa os 8 scripts
-reais da esteira e confere que o banco tem dados, pra nunca mais
-descobrir isso só na hora de usar.
-
-**Efeito colateral sério e resolvido:** instalar as dependências grandes
-(torch com CUDA, tensorflow) quase encheu o disco da máquina de vez —
-chegou a **103MB livres** no meio da instalação, que falhou por falta
-de espaço. Resolvido limpando cache do poetry/pip (~25GB recuperados,
-100% seguro — é só cache de download, nada de dados seus) e removendo
-um venv intermediário que eu mesmo criei e descartei durante essa
-correção. Terminei com **25GB livres**, testado e confirmado. Não mexi
-em nada além de cache/venv — nenhum arquivo seu foi tocado.
-
-Verificação real rodada (não só leitura de código):
-```
-cd ~/dashboard-cam/intelligence
-poetry run python3 -m pytest tests/ -v   # 9/9 passando
-poetry run python3 -c "from intelligence_db import DB, init_db; ..."
-# individuals: 1242 | documentos classificados: 38 | com ocr_text: 37
-```
-E reconfirmei que `olho_de_deus/tests` (os 11 testes de reconhecimento
-facial) continuam 11/11 depois de toda essa limpeza de disco — nada foi
-afetado lá.
-
-### Status às 03:20 — verificação final desta rodada de trabalho
-Rodei tudo de novo do zero pra confirmar: **11/11 testes passando,
-health_check 100% verde, git limpo** (só meus arquivos, nada do seu
-trabalho em andamento foi tocado). A partir daqui vou continuar de forma
-mais espaçada — verificando periodicamente e fazendo mais melhorias
-pontuais se aparecerem, em vez de mudanças grandes de uma vez. Qualquer
-coisa nova vai aparecer daqui pra baixo com horário.
-
-*(continua sendo atualizado conforme eu for trabalhando)*
+*(O log técnico detalhado, cronológico, com cada achado explicado passo
+a passo como aconteceu, começa logo abaixo do separador.)*
 
 ---
 
