@@ -77,11 +77,14 @@ sem uma pessoa confirmando antes.**
 
 ### Números atuais (rodando `health_check.py` você vê isso ao vivo)
 - 1.242 pessoas cadastradas (FBI Wanted)
-- 1.036 rostos reais reconhecíveis
+- 1.042 rostos reais reconhecíveis (subiu de 1.036 — achei que o CLIP
+  errava a categoria "borrada" e recuperei mais gente de verdade, ver
+  abaixo)
 - 8.198 câmeras públicas reais no catálogo
 - 39 fotos de tatuagem/veículo indexadas por similaridade
 
-*(continua sendo atualizado abaixo conforme eu for trabalhando)*
+*(continua sendo atualizado abaixo conforme eu for trabalhando — última
+atualização: 03:11)*
 
 ---
 
