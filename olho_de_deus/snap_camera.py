@@ -12,10 +12,30 @@ Uso:
     poetry run python3 snap_camera.py --hls "https://.../playlist.m3u8" --out /tmp/x.png
 """
 import argparse
+import signal
 import sys
 import time
 
 from playwright.sync_api import sync_playwright
+
+
+class _HardTimeout(Exception):
+    pass
+
+
+def _with_hard_timeout(seconds, fn, *a, **kw):
+    """Teto absoluto pro processo inteiro — nenhum timeout do Playwright
+    cobre TODA ação possível (achado real: Akihabara travou >90s mesmo com
+    set_default_timeout configurado). Isso garante que nunca mais trava."""
+    def _raise(signum, frame):
+        raise _HardTimeout(f"passou de {seconds}s")
+    old = signal.signal(signal.SIGALRM, _raise)
+    signal.alarm(int(seconds))
+    try:
+        return fn(*a, **kw)
+    finally:
+        signal.alarm(0)
+        signal.signal(signal.SIGALRM, old)
 
 HLS_PLAYER_HTML = """<!DOCTYPE html><html><body style="margin:0;background:#000">
 <video id="v" autoplay muted playsinline style="width:100vw;height:100vh;object-fit:contain"></video>
@@ -54,12 +74,7 @@ YT_EMBED_HTML = """<!DOCTYPE html><html><body style="margin:0;background:#000">
 </body></html>"""
 
 
-def snap_youtube(video_id: str, out_path: str, wait_s: float = 5.0) -> dict:
-    # Achado 2026-09-10: navegar pra página cheia de "watch" trava de forma
-    # imprevisível em vários vídeos (>90s, nenhum timeout configurado
-    # explicava — provável peso de JS/anúncios/sidebar da página inteira).
-    # Wrapper leve com <iframe> do /embed/ é MUITO mais rápido e confiável;
-    # só cai pra "watch" se o embed vier bloqueado pelo canal (Erro 153).
+def _snap_youtube_embed(video_id: str, out_path: str, wait_s: float) -> dict:
     with sync_playwright() as p:
         browser = p.chromium.launch()
         page = browser.new_page(viewport={"width": 960, "height": 540})
@@ -82,6 +97,26 @@ def snap_youtube(video_id: str, out_path: str, wait_s: float = 5.0) -> dict:
         return {"embed_blocked": embed_blocked}
 
 
+def snap_youtube(video_id: str, out_path: str, wait_s: float = 5.0, allow_watch_fallback: bool = True) -> dict:
+    # Achado 2026-09-10: navegar pra página cheia de "watch" trava de forma
+    # imprevisível em vários vídeos (>90s, nenhum timeout configurado
+    # explicava — provável peso de JS/anúncios/sidebar da página inteira).
+    # Wrapper leve com <iframe> do /embed/ é MUITO mais rápido e confiável;
+    # só cai pra "watch" (com teto absoluto de 25s via sinal) se o canal
+    # bloquear embed (Erro 153) — ~50-60% dos canais de turismo bloqueiam.
+    info = _with_hard_timeout(15, _snap_youtube_embed, video_id, out_path, wait_s)
+    if info.get("embed_blocked") and allow_watch_fallback:
+        try:
+            page_info = _with_hard_timeout(
+                25, snap_page, f"https://www.youtube.com/watch?v={video_id}", out_path, wait_s
+            )
+            info["watch_fallback"] = True
+            info["title"] = page_info.get("title")
+        except _HardTimeout:
+            info["watch_fallback_failed"] = "timeout"
+    return info
+
+
 def snap_hls(src_url: str, out_path: str, wait_s: float = 8.0) -> dict:
     with sync_playwright() as p:
         browser = p.chromium.launch()
@@ -99,10 +134,33 @@ def snap_hls(src_url: str, out_path: str, wait_s: float = 8.0) -> dict:
         return {"error": state.get("err"), "videoWidth": state.get("vw")}
 
 
+def snap_page(url: str, out_path: str, wait_s: float = 6.0) -> dict:
+    """Navega direto pra uma página (ex: earthcam.com) — pra sites com player
+    próprio (não YouTube), evita a restrição de embed."""
+    with sync_playwright() as p:
+        browser = p.chromium.launch()
+        page = browser.new_page(viewport={"width": 1280, "height": 800})
+        page.set_default_timeout(8000)
+        page.goto(url, timeout=15000, wait_until="domcontentloaded")
+        title = page.title()
+        for label in ["Aceitar tudo", "Accept all", "Allow all", "I agree", "Aceito", "Accept", "OK"]:
+            try:
+                page.get_by_role("button", name=label, exact=False).first.click(timeout=2000)
+                time.sleep(1.0)
+                break
+            except Exception:
+                pass
+        time.sleep(wait_s)
+        page.screenshot(path=out_path)
+        browser.close()
+        return {"title": title}
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--youtube", help="video_id do YouTube")
     parser.add_argument("--hls", help="URL do .m3u8")
+    parser.add_argument("--page", help="URL de página com player próprio (ex: earthcam.com)")
     parser.add_argument("--out", required=True)
     parser.add_argument("--wait", type=float, default=6.0)
     args = parser.parse_args()
@@ -111,8 +169,10 @@ if __name__ == "__main__":
         info = snap_youtube(args.youtube, args.out, wait_s=args.wait)
     elif args.hls:
         info = snap_hls(args.hls, args.out, wait_s=args.wait)
+    elif args.page:
+        info = snap_page(args.page, args.out, wait_s=args.wait)
     else:
-        print("passe --youtube ou --hls", file=sys.stderr)
+        print("passe --youtube, --hls ou --page", file=sys.stderr)
         sys.exit(1)
 
     print(f"[snap] salvo em {args.out} — {info}")
