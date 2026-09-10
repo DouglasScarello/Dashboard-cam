@@ -203,6 +203,22 @@ def init_db():
     except Exception:
         pass  # coluna já existe
 
+    # Mesma classificação CLIP acima, mas por IMAGEM — até aqui só a foto
+    # principal de cada indivíduo era classificada; a galeria inteira
+    # (individual_images) não tinha rosto/tatuagem/documento/veículo
+    # etiquetado por foto (achado em 2026-09-10, pedido do usuário).
+    try:
+        db.execute("ALTER TABLE individual_images ADD COLUMN image_content_type TEXT")
+        db.commit()
+    except Exception:
+        pass  # coluna já existe
+
+    try:
+        db.execute("ALTER TABLE individual_images ADD COLUMN ocr_text TEXT")
+        db.commit()
+    except Exception:
+        pass  # coluna já existe
+
     db.commit()
     db.close()
     print(f"[db] Banco inicializado ({db.type}) com suporte vetorial.")

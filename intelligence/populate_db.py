@@ -67,8 +67,8 @@ def load_fbi(limit_pages: Optional[int] = None):
                     # eram salvos, e caution (narrativa do crime), warning_message ("ARMED AND
                     # DANGEROUS" etc) e remarks (pistas físicas/localização) eram descartados.
                     "description":  "\n".join(filter(None, [
-                        item.get("description"),
-                        item.get("details"),
+                        _strip_html(item.get("description")),
+                        _strip_html(item.get("details")),
                         (f"AVISO: {item.get('warning_message')}" if item.get("warning_message") else None),
                         _strip_html(item.get("caution")),
                         _strip_html(item.get("remarks")),
