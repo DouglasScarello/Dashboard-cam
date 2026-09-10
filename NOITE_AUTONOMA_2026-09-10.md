@@ -10,6 +10,70 @@ proposito: >
   o que der, deixar tudo funcional e verificável por humanos ao final.
 ---
 
+# 📋 RESUMO — leia isso primeiro, o resto do arquivo é o log técnico detalhado
+
+**(Esta seção vai sendo atualizada conforme a noite avança — checar o
+horário no topo de cada bloco pra saber até onde já cobre.)**
+
+**Bom dia! Aqui está o que aconteceu enquanto você dormia (até ~03:05):**
+
+### O que funciona AGORA, comprovado (não é "deveria funcionar", é testado)
+Rode isto quando acordar pra ver com seus próprios olhos, sem precisar
+confiar em mim:
+```
+cd ~/dashboard-cam/olho_de_deus
+poetry run python3 health_check.py
+poetry run python3 -m pytest tests/ -v
+```
+O primeiro dá um relatório em português de tudo (banco, câmeras, os 3
+sistemas de reconhecimento). O segundo roda 11 testes automáticos que
+provam que os bugs que achei ontem/hoje continuam corrigidos — se algum
+dia alguém (eu ou você) mexer em algo e quebrar de novo, esse comando
+avisa na hora.
+
+### O que eu já tinha feito nesta conversa, antes de você dormir
+- Sistema de reconhecimento facial: 5 bugs corrigidos (o mais grave:
+  os "embeddings" nunca eram normalizados, então nenhum reconhecimento
+  jamais teria funcionado, nem com a pessoa certa cadastrada)
+- Você decidiu que a watchlist seria a lista de procurados do FBI (não
+  contatos pessoais) — ingeri a lista toda: 1.242 pessoas
+- Adicionei: OCR em documentos, busca por foto parecida (tatuagem/carro),
+  e reconhecimento de pessoa pela roupa/corpo (Person Re-ID)
+
+### O que eu fiz depois que você foi dormir
+1. Troquei o jeito que a câmera ao vivo acha o rosto (YuNet + alinhamento
+   correto) — antes ela mandava a PESSOA INTEIRA pro reconhecedor, sem
+   nem achar o rosto direito
+2. Recalibrei o "quão parecido precisa ser pra contar como reconhecido"
+   com números reais (testei em 400 pessoas), não mais um chute
+3. Construí um relatório de saúde (`health_check.py`) e 11 testes
+   automáticos — é o que garante que dá pra confiar sem ficar lendo
+   código
+4. Reli meu próprio código com espírito crítico e achei mais 2 bugs
+   reais: a webcam nunca abria de verdade, e um jeito de rodar a câmera
+   que eu mesmo criei tinha um typo de configuração
+5. Revisei manualmente (com meus próprios "olhos") 9 fotos que tinham
+   mais de um rosto — recuperei 5 que eram claramente 1 pessoa +
+   artefato pequeno, mantive 4 de fora que são fotos genuínas de 2
+   pessoas nomeadas juntas
+
+### Limitação importante que você precisa saber (não escondi isso)
+Reconhecimento facial não é perfeito — testei em escala (400+ pessoas
+reais) e a taxa de confusão genuína (reconhecer a pessoa errada) é
+baixa, ~0.5-1%, mas não é zero, principalmente em fotos de baixa
+qualidade. **Não use isso pra tomar nenhuma ação automática/irreversível
+sem uma pessoa confirmando antes.**
+
+### Números atuais (rodando `health_check.py` você vê isso ao vivo)
+- 1.242 pessoas cadastradas (FBI Wanted)
+- 1.036 rostos reais reconhecíveis
+- 8.198 câmeras públicas reais no catálogo
+- 39 fotos de tatuagem/veículo indexadas por similaridade
+
+*(continua sendo atualizado abaixo conforme eu for trabalhando)*
+
+---
+
 # Log da sessão autônoma — 2026-09-10 02:20 → 13:00 (previsto)
 
 > [!NOTE]
