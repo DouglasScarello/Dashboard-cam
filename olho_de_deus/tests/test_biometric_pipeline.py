@@ -284,3 +284,50 @@ def test_webcam_capture_uses_correct_backend():
         "live_pipeline.py precisa branch especial pra webcam — sem isso, "
         f"CAP_FFMPEG falha silenciosamente nesse ambiente (funciona={ffmpeg_works})"
     )
+
+
+# ─── Score de periculosidade: selo "ARMED AND DANGEROUS" força piso alto ──────
+# (score_engine.py, mexido nesta sessão pra ligar o badge no frontend —
+# AlertCenter.tsx — mas nunca tinha teste de regressão. Roda contra o banco
+# real: um caso que a FBI marcou como "armed and dangerous" de verdade, e um
+# caso de fraude não-violenta como contraste, pra confirmar que o piso de 9.0
+# não vira "todo mundo tira nota alta".)
+
+def test_armed_and_dangerous_forces_high_score(db_conn):
+    from intelligence_db import DB
+    from score_engine import ThreatScorer
+
+    row = db_conn.execute(
+        "SELECT id FROM individuals WHERE description LIKE '%ARMED AND DANGEROUS%' LIMIT 1"
+    ).fetchone()
+    if not row:
+        pytest.skip("nenhum indivíduo com selo 'ARMED AND DANGEROUS' no banco atual")
+
+    db = DB()
+    score = ThreatScorer(db).calculate_individual_score(row[0])
+    db.close()
+
+    assert score >= 9.0, f"selo ARMED AND DANGEROUS deveria forçar score >= 9.0, veio {score}"
+
+
+def test_non_violent_fraud_does_not_get_armed_dangerous_score(db_conn):
+    from intelligence_db import DB
+    from score_engine import ThreatScorer
+
+    row = db_conn.execute(
+        "SELECT id FROM individuals WHERE description NOT LIKE '%ARMED AND DANGEROUS%' "
+        "AND description NOT LIKE '%CONSIDERED DANGEROUS%' "
+        "AND (description LIKE '%FRAUD%' OR description LIKE '%FURTO%' OR description LIKE '%THEFT%') "
+        "LIMIT 1"
+    ).fetchone()
+    if not row:
+        pytest.skip("nenhum indivíduo de fraude/furto sem selo armado no banco atual")
+
+    db = DB()
+    score = ThreatScorer(db).calculate_individual_score(row[0])
+    db.close()
+
+    assert score < 9.0, (
+        f"caso de fraude/furto sem selo 'armed and dangerous' não deveria bater o piso "
+        f"de 9.0 reservado pra ameaça física confirmada pela fonte, veio {score}"
+    )
