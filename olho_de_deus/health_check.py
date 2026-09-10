@@ -131,6 +131,33 @@ def main():
     else:
         print(f"{WARN} Catálogo de câmeras não encontrado em {cam_db}")
 
+    section("6. BUSCA POR SIMILARIDADE (tatuagem/veículo — CLIP)")
+    clip_faiss = ROOT / "intelligence" / "data" / "clip_visual_db.faiss"
+    clip_meta = ROOT / "intelligence" / "data" / "clip_visual_metadata.json"
+    if clip_faiss.exists() and clip_meta.exists():
+        try:
+            import faiss as _faiss
+            idx = _faiss.read_index(str(clip_faiss))
+            print(f"{OK} Índice existe: {idx.ntotal} imagens (tatuagem/veículo) indexadas")
+        except Exception as e:
+            print(f"{FAIL} Índice existe mas não abre: {e}")
+            problems.append("índice CLIP de similaridade corrompido")
+    else:
+        print(f"{WARN} Índice ainda não construído — rodar clip_similarity_index.py --build")
+
+    section("7. PERSON RE-ID (roupa/corpo — Torchreid)")
+    try:
+        from person_reid import PersonReID, DEFAULT_WEIGHTS
+        if not DEFAULT_WEIGHTS.exists():
+            print(f"{FAIL} Pesos reais de ReID não encontrados em {DEFAULT_WEIGHTS} — caindo pro ImageNet genérico")
+            problems.append("pesos Market-1501 do Person ReID ausentes")
+        else:
+            reid = PersonReID()
+            print(f"{OK} Módulo carrega com pesos reais Market-1501 (rank-1 94.2% oficial)")
+    except Exception as e:
+        print(f"{FAIL} Person ReID falhou ao carregar: {e}")
+        problems.append(f"Person ReID com erro: {e}")
+
     con.close()
     report(problems)
 
