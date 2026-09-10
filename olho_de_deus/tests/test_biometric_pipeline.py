@@ -331,3 +331,43 @@ def test_non_violent_fraud_does_not_get_armed_dangerous_score(db_conn):
         f"caso de fraude/furto sem selo 'armed and dangerous' não deveria bater o piso "
         f"de 9.0 reservado pra ameaça física confirmada pela fonte, veio {score}"
     )
+
+
+# ─── Catálogo real de câmeras: seleção de modo de captura (Workstream 2) ──────
+# monitor_camera.py liga o LivePipeline numa câmera de database/live_cameras.db
+# (8198 câmeras reais) mas nunca tinha teste — só foi verificado manualmente
+# uma vez, contra 1 câmera HLS da Caltrans (ver plano/log). Testa contra o
+# catálogo de verdade: uma câmera SNAPSHOT_JPEG real (ex: 511 Ontario) e uma
+# M3U8/HLS real (ex: Caltrans), confirmando que db_manager.get_camera_by_id +
+# resolve_source_type escolhem o modo certo pras duas.
+
+def test_camera_catalog_resolves_snapshot_and_direct_modes():
+    import db_manager
+    from monitor_camera import resolve_source_type
+
+    conn = db_manager.get_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT id FROM cameras WHERE stream_format = 'SNAPSHOT_JPEG' LIMIT 1")
+    snapshot_row = cur.fetchone()
+    cur.execute(
+        "SELECT id FROM cameras WHERE stream_format != 'SNAPSHOT_JPEG' AND url LIKE '%.m3u8%' LIMIT 1"
+    )
+    hls_row = cur.fetchone()
+    conn.close()
+
+    if not snapshot_row or not hls_row:
+        pytest.skip("catálogo de câmeras não tem os dois tipos de amostra esperados")
+
+    snapshot_cam = db_manager.get_camera_by_id(snapshot_row["id"])
+    hls_cam = db_manager.get_camera_by_id(hls_row["id"])
+
+    assert snapshot_cam is not None and "url" in snapshot_cam and "nome" in snapshot_cam
+    assert hls_cam is not None and "url" in hls_cam
+
+    assert resolve_source_type(snapshot_cam) == "snapshot_jpeg", (
+        "câmera SNAPSHOT_JPEG real do catálogo precisa cair no modo de polling HTTP, "
+        "senão cv2.VideoCapture tenta ler uma URL de foto única como se fosse stream de vídeo"
+    )
+    assert resolve_source_type(hls_cam) == "direct", (
+        "câmera M3U8/HLS real do catálogo precisa cair no modo de captura contínua"
+    )

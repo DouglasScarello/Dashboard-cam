@@ -20,6 +20,12 @@ import db_manager
 from live_pipeline import LivePipeline
 
 
+def resolve_source_type(cam: dict) -> str:
+    """Decide o modo de captura certo a partir do stream_format do catálogo.
+    Extraído do corpo de main() pra dar pra testar sem precisar abrir stream de verdade."""
+    return "snapshot_jpeg" if cam.get("stream_format") == "SNAPSHOT_JPEG" else "direct"
+
+
 def main():
     parser = argparse.ArgumentParser(description="Monitora UMA câmera real do catálogo com reconhecimento facial")
     parser.add_argument("--camera-id", help="ID da câmera em database/live_cameras.db")
@@ -47,8 +53,8 @@ def main():
     if not cam:
         raise SystemExit(f"Câmera '{args.camera_id}' não encontrada em live_cameras.db")
 
-    is_snapshot = cam.get("stream_format") == "SNAPSHOT_JPEG"
-    source_type = "snapshot_jpeg" if is_snapshot else "direct"
+    source_type = resolve_source_type(cam)
+    is_snapshot = source_type == "snapshot_jpeg"
     print(f"[monitor] {cam.get('nome')} | stream_format={cam.get('stream_format')} → source_type={source_type}")
     print(f"[monitor] URL: {cam.get('url')}")
 
