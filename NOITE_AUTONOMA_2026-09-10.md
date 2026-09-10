@@ -23,7 +23,7 @@ confiar em mim:
 ```
 cd ~/dashboard-cam/olho_de_deus
 poetry run python3 health_check.py
-poetry run python3 -m pytest tests/ -v       # 16 testes
+poetry run python3 -m pytest tests/ -v       # 17 testes
 cd ../intelligence && poetry run python3 -m pytest tests/ -v   # +9 testes (novo, 04:11)
 ```
 O primeiro dá um relatório em português de tudo (banco, câmeras, os 3
@@ -596,3 +596,22 @@ sujar o banco de produção): (1) cadastro de verdade grava
 querer numa categoria do FBI. Confirmei manualmente que a limpeza
 funcionou (nenhum resíduo de teste ficou no banco nem em
 `watchlist_photos/`). **16/16 testes** agora em `olho_de_deus/tests`.
+
+## Check-in ~06:58 — +1 teste pra busca visual (tatuagem/veículo), 17/17
+
+Reverifiquei tudo (16/16 + health_check 100% + 9/9 no `intelligence`) —
+disco parado em 25GB. Achei mais uma lacuna: `clip_similarity_index.py`
+(busca por foto parecida de tatuagem/veículo, uma das ferramentas de
+visão computacional pedidas explicitamente quando você perguntou "que
+mais ferramentas usar?") só tinha o `health_check.py` confirmando "o
+índice existe com 39 vetores" — nunca tinha sido testado se uma busca
+de verdade acha algo que faz sentido.
+
+`search()` só imprimia (não dava pra testar sem capturar stdout);
+extraí a lógica pra `search_similar()` que retorna os resultados —
+mesmo comportamento, testei manualmente que o CLI continua imprimindo
+igual antes de commitar. Teste roda contra o índice real: busca pela
+própria imagem de uma entrada já indexada, confirma que ela mesma
+volta como melhor resultado (cosseno ~1.000) e que a ordenação por
+similaridade está certa (segundo lugar tem score bem mais baixo, ~0.63,
+não empatado nem invertido). **17/17 testes** agora.
