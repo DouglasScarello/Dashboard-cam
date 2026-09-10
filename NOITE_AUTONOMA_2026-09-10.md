@@ -78,6 +78,16 @@ até o frontend, só não vi com meus olhos rodando de ponta a ponta).
 Instalar resolve: `sudo pacman -S redis` e depois `sudo systemctl enable --now redis` —
 não fiz isso porque exige `sudo`, que não uso sem você.
 
+### Outra coisa que descobri: o disco da máquina está quase cheio
+Não é algo que eu causei do nada — só fiquei sabendo porque uma instalação
+de dependências (ver seção "achado real" mais abaixo) quase encheu de
+vez, sobrando 103MB por alguns minutos. Limpei cache seguro (~25GB) e
+resolvi o imediato, mas o disco de 491GB está com **apenas ~25GB livres
+no total** (95% de uso) mesmo depois da limpeza — isso não é problema
+meu pra resolver sozinho (não sei o que você quer manter/apagar do resto
+do disco), só deixando registrado pra você decidir o que fazer quando
+acordar. `df -h /` mostra o estado atual.
+
 ### Limitação importante que você precisa saber (não escondi isso)
 Reconhecimento facial não é perfeito — testei em escala (400+ pessoas
 reais) e a taxa de confusão genuína (reconhecer a pessoa errada) é
@@ -92,6 +102,51 @@ sem uma pessoa confirmando antes.**
 - 8.198 câmeras públicas reais no catálogo
 - 39 fotos de tatuagem/veículo indexadas por similaridade
 - 16 commits organizados no git, cada um com explicação do porquê
+
+### Atualização às ~04:30 — achado real depois do check-in pausado
+Voltando pra reverificar (health_check + pytest continuavam 100% verdes),
+fui procurar mais um problema genuíno em vez de ficar parado. Achei um
+grande: **`intelligence/` (a pasta que ingere o FBI e roda CLIP/OCR/
+similaridade) nunca funcionou do jeito que o próprio código documenta.**
+
+Todo script lá diz no topo `poetry run python3 script.py` — mas isso
+sempre falhava na primeira linha com `ModuleNotFoundError`, porque
+`pyproject.toml` só declarava 6 de ~10 dependências reais (faltavam
+psycopg2, python-dotenv, easyocr, open-clip-torch, torchvision) e o venv
+do poetry tinha sido criado em Python 3.14 (que ainda não tem pacote
+pronto pra torchvision/tensorflow/faiss-cpu). Essa sessão só conseguiu
+rodar essas ingestões a noite toda porque usei sem perceber o
+`python3` global do sistema, que por acaso tinha tudo instalado — ou
+seja, `poetry run` nunca foi realmente testado, e teria quebrado na cara
+de qualquer pessoa (você, inclusive) seguindo exatamente o que o
+script manda fazer.
+
+Corrigido: dependências declaradas certas, venv recriado em Python 3.11
+(mesmo padrão do `olho_de_deus`), `package-mode = false` (outro erro de
+config que só aparece quando se tenta instalar do zero). Adicionei
+`intelligence/tests/test_module_imports.py` — importa os 8 scripts
+reais da esteira e confere que o banco tem dados, pra nunca mais
+descobrir isso só na hora de usar.
+
+**Efeito colateral sério e resolvido:** instalar as dependências grandes
+(torch com CUDA, tensorflow) quase encheu o disco da máquina de vez —
+chegou a **103MB livres** no meio da instalação, que falhou por falta
+de espaço. Resolvido limpando cache do poetry/pip (~25GB recuperados,
+100% seguro — é só cache de download, nada de dados seus) e removendo
+um venv intermediário que eu mesmo criei e descartei durante essa
+correção. Terminei com **25GB livres**, testado e confirmado. Não mexi
+em nada além de cache/venv — nenhum arquivo seu foi tocado.
+
+Verificação real rodada (não só leitura de código):
+```
+cd ~/dashboard-cam/intelligence
+poetry run python3 -m pytest tests/ -v   # 9/9 passando
+poetry run python3 -c "from intelligence_db import DB, init_db; ..."
+# individuals: 1242 | documentos classificados: 38 | com ocr_text: 37
+```
+E reconfirmei que `olho_de_deus/tests` (os 11 testes de reconhecimento
+facial) continuam 11/11 depois de toda essa limpeza de disco — nada foi
+afetado lá.
 
 ### Status às 03:20 — verificação final desta rodada de trabalho
 Rodei tudo de novo do zero pra confirmar: **11/11 testes passando,
