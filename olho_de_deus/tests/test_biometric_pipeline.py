@@ -120,6 +120,38 @@ def test_faiss_upsert_normalizes_before_indexing():
 
 # ─── Bug: opencv/Haar Cascade dava falso positivo de múltiplos rostos ──────────
 
+def test_multiface_recovers_dominant_face_when_size_disparity_is_large(db_conn):
+    """
+    Revisão manual de 9 casos reais (2026-09-10, ver NOITE_AUTONOMA_2026-09-10.md):
+    quando há 2+ rostos na imagem mas um é >=10x maior em área, sempre era o
+    assunto principal + artefato pequeno (pessoa ao fundo, foto de carteira na
+    mão) — nunca uma foto genuína de 2 pessoas (essas ficam em 1x-2.3x). Esse
+    caso (Thomas Crane Wales) tem razão ~59x — tem que recuperar e reconhecer
+    ele mesmo, não ficar de fora.
+    """
+    row = db_conn.execute(
+        "SELECT has_embedding FROM individuals WHERE id = '3a3ec6ff4ecd1c5aac9a7f2380eccd47'"
+    ).fetchone()
+    if row is None:
+        pytest.skip("indivíduo de teste não está no banco (FBI não ingerido ainda)")
+    if row[0] != 1:
+        pytest.skip("ainda não reprocessado com a lógica de recuperação — rodar extract_embeddings.py")
+
+    import cv2
+    from biometric_processor import BiometricProcessor, _detect_and_align_face
+
+    img_path = ROOT / "intelligence" / "data" / "fbi_faces" / "3a3ec6ff4ecd1c5aac9a7f2380eccd47.jpg"
+    if not img_path.exists():
+        pytest.skip("foto de teste não baixada")
+
+    bp = BiometricProcessor()
+    img = cv2.imread(str(img_path))
+    aligned = _detect_and_align_face(bp.face_detector, img)
+    assert aligned is not None
+    _, match = bp._identify(aligned)
+    assert match is not None and match["uid"] == "3a3ec6ff4ecd1c5aac9a7f2380eccd47"
+
+
 def test_retinaface_used_not_opencv_haar():
     """Confere que delta_embedder.py não voltou a usar o detector_backend='opencv'
     (Haar Cascade) — regressão fácil de reintroduzir sem querer numa limpeza futura."""

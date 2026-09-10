@@ -290,13 +290,32 @@ def run_delta(
                 continue
 
             if len(objs) > 1:
-                # Cartaz/composição com mais de um rosto na mesma imagem — não dá pra saber
-                # qual rosto pertence ao nome cadastrado sem revisão manual. Pular em vez de
-                # arriscar indexar o rosto ERRADO sob o nome certo (pior que não indexar nada).
-                multi_face += 1
-                multi_face_uids.append(uid)
-                log.warning(f"[{uid}] {len(objs)} rostos detectados na mesma imagem — pulando, revisar manualmente.")
-                continue
+                # Mais de um rosto na imagem — na maioria das vezes é o assunto principal
+                # da foto + um artefato (pessoa ao fundo, ou uma carteira/RG que a própria
+                # pessoa segura na mão com a foto dela impressa). Revisei manualmente 9
+                # casos reais (2026-09-10): quando o maior rosto é MUITO maior que o
+                # segundo (>=10x em área), sempre era exatamente esse padrão — nunca uma
+                # foto genuína de 2 pessoas (essas ficam em torno de 1x-2.3x de razão,
+                # tamanho comparável, porque as duas são de fato o assunto da foto).
+                # Ver NOITE_AUTONOMA_2026-09-10.md pros 9 casos e imagens conferidas.
+                areas = sorted(
+                    ((o["facial_area"]["w"] * o["facial_area"]["h"], o) for o in objs),
+                    key=lambda t: t[0], reverse=True,
+                )
+                largest_area, largest_obj = areas[0]
+                second_area = areas[1][0]
+                if second_area > 0 and largest_area / second_area >= 10:
+                    objs = [largest_obj]
+                    log.info(f"[{uid}] {len(areas)} rostos detectados, mas o maior é "
+                             f"{largest_area/second_area:.0f}x maior — usando só ele "
+                             "(padrão: assunto principal + artefato pequeno).")
+                else:
+                    # Tamanhos comparáveis — provavelmente 2+ pessoas de verdade na foto,
+                    # não dá pra saber qual rosto é o nome cadastrado sem revisão manual.
+                    multi_face += 1
+                    multi_face_uids.append(uid)
+                    log.warning(f"[{uid}] {len(objs)} rostos de tamanho comparável — pulando, revisar manualmente.")
+                    continue
 
             raw_emb  = objs[0]["embedding"]
             emb_np   = np.array(raw_emb, dtype="float32")
