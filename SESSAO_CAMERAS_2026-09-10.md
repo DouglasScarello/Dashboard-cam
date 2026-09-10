@@ -347,3 +347,23 @@ câmera de monitoramento urbano de propósito.
 Vista de rio/campus, sem gente, painorâmica. Reprovada.
 
 Balanço: ~35 candidatas verificadas, 2 aprovadas. Continuando.
+
+### ❌ Miami Collins Ave (SkylineWebcams — fonte legítima, mas chovendo agora)
+Ângulo de rua bom (câmera baixa, esquina de prédio), mas está chovendo
+em Miami agora — rua vazia por causa do tempo, não da câmera. Candidata
+a reconferir em outro momento. Descobri também que o player da
+SkylineWebcams não usa `<video>` padrão (não achei `videoSrc`) — preciso
+investigar melhor o mecanismo antes de considerar catalogável.
+
+### ❌ Tanukikoji (Sapporo) — embed bloqueado, sem tempo de confirmar fallback
+
+## Pausa estratégica (~14:35): mudando pra ritmo pausado (ScheduleWakeup)
+
+Depois de ~40 candidatas verificadas nesta sessão contínua, decidi
+adotar o mesmo padrão que funcionou bem na madrugada anterior:
+trabalhar em blocos pausados via `ScheduleWakeup`, em vez de uma
+sessão única maratona. Motivo: o trabalho é genuinamente "infinito"
+(usuário confirmou), então ritmo sustentável > tentar esgotar tudo de
+uma vez. Cada bloco: reverificar saúde do sistema, checar mais
+candidatas com o método já validado, cadastrar aprovadas, documentar,
+commitar, agendar próximo bloco. Continua até as 23h.

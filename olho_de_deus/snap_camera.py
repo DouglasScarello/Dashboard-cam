@@ -151,6 +151,13 @@ def snap_page(url: str, out_path: str, wait_s: float = 6.0) -> dict:
             except Exception:
                 pass
         time.sleep(wait_s)
+        try:
+            video_el = page.locator("video, iframe").first
+            if video_el.count() > 0:
+                video_el.scroll_into_view_if_needed(timeout=3000)
+                time.sleep(1.0)
+        except Exception:
+            pass
         page.screenshot(path=out_path)
         browser.close()
         return {"title": title}
