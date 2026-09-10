@@ -708,7 +708,13 @@ if __name__ == "__main__":
     import json
     parser = argparse.ArgumentParser(description="Olho de Deus — Live Biometric Pipeline")
     parser.add_argument("--id", help="ID da câmera ou URL Stream")
-    parser.add_argument("--type", default="youtube", choices=["youtube", "rtsp", "webcam"], help="Tipo de fonte")
+    # "direct" e "snapshot_jpeg" adicionados pra CLI ficar consistente com o que
+    # monitor_camera.py já constrói via Python direto (LivePipeline(source_type=...))
+    # sem passar por aqui — sem isso, rodar este arquivo direto com esses tipos
+    # falhava na validação do argparse antes mesmo de tentar abrir a câmera.
+    parser.add_argument("--type", default="youtube",
+                         choices=["youtube", "rtsp", "webcam", "direct", "snapshot_jpeg"],
+                         help="Tipo de fonte")
     # Calibrado empiricamente (2026-09-10): distância de auto-match (mesma pessoa,
     # YuNet alinhado vs. embedding cadastrado via RetinaFace) mediu p50=0.36,
     # p90=0.52, p95=0.54 em amostra de 138 indivíduos reais. 0.48 (valor antigo)
