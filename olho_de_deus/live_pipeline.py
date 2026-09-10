@@ -43,6 +43,7 @@ if "WAYLAND_DISPLAY" in os.environ and "QT_QPA_PLATFORM" not in os.environ:
 import time
 import queue
 import cv2
+import requests
 import threading
 import torch
 
@@ -106,13 +107,17 @@ class AtomicFrameRing:
             return self.frames[self.index]
 
 class LivePipeline:
-    def __init__(self, camera_id: str, source_type: str = "youtube", match_threshold: float = 0.48, process_every_n: int = 3,
+    def __init__(self, camera_id: str, source_type: str = "youtube", stream_url: Optional[str] = None,
+                 match_threshold: float = 0.48, process_every_n: int = 3,
                  max_width: int = 0, max_height: int = 0, profile: bool = False, show_every_n: int = 1,
                  use_byte_track: bool = False,
                  yt_cookies_browser: Optional[str] = None,
                  yt_cookies_file: Optional[str] = None):
         self.camera_id = camera_id
         self.source_type = source_type
+        # camera_id = identidade/nome (banco, logs, alertas); stream_url = o que o OpenCV/HTTP realmente abre.
+        # Retrocompatível: chamadas antigas (--id, --all, --city) passam a URL como camera_id e não passam stream_url.
+        self.stream_url = stream_url or camera_id
         self.match_threshold = match_threshold
         self._yt_cookies_browser = yt_cookies_browser
         self._yt_cookies_file = yt_cookies_file
@@ -260,6 +265,45 @@ class LivePipeline:
                 log.info(f"[DEBUG] Primeiro frame capturado com sucesso! Dimensões: {frame.shape}")
             self.frame_bus.push(frame)
         cap.release()
+
+    def _capture_loop_snapshot(self, url: str, poll_interval_s: Optional[float] = None):
+        """
+        Thread de captura para câmeras SNAPSHOT_JPEG (foto única via HTTP, sem
+        stream contínuo — ex: Ontario 511, Digitraffic, NZTA). Busca uma imagem
+        nova a cada `poll_interval_s` segundos em vez de ler um stream de vídeo.
+        10s é um chute conservador — confirmado por amostra que pelo menos a
+        Ontario 511 só atualiza a cada ~20s (header cache-control: max-age=20);
+        outras fontes podem variar, ajustar por câmera se necessário.
+        """
+        poll_interval_s = poll_interval_s or getattr(self, "_snapshot_poll_interval", 10.0)
+        pin_thread([2])
+        log.info(f"Captura por polling JPEG iniciada para {self.camera_id} (a cada {poll_interval_s}s)")
+        while self.running:
+            t0 = time.time()
+            try:
+                resp = requests.get(url, timeout=8)
+                if resp.ok and resp.content:
+                    arr = np.frombuffer(resp.content, dtype=np.uint8)
+                    frame = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+                    if frame is not None:
+                        if self.max_width > 0 and self.max_height > 0:
+                            h, w = frame.shape[:2]
+                            if w > self.max_width or h > self.max_height:
+                                r = min(self.max_width / w, self.max_height / h)
+                                frame = cv2.resize(frame, (int(w * r), int(h * r)), interpolation=cv2.INTER_LINEAR)
+                        if self._last_frame_hash == 0:
+                            log.info(f"[DEBUG] Primeiro snapshot capturado com sucesso! Dimensões: {frame.shape}")
+                        self._last_capture_dt = time.time() - t0
+                        self._last_frame_time = time.time()
+                        self.frame_bus.push(frame)
+                    else:
+                        log.warning(f"Snapshot de {self.camera_id} não decodificou como imagem válida.")
+                else:
+                    log.warning(f"Snapshot de {self.camera_id} retornou HTTP {resp.status_code}.")
+            except Exception as e:
+                log.warning(f"Falha ao buscar snapshot de {self.camera_id}: {e}")
+            elapsed = time.time() - t0
+            time.sleep(max(0.0, poll_interval_s - elapsed))
 
     def _process_match(self, frame, match, track_id, db=None):
         """
@@ -417,19 +461,30 @@ class LivePipeline:
 
     def run(self):
         """Loop principal coordenador: gerencia as threads e o watchdog."""
-        stream_url = self.camera_id
+        stream_url = self.stream_url
         if self.source_type == "youtube":
             stream_url = get_live_url(self.camera_id, self._yt_cookies_browser, self._yt_cookies_file)
             if not stream_url: return
 
         self.running = True
         win_name = "Olho de Deus - Tactical"
-        
+
         # Estabilização GUI: Evita resize e overhead de driver (Fase 32)
-        cv2.namedWindow(win_name, cv2.WINDOW_NORMAL)
-        cv2.resizeWindow(win_name, self.max_width, self.max_height)
-        
-        self. capture_thread = threading.Thread(target=self._capture_loop, args=(stream_url,), daemon=True)
+        # Detecção automática de ambiente headless: opencv-python-headless (sem GTK/Qt/Cocoa)
+        # não sabe abrir janela nenhuma — nesse caso a pipeline continua rodando só com
+        # alertas/logs, sem tentar exibir vídeo (o reconhecimento em si não depende disso).
+        self._headless = False
+        try:
+            cv2.namedWindow(win_name, cv2.WINDOW_NORMAL)
+            cv2.resizeWindow(win_name, self.max_width, self.max_height)
+        except cv2.error:
+            self._headless = True
+            log.warning("OpenCV sem suporte a GUI nesse ambiente — rodando sem janela de vídeo (só alertas/logs).")
+
+        if self.source_type == "snapshot_jpeg":
+            self.capture_thread = threading.Thread(target=self._capture_loop_snapshot, args=(stream_url,), daemon=True)
+        else:
+            self.capture_thread = threading.Thread(target=self._capture_loop, args=(stream_url,), daemon=True)
         self.capture_thread.start()
         
         self.ai_thread = threading.Thread(target=self._process_worker_loop, daemon=True)
@@ -475,12 +530,13 @@ class LivePipeline:
                         results = list(self._last_results)
                     self._draw_hud(display_frame, results)
                     
-                    # EXIBIÇÃO NA MAIN THREAD (Corrige "tela preta")
-                    cv2.imshow(win_name, display_frame)
-                    if cv2.waitKey(1) & 0xFF == ord('q'):
-                        self.running = False
-                        break
-                    
+                    # EXIBIÇÃO NA MAIN THREAD (Corrige "tela preta") — pulado em modo headless
+                    if not self._headless:
+                        cv2.imshow(win_name, display_frame)
+                        if cv2.waitKey(1) & 0xFF == ord('q'):
+                            self.running = False
+                            break
+
                     # Stream WebRTC
                     if self.enable_stream and self.streamer:
                         self.streamer.push(display_frame)

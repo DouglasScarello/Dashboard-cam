@@ -48,6 +48,8 @@ pymerkle = "^6.1.0"
 # wheel pra Python >=3.13 no momento (2026-08-29) — ver PLANO_CONTINUACAO.md
 # Seção 5.2/8b. Revisitar se/quando a Paddle Foundation publicar suporte.
 easyocr = "^1.7.2"
+open-clip-torch = "^3.3.0"
+torchreid = "^0.2.5"
 
 [build-system]
 requires = ["poetry-core"]

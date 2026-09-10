@@ -5,6 +5,7 @@ Carrega todas as fontes de inteligência no banco (PostgreSQL/SQLite).
 """
 import os
 import io
+import re
 import csv
 import json
 import time
@@ -13,6 +14,13 @@ import logging
 from tqdm import tqdm
 from typing import Optional
 from datetime import datetime
+
+
+def _strip_html(text: Optional[str]) -> str:
+    """Remove tags HTML dos campos ricos da API do FBI (caution/remarks vêm com <p> etc)."""
+    if not text:
+        return ""
+    return re.sub(r"<[^>]+>", " ", text).strip()
 
 logging.getLogger("deepface").setLevel(logging.ERROR)
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
@@ -55,11 +63,21 @@ def load_fbi(limit_pages: Optional[int] = None):
                     "hair_color":   item.get("hair"),
                     "nationalities": item.get("nationality", []),
                     "occupation":   (item.get("occupations") or [None])[0],
-                    "description":  (item.get("description") or "") + "\n" + (item.get("details") or ""),
+                    # Concatena TODOS os campos textuais ricos da API — antes só description+details
+                    # eram salvos, e caution (narrativa do crime), warning_message ("ARMED AND
+                    # DANGEROUS" etc) e remarks (pistas físicas/localização) eram descartados.
+                    "description":  "\n".join(filter(None, [
+                        item.get("description"),
+                        item.get("details"),
+                        (f"AVISO: {item.get('warning_message')}" if item.get("warning_message") else None),
+                        _strip_html(item.get("caution")),
+                        _strip_html(item.get("remarks")),
+                        _strip_html(item.get("additional_information")),
+                    ])),
                     "reward":       item.get("reward_text"),
                     "url":          item.get("url"),
                     "img_url":      (item.get("images") or [{}])[0].get("large"),
-                    "img_path":     f"data/fbi_faces/{uid}.jpg" if os.path.exists(f"intelligence/data/fbi_faces/{uid}.jpg") else None,
+                    "img_path":     f"fbi_faces/{uid}.jpg" if os.path.exists(f"data/fbi_faces/{uid}.jpg") else None,
                     "first_seen":   item.get("publication"),
                     "last_seen":    item.get("modified"),
                 })

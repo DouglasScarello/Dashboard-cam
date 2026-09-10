@@ -67,13 +67,14 @@ class ThreatScorer:
         factors = {
             "max_crime_weight": 0.0,
             "reward_bonus": 0.0,
+            "armed_and_dangerous": False,
             "keywords_found": []
         }
 
         # Análise de Crimes
         max_weight = 0.1
         crime_text = " ".join(crimes).upper()
-        # Adiciona a descrição para uma busca mais profunda
+        # Adiciona a descrição (agora inclui caution/warning_message/remarks — ver populate_db.py)
         full_context = (crime_text + " " + (ind["description"] or "").upper())
 
         for kw, weight in WEIGHTS.items():
@@ -84,6 +85,13 @@ class ThreatScorer:
 
         factors["max_crime_weight"] = max_weight
         score = max_weight * 10.0
+
+        # "ARMED AND DANGEROUS" é um selo oficial da fonte (FBI warning_message), não uma
+        # palavra-chave genérica de crime — pesa mais que qualquer keyword de WEIGHTS e
+        # estabelece um piso alto de score, já que é literalmente um aviso de risco físico.
+        if "ARMED AND DANGEROUS" in full_context or "CONSIDERED DANGEROUS" in full_context:
+            factors["armed_and_dangerous"] = True
+            score = max(score, 9.0)
 
         # Análise de Recompensa
         reward_str = ind["reward"]

@@ -344,13 +344,18 @@ class BiometricProcessor:
                     match_data["identity_confidence"] = _probability_to_confidence(match_data["match_probability"])
             elif self.index is not None:
                 # Busca (FAISS) → calibração → probabilidade → classificação
-                D, I = self.index.search(np.array([embedding]).astype('float32'), 1)
+                # Normalizar igual ao índice (ver nota em delta_embedder.FaissIDMap.upsert) —
+                # sem isso a distância L2 crua nunca cai dentro de nenhum threshold configurado.
+                query_vec = np.array([embedding]).astype('float32')
+                faiss.normalize_L2(query_vec)
+                D, I = self.index.search(query_vec, 1)
                 distance = float(D[0][0])
                 probability = _distance_to_probability(distance)
                 confidence = _probability_to_confidence(probability)
 
-                if distance < self.match_threshold:
-                    match_data = self.metadata[I[0][0]].copy()
+                match_key = str(int(I[0][0]))
+                if distance < self.match_threshold and match_key in self.metadata:
+                    match_data = self.metadata[match_key].copy()
                     match_data["score"] = distance
                     match_data["match_probability"] = probability
                     match_data["identity_confidence"] = confidence

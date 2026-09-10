@@ -593,7 +593,7 @@ class EnhanceROIRequest(BaseModel):
     roi_type: str = Field("plate", description="Tipo do ROI: 'plate', 'face', 'general'")
     scale_factor: int = Field(4, ge=1, le=8, description="Fator de Super-Resolução (2x, 4x, 8x)")
     apply_deskew: bool = Field(True, description="Executa retificação homográfica de perspectiva")
-    deblur_method: str = Field("wiener", description="Método de deblur: 'wiener', 'richardson_lucy', 'none'")
+    deblur_method: str = Field("none", description="Método de deblur: 'wiener', 'richardson_lucy', 'none'")
     motion_length: int = Field(15, ge=1, le=100, description="Arrasto estimado do movimento em pixels")
     motion_angle: float = Field(0.0, ge=-180.0, le=180.0, description="Ângulo do movimento em graus")
     wiener_nsr: float = Field(0.01, ge=0.0001, le=1.0, description="NSR para filtro de Wiener")
@@ -798,7 +798,7 @@ async def enhance_roi(payload: EnhanceROIRequest):
 async def enhance_license_plate_file(
     file: UploadFile = File(..., description="Arquivo de imagem da placa veicular (crop/ROI)"),
     deskew: bool = Form(True),
-    deblur: bool = Form(True),
+    deblur: bool = Form(False),
     motion_length: int = Form(12),
     motion_angle: float = Form(0.0)
 ):

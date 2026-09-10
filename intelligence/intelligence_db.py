@@ -163,6 +163,16 @@ CREATE TABLE IF NOT EXISTS threat_scores (
     updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS match_logs (
+    id              SERIAL PRIMARY KEY,
+    individual_id   TEXT REFERENCES individuals(id),
+    camera_id       TEXT,
+    distance        REAL,
+    probability     REAL,
+    confidence      TEXT,
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 """
 
 def init_db():
@@ -178,6 +188,21 @@ def init_db():
         # Habilitar pgvector no Postgres
         db.execute("CREATE EXTENSION IF NOT EXISTS vector;")
         db.execute(SCHEMA_SQL)
+
+    # Migração aditiva (Fase: triagem CLIP) — CREATE TABLE IF NOT EXISTS não adiciona
+    # coluna em tabela já existente, então isso precisa de ALTER TABLE explícito.
+    try:
+        db.execute("ALTER TABLE individuals ADD COLUMN image_content_type TEXT")
+        db.commit()
+    except Exception:
+        pass  # coluna já existe
+
+    try:
+        db.execute("ALTER TABLE individuals ADD COLUMN ocr_text TEXT")
+        db.commit()
+    except Exception:
+        pass  # coluna já existe
+
     db.commit()
     db.close()
     print(f"[db] Banco inicializado ({db.type}) com suporte vetorial.")
@@ -425,6 +450,7 @@ def get_embedding_delta(db: DB, limit: Optional[int] = None) -> List[Dict]:
             i.name,
             i.img_path,
             i.last_seen,
+            i.image_content_type,
             fe.created_at AS emb_created_at
         FROM individuals i
         LEFT JOIN face_embeddings fe ON fe.individual_id = i.id
@@ -460,10 +486,12 @@ def get_all_embeddings_for_index(db: DB) -> List[Dict]:
     """
     Retorna todos os embeddings já calculados para reconstrução
     do IndexIDMap ao inicializar o delta_embedder.
-    Retorna list de {individual_id, embedding_blob} ou {individual_id, embedding}.
+    Retorna list de {individual_id, embedding_blob, name} ou {individual_id, embedding, name}.
     """
     cur = db.execute(
-        "SELECT individual_id, embedding_blob FROM face_embeddings WHERE embedding_blob IS NOT NULL"
+        "SELECT fe.individual_id, fe.embedding_blob, i.name "
+        "FROM face_embeddings fe JOIN individuals i ON i.id = fe.individual_id "
+        "WHERE fe.embedding_blob IS NOT NULL"
     )
     return [dict(r) for r in cur.fetchall()]
 
@@ -529,6 +557,15 @@ def get_threat_score(db: DB, individual_id: str) -> Optional[Dict]:
         res["factors"] = json.loads(res["factors_json"]) if res["factors_json"] else {}
         return res
     return None
+
+
+def register_match_log(db: DB, individual_id: str, distance: float, probability: float,
+                        confidence: str, camera_id: str = None) -> None:
+    """Registra um match biométrico ao vivo (live_pipeline.py) para auditoria/calibração de thresholds."""
+    q = """INSERT INTO match_logs (individual_id, camera_id, distance, probability, confidence)
+           VALUES (?, ?, ?, ?, ?)"""
+    db.execute(q, (individual_id, camera_id, distance, probability, confidence))
+    db.commit()
 
 
 def get_full_individual_dossier(db: DB, individual_id: str) -> Optional[Dict]:

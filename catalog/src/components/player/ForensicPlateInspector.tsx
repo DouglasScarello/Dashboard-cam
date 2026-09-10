@@ -51,7 +51,7 @@ export const ForensicPlateInspector: React.FC<ForensicPlateInspectorProps> = ({
     // Parâmetros do Pipeline Forense
     const [scaleFactor, setScaleFactor] = useState(4);
     const [applyDeskew, setApplyDeskew] = useState(true);
-    const [deblurMethod, setDeblurMethod] = useState<'wiener' | 'richardson_lucy' | 'none'>('wiener');
+    const [deblurMethod, setDeblurMethod] = useState<'wiener' | 'richardson_lucy' | 'none'>('none');
     const [motionLength, setMotionLength] = useState(15);
     const [motionAngle, setMotionAngle] = useState(0.0);
     const [binarization, setBinarization] = useState<'sauvola' | 'otsu' | 'none'>('sauvola');
@@ -62,15 +62,15 @@ export const ForensicPlateInspector: React.FC<ForensicPlateInspectorProps> = ({
         tacticalAudio.playClick();
         if (type === 'plate') {
             setApplyDeskew(true);
-            setDeblurMethod('wiener');
+            setDeblurMethod('none');
             setBinarization('sauvola');
         } else if (type === 'face') {
             setApplyDeskew(false);
-            setDeblurMethod('wiener');
+            setDeblurMethod('none');
             setBinarization('none');
         } else {
             setApplyDeskew(false);
-            setDeblurMethod('wiener');
+            setDeblurMethod('none');
             setBinarization('none');
         }
     };

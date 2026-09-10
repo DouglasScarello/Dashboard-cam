@@ -17,6 +17,7 @@ Uso direto:
 """
 import os
 import sys
+import json
 import struct
 import hashlib
 import logging
@@ -73,6 +74,7 @@ class FaissIDMap:
     def __init__(self):
         self.index: Optional[faiss.IndexIDMap] = None
         self._id_to_uid: Dict[int, str] = {}   # int64 → uid string
+        self._id_to_meta: Dict[int, Dict] = {}  # int64 → {"uid", "title"} (persistido em vector_metadata.json)
 
     def load_or_create(self, db: DB) -> int:
         """
@@ -86,6 +88,12 @@ class FaissIDMap:
             if FAISS_ID_PATH.exists():
                 id_map_raw = np.load(str(FAISS_ID_PATH), allow_pickle=True).item()
                 self._id_to_uid = id_map_raw
+            if META_PATH.exists():
+                with open(META_PATH, "r", encoding="utf-8") as f:
+                    self._id_to_meta = {int(k): v for k, v in json.load(f).items()}
+            else:
+                # Índice existente de uma versão anterior sem metadata — reconstrói a partir do uid.
+                self._id_to_meta = {int_id: {"uid": uid, "title": uid} for int_id, uid in self._id_to_uid.items()}
             return self.index.ntotal
 
         # Primeira vez — constrói o IndexIDMap do zero a partir do banco
@@ -93,6 +101,7 @@ class FaissIDMap:
         flat = faiss.IndexFlatL2(self.DIM)
         self.index = faiss.IndexIDMap(flat)
         self._id_to_uid = {}
+        self._id_to_meta = {}
 
         rows = get_all_embeddings_for_index(db)
         if not rows:
@@ -114,19 +123,32 @@ class FaissIDMap:
             vecs.append(emb)
             ids.append(int_id)
             self._id_to_uid[int_id] = uid
+            self._id_to_meta[int_id] = {"uid": uid, "title": row.get("name") or uid}
 
         if vecs:
+            vecs_np = np.array(vecs, dtype="float32")
+            faiss.normalize_L2(vecs_np)  # ver nota em upsert() sobre por que isso é obrigatório
             self.index.add_with_ids(
-                np.array(vecs, dtype="float32"),
+                vecs_np,
                 np.array(ids, dtype="int64"),
             )
         log.info(f"Índice construído com {len(vecs)} vetores existentes.")
         return len(vecs)
 
-    def upsert(self, uid: str, embedding: np.ndarray) -> None:
+    def upsert(self, uid: str, embedding: np.ndarray, name: Optional[str] = None) -> None:
         """
         Insere ou atualiza o vetor de um indivíduo no índice.
         Se o ID já existir, remove o vetor antigo antes de inserir o novo.
+
+        IMPORTANTE: o embedding é L2-normalizado antes de entrar no índice.
+        O ArcFace do DeepFace NÃO devolve vetores unitários por padrão — em L2
+        cru, a distância entre a MESMA pessoa fica na casa de 2-3 (medido:
+        mesma foto exata deu distância 2.54), muito acima de qualquer
+        match_threshold configurado (0.4-0.7) e da calibração de probabilidade
+        em biometric_processor.py (exp(-d*1.2), pensada pra distância
+        normalizada 0-2). Sem essa normalização, NENHUM match real dispara,
+        mesmo com o rosto certo no índice. biometric_processor._identify()
+        também precisa normalizar o embedding de busca do mesmo jeito.
         """
         int_id = uid_to_int64(uid)
 
@@ -141,14 +163,18 @@ class FaissIDMap:
                 pass  # ignore se o ID não estava no índice
 
         vec = embedding.reshape(1, -1).astype("float32")
+        faiss.normalize_L2(vec)
         self.index.add_with_ids(vec, np.array([int_id], dtype="int64"))
         self._id_to_uid[int_id] = uid
+        self._id_to_meta[int_id] = {"uid": uid, "title": name or uid}
 
     def save(self) -> None:
-        """Persiste o índice e o mapa de IDs no disco."""
+        """Persiste o índice, o mapa de IDs e a metadata (nome exibido no match) no disco."""
         FAISS_PATH.parent.mkdir(parents=True, exist_ok=True)
         faiss.write_index(self.index, str(FAISS_PATH))
         np.save(str(FAISS_ID_PATH), self._id_to_uid)
+        with open(META_PATH, "w", encoding="utf-8") as f:
+            json.dump({str(k): v for k, v in self._id_to_meta.items()}, f, ensure_ascii=False)
         log.info(f"Índice salvo: {self.index.ntotal} vetores → {FAISS_PATH}")
 
     @property
@@ -221,14 +247,30 @@ def run_delta(
                 "already_indexed": already_indexed, "total_indexed": fidx.total}
 
     # ── 3. Processar delta ────────────────────────────────────────────────────
+    try:
+        from classify_images import USABLE_LABELS
+    except ImportError:
+        USABLE_LABELS = None  # classify_images.py não rodou ainda — não filtra por conteúdo
+
     processed = 0
     skipped   = 0
     errors    = 0
+    not_a_face = 0
+    multi_face = 0
+    multi_face_uids = []
     commit_buf = 0
 
     for row in tqdm(delta, desc="  ArcFace Embeddings", unit="face"):
         uid      = row["id"]
         img_path = row.get("img_path", "")
+        content_type = row.get("image_content_type")
+
+        # Triagem CLIP (classify_images.py) — pula direto imagens que já sabemos não
+        # serem foto de rosto único (cartaz com várias pessoas, esboço, tatuagem,
+        # documento etc), sem gastar tempo do RetinaFace nelas.
+        if USABLE_LABELS is not None and content_type is not None and content_type not in USABLE_LABELS:
+            not_a_face += 1
+            continue
 
         # Resolve caminho da imagem
         full_path = resolve_img_path(img_path)
@@ -241,17 +283,26 @@ def run_delta(
                 img_path=str(full_path),
                 model_name="ArcFace",
                 enforce_detection=True,
-                detector_backend="opencv",  # mais rápido em CPU
+                detector_backend="retinaface",  # mais preciso que Haar Cascade/opencv — evita falso positivo em fundo complexo
             )
             if not objs:
                 skipped += 1
+                continue
+
+            if len(objs) > 1:
+                # Cartaz/composição com mais de um rosto na mesma imagem — não dá pra saber
+                # qual rosto pertence ao nome cadastrado sem revisão manual. Pular em vez de
+                # arriscar indexar o rosto ERRADO sob o nome certo (pior que não indexar nada).
+                multi_face += 1
+                multi_face_uids.append(uid)
+                log.warning(f"[{uid}] {len(objs)} rostos detectados na mesma imagem — pulando, revisar manualmente.")
                 continue
 
             raw_emb  = objs[0]["embedding"]
             emb_np   = np.array(raw_emb, dtype="float32")
 
             # Upsert no IndexIDMap
-            fidx.upsert(uid, emb_np)
+            fidx.upsert(uid, emb_np, row.get("name"))
 
             # Salva blob no banco relacional
             save_embedding(db, uid, raw_emb)
@@ -270,7 +321,11 @@ def run_delta(
             errors += 1
 
     # ── 4. Salvar índice final ────────────────────────────────────────────────
-    if processed > 0:
+    # Salva sempre que há algo pra salvar — não só quando processed > 0. Sem isso,
+    # um --force-rebuild que reconstrói do banco mas não processa nada de NOVO no
+    # delta (ex: só sobraram erros/múltiplos rostos) nunca persistia o índice
+    # recém-reconstruído no disco, apagando o arquivo antigo e não escrevendo um novo.
+    if fidx.total > 0:
         fidx.save()
 
     db.close()
@@ -278,17 +333,24 @@ def run_delta(
 
     # ── 5. Relatório ──────────────────────────────────────────────────────────
     print("\n" + "═" * 60)
-    print(f"  ✅ Processados  : {processed}")
-    print(f"  ⚠  Sem imagem   : {skipped}")
-    print(f"  ✗  Erros ArcFace: {errors}")
-    print(f"  📦 Total no FAISS: {fidx.total}")
-    print(f"  ⏱  Tempo total  : {elapsed:.1f}s")
+    print(f"  ✅ Processados       : {processed}")
+    print(f"  ⚠  Sem imagem        : {skipped}")
+    print(f"  🚫 Não é rosto (CLIP): {not_a_face} (cartaz/esboço/tatuagem/documento — pulados sem gastar RetinaFace)")
+    print(f"  ✗  Erros ArcFace     : {errors}")
+    print(f"  🖼️  Múltiplos rostos  : {multi_face} (pulados — revisar manualmente)")
+    print(f"  📦 Total no FAISS    : {fidx.total}")
+    print(f"  ⏱  Tempo total       : {elapsed:.1f}s")
     print("═" * 60 + "\n")
+    if multi_face_uids:
+        print(f"  UIDs com múltiplos rostos (não indexados): {', '.join(multi_face_uids)}\n")
 
     return {
         "processed": processed,
         "skipped":   skipped,
+        "not_a_face": not_a_face,
         "errors":    errors,
+        "multi_face": multi_face,
+        "multi_face_uids": multi_face_uids,
         "already_indexed": already_indexed,
         "total_indexed":   fidx.total,
     }
