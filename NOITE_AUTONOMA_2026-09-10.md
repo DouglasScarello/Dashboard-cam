@@ -229,6 +229,33 @@ sugeria — grande parte do que parecia "erro" era ruído de dados do FBI
 mantenho a recomendação de revisão humana pra qualquer ação — 0.5% não é
 zero.
 
+## Auto-revisão de código (releitura crítica de tudo que mudei)
+
+Depois de fechar as ferramentas novas (OCR, similaridade CLIP, Person
+ReID, YuNet) e o health_check/pytest, parei pra reler cada diff da noite
+com espírito crítico em vez de só seguir adicionando coisa nova. Valeu a
+pena — achei mais 2 bugs reais:
+
+1. **`live_pipeline.py --type` não aceitava `direct`/`snapshot_jpeg`** na
+   própria CLI (só funcionava indireto via `monitor_camera.py`, que
+   constrói o objeto Python direto). Corrigido.
+2. **Webcam nunca abria de verdade** — `_capture_loop` forçava
+   `cv2.CAP_FFMPEG` pra TODAS as fontes, inclusive webcam. Testei com o
+   dispositivo real (`/dev/video0` existe nessa máquina): FFMPEG falha
+   silenciosamente pra câmera local (precisa de `libavdevice`, esse build
+   do OpenCV não tem) — `isOpened()` retorna `False` sem exceção nenhuma.
+   Isso é grave porque **eu tinha recomendado esse caminho pro usuário
+   testar** mais cedo na conversa ("monitor_camera.py --webcam 0") — teria
+   simplesmente não funcionado. Corrigido: `source_type == "webcam"` usa
+   o backend padrão (auto-detect/V4L2) + índice como int. Testado de
+   verdade: captura contínua de frames reais (480x640).
+
+Os dois viraram teste de regressão em `tests/test_biometric_pipeline.py`
+(agora 10 testes, todos passando). Lição confirmada: reler o próprio
+código com ceticismo depois de um trecho de trabalho intenso encontra
+bug de verdade — vale a pena fazer isso periodicamente durante a noite,
+não só no fim.
+
 ## Decisão sobre "pesquisar como proceder" (contexto pra IA)
 
 O usuário pediu pra eu pesquisar como evitar perder contexto numa sessão
