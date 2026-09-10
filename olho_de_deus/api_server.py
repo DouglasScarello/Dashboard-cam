@@ -330,12 +330,14 @@ async def get_catalog_individuals(
         offset = page * limit
         sql = f"""
             SELECT DISTINCT i.id, i.name, i.category, i.source, i.birth_date, i.nationalities,
-                   i.description, i.reward, i.img_path, i.img_url, i.has_embedding, i.ingested_at
+                   i.description, i.reward, i.img_path, i.img_url, i.has_embedding, i.ingested_at,
+                   i.image_content_type, t.score AS threat_score
             FROM individuals i {crime_join}
+            LEFT JOIN threat_scores t ON t.individual_id = i.id
             WHERE {' AND '.join(conds)}
-            ORDER BY 
+            ORDER BY
                 (CASE WHEN i.reward IS NOT NULL THEN 0 ELSE 1 END),
-                i.name ASC 
+                i.name ASC
             LIMIT ? OFFSET ?
         """
         params.extend([limit, offset])
@@ -350,7 +352,8 @@ async def get_catalog_individuals(
                     "id": r[0], "name": r[1], "category": r[2], "source": r[3],
                     "birth_date": r[4], "nationalities": r[5], "description": r[6],
                     "reward": r[7], "img_path": r[8], "img_url": r[9],
-                    "has_embedding": r[10], "ingested_at": r[11]
+                    "has_embedding": r[10], "ingested_at": r[11],
+                    "image_content_type": r[12], "threat_score": r[13]
                 })
         return results
     except Exception as e:
@@ -400,22 +403,45 @@ async def get_catalog_individual_detail(id: str):
         cur = db.execute(
             """SELECT id, name, category, source, birth_date, nationalities, description,
                       reward, img_path, img_url, has_embedding, aliases, sex, url, ingested_at,
-                      height_cm, weight_kg, eye_color, hair_color, occupation
+                      height_cm, weight_kg, eye_color, hair_color, occupation,
+                      image_content_type, ocr_text
                FROM individuals WHERE id = ?""",
             (id,)
         )
         row = cur.fetchone()
         if not row:
             return {"error": "Alvo não encontrado"}
-        
+
         detail = dict(row) if isinstance(row, dict) else {
             "id": row[0], "name": row[1], "category": row[2], "source": row[3],
             "birth_date": row[4], "nationalities": row[5], "description": row[6],
             "reward": row[7], "img_path": row[8], "img_url": row[9], "has_embedding": row[10],
             "aliases": row[11], "sex": row[12], "url": row[13], "ingested_at": row[14],
             "height_cm": row[15], "weight_kg": row[16], "eye_color": row[17],
-            "hair_color": row[18], "occupation": row[19]
+            "hair_color": row[18], "occupation": row[19],
+            "image_content_type": row[20], "ocr_text": row[21]
         }
+
+        # Score de periculosidade (calculado por score_engine.py) — antes só chegava
+        # até o AlertCenter.tsx (alerta ao vivo), nunca até o dossiê estático que
+        # é o que a maioria das pessoas realmente navega. armed_and_dangerous vem
+        # de dentro do factors_json (ver score_engine.py:ThreatScorer).
+        cur_score = db.execute(
+            "SELECT score, factors_json FROM threat_scores WHERE individual_id = ?", (id,)
+        )
+        score_row = cur_score.fetchone()
+        if score_row:
+            score_val = score_row[0] if not isinstance(score_row, dict) else score_row.get("score")
+            factors_raw = score_row[1] if not isinstance(score_row, dict) else score_row.get("factors_json")
+            try:
+                factors = json.loads(factors_raw) if factors_raw else {}
+            except Exception:
+                factors = {}
+            detail["threat_score"] = score_val
+            detail["armed_and_dangerous"] = bool(factors.get("armed_and_dangerous"))
+        else:
+            detail["threat_score"] = None
+            detail["armed_and_dangerous"] = False
 
         # Crimes
         cur_crimes = db.execute("SELECT crime FROM crimes WHERE individual_id = ?", (id,))
@@ -431,18 +457,31 @@ async def get_catalog_individual_detail(id: str):
                 locs.append({"loc_type": r[0], "country": r[1], "state": r[2], "city": r[3], "details": r[4]})
         detail["locations"] = locs
 
-        # Images
-        cur_imgs = db.execute("SELECT img_url, img_path, caption, is_primary FROM individual_images WHERE individual_id = ?", (id,))
+        # Images — inclui image_content_type/ocr_text POR FOTO (não só a principal),
+        # pedido do usuário pra saber qual foto da galeria é rosto vs tatuagem vs
+        # documento sem precisar abrir cada uma manualmente.
+        cur_imgs = db.execute(
+            "SELECT img_url, img_path, caption, is_primary, image_content_type, ocr_text "
+            "FROM individual_images WHERE individual_id = ?",
+            (id,)
+        )
         imgs = []
         for r in cur_imgs.fetchall():
             if isinstance(r, dict):
                 imgs.append(r)
             else:
-                imgs.append({"img_url": r[0], "img_path": r[1], "caption": r[2], "is_primary": r[3]})
-        
+                imgs.append({
+                    "img_url": r[0], "img_path": r[1], "caption": r[2], "is_primary": r[3],
+                    "image_content_type": r[4], "ocr_text": r[5]
+                })
+
         if not imgs and (detail.get("img_url") or detail.get("img_path")):
-            imgs.append({"img_url": detail.get("img_url"), "img_path": detail.get("img_path"), "caption": "Foto Principal", "is_primary": 1})
-            
+            imgs.append({
+                "img_url": detail.get("img_url"), "img_path": detail.get("img_path"),
+                "caption": "Foto Principal", "is_primary": 1,
+                "image_content_type": detail.get("image_content_type"), "ocr_text": detail.get("ocr_text")
+            })
+
         detail["images"] = imgs
         return detail
     except Exception as e:
