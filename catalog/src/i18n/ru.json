@@ -127,6 +127,8 @@
         "camera_label": "Камера",
         "new_match": "НОВОЕ БИОМЕТРИЧЕСКОЕ СОВПАДЕНИЕ",
         "view_camera": "Перейти к камере",
+        "threat_score": "Риск",
+        "armed_dangerous": "ВООРУЖЁН И ОПАСЕН",
         "status": {
             "connected": "Подключено",
             "connecting": "Подключение...",

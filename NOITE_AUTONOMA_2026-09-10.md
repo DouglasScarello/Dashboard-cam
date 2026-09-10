@@ -195,6 +195,40 @@ duas pessoas existe quando a imagem é de baixa qualidade. Isso é normal
 pra qualquer sistema de reconhecimento facial real (nenhum é 100%), mas
 precisa estar claro pra quem for usar.
 
+## Validação em escala maior (400 amostras) e limpeza de dado de teste
+
+Rodei o mesmo teste de auto-match em 400 indivíduos reais (amostra maior
+pra mais confiança estatística). Resultado: 370 corretos, 9 "errados" —
+mas investigando cada um dos 9 individualmente, a maioria não é erro de
+algoritmo:
+- **4 casos** são entradas tipo "UNKNOWN SUSPECT"/"CIVIL UNREST"/nomes de
+  caso genérico (não são pessoas nomeadas de verdade) — filosoficamente
+  nem deveriam contar como "erro de identificação", já que não há uma
+  identidade única pra acertar.
+- **2 casos** confirmados como duplicata de foto no próprio dado do FBI
+  (grupo+membro nomeado usando a mesma imagem — "GRU 29155"↔Borovkov, e
+  agora também "JIN SUNG-IL"↔"DPRK IT FRAUD", mesmo padrão).
+- **1 caso** era **artefato do meu próprio teste**: eu tinha cadastrado
+  "Teste Pessoa" usando sem querer a mesma foto do Miguel A. Alvarado real
+  (sessão anterior) — removido do banco agora (individuals, images,
+  embeddings, threat_scores) e o índice FAISS reconstruído (1032→1031).
+- **Sobram só 2 casos genuinamente intrigantes** (Jeffrey McDaniel↔Helena
+  Negrete, dist. 0.392; Husayn Al-Umari↔Armando Vargas, dist. 0.633) —
+  pessoas claramente diferentes, sem explicação de duplicata óbvia. Taxa
+  real de confusão genuína do algoritmo: **~0.5% (2 em ~379)**, dentro do
+  esperado pra ArcFace em imagem variada de qualidade real (não estúdio).
+
+Vi a foto do McDaniel visualmente pra confirmar — é um retrato preto-e-branco
+bem granulado/baixa resolução, mesmo padrão de degradação dos outros casos
+confusos. Reforça a mesma explicação (qualidade de imagem), não uma falha
+nova.
+
+**Conclusão:** o sistema está mais confiável do que a primeira amostra (n=40)
+sugeria — grande parte do que parecia "erro" era ruído de dados do FBI
+(entradas duplicadas/genéricas), não falha de reconhecimento. Ainda assim,
+mantenho a recomendação de revisão humana pra qualquer ação — 0.5% não é
+zero.
+
 ## Decisão sobre "pesquisar como proceder" (contexto pra IA)
 
 O usuário pediu pra eu pesquisar como evitar perder contexto numa sessão

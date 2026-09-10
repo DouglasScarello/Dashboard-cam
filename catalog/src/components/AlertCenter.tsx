@@ -12,6 +12,8 @@ function cn(...inputs: ClassValue[]) {
 }
 
 const TOAST_LIFETIME_MS = 8000;
+// Mesmo piso que score_engine.py usa pro selo oficial "ARMED AND DANGEROUS" do FBI.
+const ARMED_AND_DANGEROUS_THRESHOLD = 9.0;
 
 /**
  * Sino de alertas (com histórico em dropdown) + pilha de toasts para matches
@@ -121,8 +123,16 @@ export default function AlertCenter() {
                                                     <span className="text-xs font-bold text-white truncate">{alert.name || t('alerts.unknown_target')}</span>
                                                     <span className="text-[9px] font-mono text-accent-amber shrink-0">{alert.confidence}</span>
                                                 </div>
+                                                {(alert.threat_score ?? 0) >= ARMED_AND_DANGEROUS_THRESHOLD && (
+                                                    <span className="inline-block mt-1 px-1.5 py-0.5 rounded bg-red-500/20 border border-red-500/50 text-red-400 text-[8px] font-black tracking-wider">
+                                                        ⚠ {t('alerts.armed_dangerous')}
+                                                    </span>
+                                                )}
                                                 <p className="text-[10px] text-muted font-mono mt-0.5">
                                                     {t('alerts.camera_label')} {alert.camera_id} · {formatRelativeTime(alert.timestamp)}
+                                                    {typeof alert.threat_score === 'number' && (
+                                                        <> · {t('alerts.threat_score')} {alert.threat_score.toFixed(1)}</>
+                                                    )}
                                                 </p>
                                             </div>
                                         </button>
@@ -156,8 +166,16 @@ export default function AlertCenter() {
                                         </button>
                                     </div>
                                     <p className="text-sm font-bold text-white truncate mt-0.5">{toast.name || t('alerts.unknown_target')}</p>
+                                    {(toast.threat_score ?? 0) >= ARMED_AND_DANGEROUS_THRESHOLD && (
+                                        <span className="inline-block mt-1 px-1.5 py-0.5 rounded bg-red-500/20 border border-red-500/50 text-red-400 text-[8px] font-black tracking-wider">
+                                            ⚠ {t('alerts.armed_dangerous')}
+                                        </span>
+                                    )}
                                     <p className="text-[10px] text-muted font-mono mt-1">
                                         {t('alerts.camera_label')} {toast.camera_id} · {toast.confidence}
+                                        {typeof toast.threat_score === 'number' && (
+                                            <> · {t('alerts.threat_score')} {toast.threat_score.toFixed(1)}</>
+                                        )}
                                     </p>
                                     <button
                                         onClick={() => goToCamera(toast.camera_id)}

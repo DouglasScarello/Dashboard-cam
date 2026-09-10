@@ -127,6 +127,8 @@
         "camera_label": "Câmera",
         "new_match": "NOVO MATCH BIOMÉTRICO",
         "view_camera": "Acessar Câmera",
+        "threat_score": "Risco",
+        "armed_dangerous": "ARMADO E PERIGOSO",
         "status": {
             "connected": "Conectado",
             "connecting": "Conectando...",
