@@ -1,0 +1,150 @@
+#!/usr/bin/env python3
+"""
+health_check.py — Olho de Deus
+
+Relatório único, em português simples, pra qualquer humano (mesmo sem ler
+código) confirmar que o sistema de reconhecimento facial está de verdade
+funcional — sem precisar confiar apenas no que uma sessão de IA disse que
+fez. Roda um teste real (não só conta linhas no banco).
+
+Uso:
+    poetry run python3 health_check.py
+"""
+import os
+import sys
+import sqlite3
+from pathlib import Path
+
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
+
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "intelligence"))
+
+OK = "✅"
+WARN = "⚠️ "
+FAIL = "❌"
+
+
+def section(title):
+    print("\n" + "─" * 70)
+    print(f"  {title}")
+    print("─" * 70)
+
+
+def main():
+    problems = []
+
+    section("1. BANCO DE DADOS DE INTELIGÊNCIA (intelligence.db)")
+    db_path = ROOT / "intelligence" / "data" / "intelligence.db"
+    if not db_path.exists():
+        print(f"{FAIL} Banco não existe em {db_path}")
+        problems.append("banco de inteligência não existe")
+        return report(problems)
+
+    con = sqlite3.connect(str(db_path))
+    total = con.execute("SELECT COUNT(*) FROM individuals").fetchone()[0]
+    com_foto = con.execute("SELECT COUNT(*) FROM individuals WHERE img_path IS NOT NULL").fetchone()[0]
+    com_emb_real = con.execute(
+        "SELECT COUNT(*) FROM face_embeddings WHERE embedding_blob IS NOT NULL"
+    ).fetchone()[0]
+    com_score = con.execute("SELECT COUNT(*) FROM threat_scores").fetchone()[0]
+    print(f"  Total de indivíduos cadastrados : {total}")
+    print(f"  Com foto local baixada          : {com_foto}")
+    print(f"  Com embedding facial REAL       : {com_emb_real}  {OK if com_emb_real > 0 else FAIL}")
+    print(f"  Com score de periculosidade     : {com_score}  {OK if com_score > 0 else WARN}")
+    if com_emb_real == 0:
+        problems.append("nenhum embedding facial real gerado — rodar extract_embeddings.py")
+
+    section("2. CLASSIFICAÇÃO DE CONTEÚDO (CLIP)")
+    try:
+        rows = con.execute(
+            "SELECT image_content_type, COUNT(*) FROM individuals "
+            "WHERE image_content_type IS NOT NULL GROUP BY image_content_type ORDER BY 2 DESC"
+        ).fetchall()
+        if rows:
+            for label, n in rows:
+                print(f"  {n:>5}  {label}")
+        else:
+            print(f"{WARN} Nenhuma imagem classificada ainda — rodar classify_images.py")
+    except sqlite3.OperationalError:
+        print(f"{WARN} Coluna image_content_type não existe — rodar init_db()")
+
+    section("3. ÍNDICE DE BUSCA FACIAL (FAISS)")
+    faiss_path = ROOT / "intelligence" / "data" / "vector_db.faiss"
+    meta_path = ROOT / "intelligence" / "data" / "vector_metadata.json"
+    if faiss_path.exists() and meta_path.exists():
+        import json
+        with open(meta_path) as f:
+            meta = json.load(f)
+        print(f"{OK} Índice existe: {len(meta)} rostos indexados")
+        if abs(len(meta) - com_emb_real) > 5:
+            print(f"{WARN} Diferença entre metadata ({len(meta)}) e face_embeddings ({com_emb_real}) — rodar extract_embeddings.py --force-rebuild")
+    else:
+        print(f"{FAIL} Índice FAISS ou metadata não existem")
+        problems.append("índice FAISS não existe")
+
+    section("4. TESTE REAL — reconhecer um rosto de verdade (não é só contagem)")
+    try:
+        import cv2
+        from biometric_processor import BiometricProcessor, _detect_and_align_face
+
+        row = con.execute(
+            "SELECT id, name, img_path FROM individuals "
+            "WHERE has_embedding=1 AND img_path IS NOT NULL "
+            "AND image_content_type IN ('a mugshot photo of one person','a clear photo of one single person face') "
+            "ORDER BY RANDOM() LIMIT 1"
+        ).fetchone()
+        if not row:
+            print(f"{WARN} Nenhum indivíduo com embedding pra testar")
+        else:
+            uid, name, img_path = row
+            img_full = ROOT / "intelligence" / "data" / img_path
+            bp = BiometricProcessor()
+            img = cv2.imread(str(img_full))
+            aligned = _detect_and_align_face(bp.face_detector, img) if bp.face_detector else None
+            if aligned is None:
+                print(f"{FAIL} YuNet não achou rosto na foto de teste ({name})")
+                problems.append("teste de reconhecimento falhou (rosto não detectado)")
+            else:
+                _, match = bp._identify(aligned)
+                if match and match["uid"] == uid:
+                    print(f"{OK} Testado com '{name}': reconhecido corretamente "
+                          f"(confiança {match.get('identity_confidence', '?')}, "
+                          f"distância {match['score']:.3f})")
+                elif match:
+                    print(f"{FAIL} Testado com '{name}': reconheceu ERRADO como '{match['title']}'")
+                    problems.append("teste de reconhecimento deu resultado errado")
+                else:
+                    print(f"{FAIL} Testado com '{name}': não reconheceu ninguém (deveria reconhecer a si mesmo)")
+                    problems.append("teste de reconhecimento não encontrou match")
+    except Exception as e:
+        print(f"{FAIL} Teste real falhou com erro: {e}")
+        problems.append(f"teste real deu erro: {e}")
+
+    section("5. CATÁLOGO DE CÂMERAS REAIS")
+    cam_db = ROOT / "database" / "live_cameras.db"
+    if cam_db.exists():
+        ccon = sqlite3.connect(str(cam_db))
+        n_cams = ccon.execute("SELECT COUNT(*) FROM cameras WHERE confirmed_dead=0").fetchone()[0]
+        print(f"{OK} {n_cams} câmeras confirmadas vivas no catálogo")
+        ccon.close()
+    else:
+        print(f"{WARN} Catálogo de câmeras não encontrado em {cam_db}")
+
+    con.close()
+    report(problems)
+
+
+def report(problems):
+    print("\n" + "═" * 70)
+    if not problems:
+        print(f"  {OK} TUDO FUNCIONAL — nenhum problema encontrado.")
+    else:
+        print(f"  {FAIL} {len(problems)} PROBLEMA(S) ENCONTRADO(S):")
+        for p in problems:
+            print(f"    - {p}")
+    print("═" * 70 + "\n")
+
+
+if __name__ == "__main__":
+    main()

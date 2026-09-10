@@ -18,6 +18,50 @@ from core.vector_cache import VectorCache
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
+YUNET_MODEL_PATH = Path(__file__).parent / "models" / "face_detection_yunet_2023mar.onnx"
+
+# Template de referência ArcFace 112x112 (padrão insightface) — mesma ordem de
+# pontos que o YuNet devolve: olho direito, olho esquerdo, nariz, boca-direita,
+# boca-esquerda. Alinhar contra isso é o que o DeepFace faz internamente quando
+# detector_backend="retinaface" (usado no cadastro via delta_embedder.py) — sem
+# alinhar aqui também, o embedding da câmera ao vivo (YuNet, sem alinhamento)
+# fica sistematicamente mais distante do embedding cadastrado da MESMA pessoa
+# só por causa da diferença de pipeline, não por diferença de identidade.
+# Medido: sem alinhamento, distância de auto-match variava 0.04–0.70 (faixa tão
+# larga que se sobrepõe à de gente DIFERENTE — nenhum threshold resolveria isso).
+_ARCFACE_112_TEMPLATE = np.array([
+    [38.2946, 51.6963],
+    [73.5318, 51.5014],
+    [56.0252, 71.7366],
+    [41.5493, 92.3655],
+    [70.7299, 92.2041],
+], dtype=np.float32)
+
+
+def _detect_and_align_face(face_detector, crop: np.ndarray, out_size: int = 112) -> Optional[np.ndarray]:
+    """
+    Roda YuNet dentro de um recorte de PESSOA (não do frame inteiro — mais rápido
+    e evita achar rosto de outra pessoa ao fundo), e devolve o rosto já ALINHADO
+    (rotação/escala pelos 5 pontos faciais, mesmo padrão que o ArcFace espera) em
+    112x112 — pronto pra ir direto pro DeepFace com detector_backend="skip".
+    None se não achar rosto (pessoa de costas, ângulo ruim, fora de quadro).
+    """
+    h, w = crop.shape[:2]
+    if h < 10 or w < 10:
+        return None
+    face_detector.setInputSize((w, h))
+    _, faces = face_detector.detect(crop)
+    if faces is None or len(faces) == 0:
+        return None
+    best = max(faces, key=lambda f: f[14])  # coluna 14 = score de confiança
+    landmarks = best[4:14].reshape(5, 2).astype(np.float32)
+
+    transform, _ = cv2.estimateAffinePartial2D(landmarks, _ARCFACE_112_TEMPLATE, method=cv2.LMEDS)
+    if transform is None:
+        return None
+    aligned = cv2.warpAffine(crop, transform, (out_size, out_size), borderValue=0.0)
+    return aligned
+
 # ─── Confidence score (Etapa 1: calibração → probabilidade → classificação) ───
 # Distância L2 → probabilidade; thresholds para HIGH/MEDIUM/LOW (calibrar com match_logs depois)
 # k menor = probabilidade decai mais devagar (d=0.25 pode virar MEDIUM/HIGH)
@@ -128,6 +172,19 @@ class BiometricProcessor:
         # Cache Redis (Fase 31.2)
         self.cache = VectorCache()
 
+        # Detector de ROSTO real (YuNet) — segundo estágio depois do YOLO achar a
+        # pessoa. Sem isso, o crop de PESSOA INTEIRA ia direto pro ArcFace com
+        # detector_backend="skip" (sem detecção/alinhamento nenhum), o que é
+        # impreciso pra reconhecimento biométrico. Leve o suficiente pra rodar
+        # por frame em CPU (ONNX ~230KB, bem mais leve que RetinaFace).
+        try:
+            self.face_detector = cv2.FaceDetectorYN.create(
+                str(YUNET_MODEL_PATH), "", (320, 320), score_threshold=0.6
+            )
+        except Exception as e:
+            print(f"[warning] YuNet indisponível ({e}) — cai de volta pro crop de pessoa inteira.")
+            self.face_detector = None
+
     def process_frame(self, frame: np.ndarray) -> List[Dict]:
         """
         Detecta faces, aplica REID para não reprocessar o mesmo rosto,
@@ -199,7 +256,15 @@ class BiometricProcessor:
                     "match": track.match
                 })
             else:
-                embedding, match = self._identify(face_img)
+                embedding, match = None, None
+                if self.face_detector is not None:
+                    aligned_face = _detect_and_align_face(self.face_detector, face_img)
+                    if aligned_face is not None:
+                        embedding, match = self._identify(aligned_face)
+                    # sem rosto detectado dentro da pessoa (de costas, ângulo ruim) —
+                    # não arrisca identificar com o corpo inteiro, fica sem match mesmo
+                else:
+                    embedding, match = self._identify(face_img)  # fallback sem YuNet
                 new_track = TrackedFace((x1, y1, x2, y2), embedding, match)
                 new_track.track_id = tid
                 self.tracked_faces[tid] = new_track
@@ -288,16 +353,24 @@ class BiometricProcessor:
             if i in assigned_boxes:
                 continue
 
-            # Recorte da região da face (terço superior da silhueta da pessoa)
-            bh = max(1, y2 - y1)
-            face_y2 = y1 + int(bh * 0.35)
-            face_img = frame[max(0, y1):min(h, face_y2), max(0, x1):min(w, x2)]
-            if face_img.size == 0:
-                face_img = frame[max(0, y1):min(h, y2), max(0, x1):min(w, x2)]
-            if face_img.size == 0:
+            person_img = frame[max(0, y1):min(h, y2), max(0, x1):min(w, x2)]
+            if person_img.size == 0:
                 continue
 
-            embedding, match = self._identify(face_img)
+            embedding, match = None, None
+            if self.face_detector is not None:
+                aligned_face = _detect_and_align_face(self.face_detector, person_img)
+                if aligned_face is not None:
+                    embedding, match = self._identify(aligned_face)
+                # sem rosto achado dentro da pessoa — não identifica com o corpo todo
+            else:
+                # Fallback sem YuNet: heurística antiga (terço superior da silhueta)
+                bh = max(1, y2 - y1)
+                face_y2 = y1 + int(bh * 0.35)
+                fallback_img = frame[max(0, y1):min(h, face_y2), max(0, x1):min(w, x2)]
+                if fallback_img.size > 0:
+                    embedding, match = self._identify(fallback_img)
+
             new_track = TrackedFace((x1, y1, x2, y2), embedding, match)
             self.tracked_faces[new_track.track_id] = new_track
 

@@ -24,7 +24,9 @@ def main():
     parser = argparse.ArgumentParser(description="Monitora UMA câmera real do catálogo com reconhecimento facial")
     parser.add_argument("--camera-id", help="ID da câmera em database/live_cameras.db")
     parser.add_argument("--webcam", type=int, default=None, help="Índice da webcam local, pra teste (ex: 0)")
-    parser.add_argument("--threshold", type=float, default=0.48)
+    # Ver comentário de calibração em live_pipeline.py (mesma constante) — 0.6 é o
+    # valor empírico, não um chute.
+    parser.add_argument("--threshold", type=float, default=0.6)
     parser.add_argument("--process-every", type=int, default=4)
     parser.add_argument("--poll-interval", type=float, default=10.0, help="Intervalo (s) pra câmeras SNAPSHOT_JPEG")
     args = parser.parse_args()

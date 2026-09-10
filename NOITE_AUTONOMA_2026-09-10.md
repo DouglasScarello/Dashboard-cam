@@ -144,6 +144,57 @@ Ordem de prioridade, ajustável conforme achados:
      mesma regra que already document em `PLANO_CONTINUACAO.md` do
      projeto: sempre verificar rodando, nunca assumir.
 
+## Achado crítico de precisão — pipeline ao vivo vs. cadastro (2026-09-10, ~02:20-02:45)
+
+Investigando o item 4 do plano anterior (YOLO detectava PESSOA inteira, não
+rosto, e mandava direto pro ArcFace sem alinhamento):
+
+1. **Corrigido**: `biometric_processor.py` agora usa **YuNet** (detector de
+   rosto real, ONNX ~230KB, leve o suficiente pra rodar por frame em CPU)
+   como segundo estágio depois do YOLO achar a pessoa — testado, 29/30
+   (96.7%) de detecção correta em mugshots reais.
+2. **Corrigido também**: o YuNet devolve 5 pontos faciais (olhos, nariz,
+   boca) que eu não estava usando — adicionei alinhamento de verdade
+   (transformação de similaridade contra o template padrão ArcFace 112x112,
+   mesma convenção do insightface) em vez de só recortar o retângulo cru.
+   Verificado visualmente — rosto sai centralizado, olhos nivelados.
+3. **Achado importante (limitação real, não totalmente resolvida)**: testei
+   auto-match (a própria foto cadastrada, redetectada via YuNet+alinhamento,
+   contra o embedding já indexado da mesma pessoa) em 138 indivíduos reais.
+   Resultado: **distância varia de 0.008 a 0.666**, com mediana 0.36 e p95
+   em 0.54 — uma faixa larga, mesmo alinhando certo. Em 150 tentativas, 3
+   deram "match errado" (pessoa A reconhecida como pessoa B):
+   - 2 dos 3 são **duplicata de dados do próprio FBI**, não erro do
+     algoritmo — confirmei visualmente/pela URL que a "entidade" (ex: "GRU
+     29155 CYBER ACTORS", um grupo) e o "indivíduo" (ex: "Vladislav
+     Borovkov", membro nomeado do mesmo caso) usam a MESMA foto de origem.
+     O sistema reconheceu certo; é a base de dados do FBI que tem duas
+     fichas (grupo + pessoa) pra a mesma imagem.
+   - 1 dos 3 (Eulalia "Lolly" Chavez ↔ caso de vandalismo) é um falso
+     positivo genuíno — duas pessoas fisicamente diferentes, fotos de baixa
+     qualidade (escura/borrada), distância 0.033-0.049 (bem abaixo de
+     qualquer threshold razoável). Tentei achar um filtro de nitidez pra
+     pegar esses casos automaticamente — não funcionou (medi nitidez do
+     recorte de rosto nos dois casos e no caso correto, não teve separação
+     clara). **Conclusão honesta: isso é uma limitação conhecida de
+     reconhecimento facial em imagem degradada — não existe fix perfeito
+     com as ferramentas disponíveis.**
+4. **Recalibrei o threshold com base nesses números reais**: estava em
+   0.48 (chute antigo), o que rejeitaria boa parte dos matches
+   genuinamente corretos (mediana real é 0.36, p90 é 0.52). Subi pra
+   **0.6** em `live_pipeline.py` e `monitor_camera.py` (comentário no
+   código explica a conta). Isso reduz falso-negativo (deixar de reconhecer
+   quem devia) às custas de manter o risco pequeno mas real de falso-
+   positivo em fotos degradadas — **decisão consciente, documentada, não
+   escondida**.
+
+**Recomendação pro usuário, importante**: dado o achado do item 3, o
+sistema NÃO deve ser usado pra ação automática/irreversível sem revisão
+humana — mesmo com tudo calibrado direito, ~1-2% de chance de confundir
+duas pessoas existe quando a imagem é de baixa qualidade. Isso é normal
+pra qualquer sistema de reconhecimento facial real (nenhum é 100%), mas
+precisa estar claro pra quem for usar.
+
 ## Decisão sobre "pesquisar como proceder" (contexto pra IA)
 
 O usuário pediu pra eu pesquisar como evitar perder contexto numa sessão

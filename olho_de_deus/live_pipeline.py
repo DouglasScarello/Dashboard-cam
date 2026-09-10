@@ -108,7 +108,7 @@ class AtomicFrameRing:
 
 class LivePipeline:
     def __init__(self, camera_id: str, source_type: str = "youtube", stream_url: Optional[str] = None,
-                 match_threshold: float = 0.48, process_every_n: int = 3,
+                 match_threshold: float = 0.6, process_every_n: int = 3,
                  max_width: int = 0, max_height: int = 0, profile: bool = False, show_every_n: int = 1,
                  use_byte_track: bool = False,
                  yt_cookies_browser: Optional[str] = None,
@@ -709,7 +709,14 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Olho de Deus — Live Biometric Pipeline")
     parser.add_argument("--id", help="ID da câmera ou URL Stream")
     parser.add_argument("--type", default="youtube", choices=["youtube", "rtsp", "webcam"], help="Tipo de fonte")
-    parser.add_argument("--threshold", type=float, default=0.48, help="Match threshold")
+    # Calibrado empiricamente (2026-09-10): distância de auto-match (mesma pessoa,
+    # YuNet alinhado vs. embedding cadastrado via RetinaFace) mediu p50=0.36,
+    # p90=0.52, p95=0.54 em amostra de 138 indivíduos reais. 0.48 (valor antigo)
+    # rejeitava boa parte dos matches genuinamente corretos. Ver NOITE_AUTONOMA_
+    # 2026-09-10.md pra achado completo, incluindo limitação conhecida: casos raros
+    # de foto duplicada/degradada podem dar distância baixa mesmo sendo pessoa
+    # diferente — nenhum threshold sozinho resolve isso, revisão humana recomendada.
+    parser.add_argument("--threshold", type=float, default=0.6, help="Match threshold")
     parser.add_argument("--process-every", type=int, default=4, metavar="N",
                         help="Processar biometria a cada N frames. "
                              "4=≈4.5 FPS bio / 18 FPS vídeo (padrão, Ryzen 15W). "
