@@ -23,7 +23,8 @@ confiar em mim:
 ```
 cd ~/dashboard-cam/olho_de_deus
 poetry run python3 health_check.py
-poetry run python3 -m pytest tests/ -v
+poetry run python3 -m pytest tests/ -v       # 13 testes
+cd ../intelligence && poetry run python3 -m pytest tests/ -v   # +9 testes (novo, 04:11)
 ```
 O primeiro dá um relatório em português de tudo (banco, câmeras, os 3
 sistemas de reconhecimento). O segundo roda 11 testes automáticos que
@@ -541,3 +542,20 @@ o quase-cheio de disco de ontem por um ganho que é zero (conserta código
 morto, não o caminho real). Fica registrado pra quem no futuro decidir
 que vale a pena limpar/remover essas duas cópias antigas de verdade, em
 vez de só religar o import.
+
+## Check-in ~05:16 — 13/13 testes, +2 testes novos pro score de periculosidade
+
+Reverifiquei tudo de novo (11/11 + health_check 100%, agora 9/9 no
+`intelligence/tests` também) — disco parado em 25GB livres, não instalei
+nada. Procurando o que faltava testar, achei que `score_engine.py` (o
+selo "ARMED AND DANGEROUS" que a FBI dá, e que esta sessão ligou ao
+badge de alerta no `AlertCenter.tsx` do frontend) nunca tinha teste de
+regressão nenhum, apesar de já ter sido mexido hoje.
+
+Adicionei 2 testes contra o banco real (não mock): um indivíduo que a
+FBI realmente marcou como "armed and dangerous" (confirma que o score
+bate o piso de 9.0), e um caso de fraude/furto sem esse selo (confirma
+que o piso de 9.0 NÃO aparece pra todo mundo — sem esse segundo teste,
+um bug que sempre retornasse >= 9.0 passaria despercebido). **13/13
+testes** agora em `olho_de_deus/tests`, todos passando contra dados de
+produção reais.
