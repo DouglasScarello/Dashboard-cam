@@ -688,3 +688,21 @@ recalculei tudo de novo — 12 scores mudaram, `JOHN DOE 5` foi de 1.0
 pra 8.0, piso de "wanted" caiu de 89 pra **80**. Testado (estendi o
 teste do check-in anterior em vez de duplicar). **19/19 testes** ainda
 (mesmo teste, mais um caso coberto).
+
+## Encerramento desta sessão (~13:20) — usuário acordou, pivô pra frontend
+
+O usuário acordou por volta das 06:xx (hora dele), conversamos ao vivo,
+e a partir daí o trabalho deixou de ser autônomo/solo — ele pediu pra
+organizar os dados confusos do frontend (cards de procurados/
+desaparecidos) e depois catalogar câmeras públicas de rua. Esse
+trabalho está registrado a partir daqui num log novo:
+**`SESSAO_CAMERAS_2026-09-10.md`** (câmeras) — o trabalho do dossiê/
+frontend ficou registrado nos commits desta mesma sessão (busca
+`git log --oneline` por "feat(catalog)"/"feat(api)"/
+"feat(intelligence): classificação CLIP+OCR por imagem da galeria").
+
+**Resumo final desta madrugada:** 37 commits de trabalho autônomo
+(02:20–13:00) + mais ~6 de trabalho supervisionado depois que o usuário
+acordou, corrigindo o score de periculosidade (137 pessoas no piso
+errado), o ambiente do `intelligence/`, e organizando o frontend com
+dados reais e limpos. 29+ testes automáticos cobrindo tudo.
