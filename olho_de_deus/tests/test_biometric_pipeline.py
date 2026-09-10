@@ -217,3 +217,38 @@ def test_health_check_reports_no_problems():
     assert "TUDO FUNCIONAL" in result.stdout, (
         f"health_check.py encontrou problema(s):\n{result.stdout[-2000:]}"
     )
+
+
+# ─── Bug real: CAP_FFMPEG não abre webcam nesse sistema (silenciosamente) ──────
+
+def test_webcam_capture_uses_correct_backend():
+    """
+    monitor_camera.py --webcam N é a via de teste recomendada ao usuário quando
+    não há câmera real de catálogo à mão. Achado em auto-revisão: _capture_loop
+    usava cv2.CAP_FFMPEG pra TODAS as fontes, inclusive webcam — mas FFMPEG
+    precisa de libavdevice (esse build do OpenCV não tem) e falha silenciosamente
+    (isOpened()=False) pra dispositivo de câmera local. Testado que precisa do
+    backend padrão (auto-detect/V4L2) e do índice como int, não string.
+    """
+    import cv2
+    if not Path("/dev/video0").exists():
+        pytest.skip("sem dispositivo de webcam nesse ambiente")
+
+    cap_ffmpeg = cv2.VideoCapture(0, cv2.CAP_FFMPEG)
+    ffmpeg_works = cap_ffmpeg.isOpened()
+    cap_ffmpeg.release()
+
+    cap_default = cv2.VideoCapture(0)
+    default_works = cap_default.isOpened()
+    cap_default.release()
+
+    assert default_works, "backend padrão deveria conseguir abrir a webcam"
+    # Documenta a limitação real do ambiente (não é bug do nosso código, é do
+    # build do OpenCV) — se algum dia isso passar a True, tudo bem, só significa
+    # que o ambiente ganhou libavdevice; o importante é que _capture_loop já
+    # trata os dois casos corretamente (ver source_type == "webcam" em live_pipeline.py).
+    src = (ROOT / "olho_de_deus" / "live_pipeline.py").read_text()
+    assert 'if self.source_type == "webcam"' in src, (
+        "live_pipeline.py precisa branch especial pra webcam — sem isso, "
+        f"CAP_FFMPEG falha silenciosamente nesse ambiente (funciona={ffmpeg_works})"
+    )

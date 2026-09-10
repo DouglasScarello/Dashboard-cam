@@ -217,7 +217,15 @@ class LivePipeline:
     def _capture_loop(self, stream_url: str):
         """Thread de captura: Core 2 (Fase 33-Giga)."""
         pin_thread([2])
-        cap = cv2.VideoCapture(stream_url, cv2.CAP_FFMPEG)
+        if self.source_type == "webcam":
+            # Bug real encontrado: CAP_FFMPEG não abre webcam nesse sistema (precisa de
+            # libavdevice, que esse build do OpenCV não tem) — sempre isOpened=False,
+            # silenciosamente. Testado: só o backend padrão (auto-detect, V4L2 no Linux)
+            # funciona pra dispositivo de câmera local, e precisa do índice como int,
+            # não como string.
+            cap = cv2.VideoCapture(int(stream_url))
+        else:
+            cap = cv2.VideoCapture(stream_url, cv2.CAP_FFMPEG)
         
         # Tentar aceleração de hardware (Vega iGPU)
         try:
@@ -246,7 +254,7 @@ class LivePipeline:
                 time.sleep(2)
                 if self.source_type == "youtube":
                     stream_url = get_live_url(self.camera_id, self._yt_cookies_browser, self._yt_cookies_file) or stream_url
-                cap = cv2.VideoCapture(stream_url)
+                cap = cv2.VideoCapture(int(stream_url)) if self.source_type == "webcam" else cv2.VideoCapture(stream_url)
                 try: cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
                 except: pass
                 continue
