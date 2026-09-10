@@ -11,6 +11,58 @@ proposito: >
   Regra explícita: pesquisar e entender o contexto ANTES de agir.
 ---
 
+# 📋 RESUMO (atualizado ~14:30) — leia isso primeiro
+
+**Status até agora: 2 câmeras aprovadas e catalogadas, de ~35 verificadas.**
+Baixo, mas cada aprovação passou por 3 critérios rígidos de verdade
+(pública, de rua — não rodovia, e movimentada) — prefiro poucas
+confiáveis a muitas duvidosas. Trabalho contínuo, sem parar, até 23h.
+
+## O que já funciona
+- **Ferramenta de verificação visual própria** (`snap_camera.py`,
+  Playwright) — contorna um bug do screenshot nativo do navegador MCP
+  que travava nesta sessão. Salva screenshot real em disco, eu confiro
+  com meus "olhos" via Read tool antes de aprovar qualquer câmera.
+- **`add_street_camera.py`** — cadastra câmera verificada no catálogo
+  (`database/live_cameras.db`), separada das 8.198 de rodovia por
+  `source="GlobeTV-Rua-Verificada"` e `tipo_area="RUA_PEDESTRE"`.
+
+## As 2 aprovadas
+Krupówki (rua de pedestres mais famosa de Zakopane, Polônia) — 2
+ângulos diferentes, dezenas de pessoas bem identificáveis, altura de
+câmera baixa o suficiente pro rosto não virar ponto. IDs:
+`globetv_krupowki_zakopane_1` e `_2`.
+
+## Três achados que estão guiando a busca agora
+1. **Altura da câmera importa mais que "tem gente"**: praças
+   principais de cidade grande (Kraków, Varsóvia, Wrocław) quase
+   sempre são filmadas do topo de uma torre — lindo, genuinamente
+   movimentado, mas rosto vira pontinho. Só rua estreita com câmera
+   baixa (tipo Krupówki) realmente serve.
+2. **Fuso horário decide se vai ter gente na tela**: testei vários da
+   Polônia sem perceber que já era fim de tarde/noite lá — praça vazia
+   não é culpa da câmera, é a hora errada. Agora priorizo região que
+   está em horário de pico AGORA (ver seção de achados completa).
+3. **Nem toda câmera boa pros meus olhos serve pro sistema**: a
+   EarthCam de Times Square é visualmente perfeita, mas usa uma URL
+   `blob:` (só existe dentro da aba do navegador) — o pipeline de
+   reconhecimento (`cv2.VideoCapture`) não consegue ler isso. Só cadastro
+   câmera com URL de stream de verdade (`.m3u8` na maioria dos casos).
+
+## Fontes
+- **`globetvapp/webcams`** (GitHub, 2.905 câmeras mundiais) — fonte
+  principal, filtrada pra 199 candidatas de cena urbana.
+- **`webcamera.pl`** — rede comercial polonesa, confirmada legítima,
+  expõe URL `.m3u8` de verdade (as 2 aprovadas vêm daqui).
+- **`opencctv.org`** — **descartada**, sem documentação de origem das
+  câmeras, risco de ser agregador de câmera não-autorizada.
+- **EarthCam** — legítima, mas tecnicamente inutilizável (URL blob).
+
+*(O log detalhado câmera-a-câmera, com cada verificação, continua
+abaixo.)*
+
+---
+
 # 📋 Contexto e decisões (leia antes do log câmera-a-câmera)
 
 ## O pedido exato do usuário
@@ -229,3 +281,69 @@ não uma praça grande — a câmera fica relativamente mais perto de quem
 passa. **Próxima estratégia: procurar mais câmeras de RUA ESTREITA
 específica (não praça/rynek grande), e pesquisar outras fontes além do
 globetvapp/webcams.**
+
+## Achado técnico importante: nem toda câmera "boa visualmente" dá pra catalogar
+
+### ⚠️ EarthCam Times Square (tsrobo1) — ótima pros olhos, inutilizável pro pipeline
+Pesquisei e achei a câmera de rua de verdade da EarthCam em Times
+Square (não a versão "torre" que vi antes) — visualmente é exatamente
+o que o usuário quer: **dezenas de pessoas bem próximas e
+identificáveis**, praça mais movimentada do mundo, fonte
+inquestionavelmente legítima e pública (EarthCam, empresa conhecida).
+
+Mas ao inspecionar o player, o vídeo usa uma URL `blob:` — construída
+por JavaScript no navegador via Media Source Extensions, não existe
+como link de rede de verdade. **Isso significa que não dá pra usar no
+pipeline de reconhecimento** (`live_pipeline.py`/`monitor_camera.py`
+usam `cv2.VideoCapture`, que precisa de uma URL HTTP/HLS de verdade,
+não um blob só existente dentro da aba do navegador). Provavelmente
+proposital da EarthCam (proteção de conteúdo).
+
+**Não adicionada ao catálogo** — mas fica registrada como referência
+"ótima fonte visual, ruim pra automação". Se algum dia quiser assistir
+manualmente, é essa: `earthcam.com/usa/newyork/timessquare/?cam=tsrobo1`.
+
+**Ajuste de estratégia:** daqui pra frente, só considero fontes que já
+provaram ter URL de stream de verdade e pegável (como a rede
+`webcamera.pl`, que expõe `.m3u8` direto) — evita perder tempo em
+câmeras visualmente ótimas mas tecnicamente inúteis.
+
+## Achado metodológico: fuso horário importa demais pra "movimentada"
+
+Depois de reprovar Opole, Starachowice, Sucha Beskidzka e Wadowice por
+"pouca gente" — percebi o padrão: são todas da Polônia, e agora são
+~19h lá (entardecer, já esvaziando). Não é que essas praças sejam
+ruins, é que caí verificando todas no horário errado. **Daqui pra
+frente: priorizar região que está em horário de pico (meio-dia/tarde)
+agora, e guardar as candidatas de fuso "fora de hora" pra reconferir
+quando virar dia de lá** (a sessão continua até as 23h de hoje, dá
+tempo de voltar).
+
+Agora (14h Brasil): meio-dia nos EUA (bom horário), tarde no Brasil/
+América Latina (bom horário), amanhecer/madrugada na Ásia (ruim,
+evitar por enquanto), entardecer na Europa (ruim agora, reconferir
+mais tarde ainda hoje/à noite European não ajuda tão cedo — melhor
+tentar de manhã horário de Brasília, que aí já é meio-dia na Europa).
+
+## Melhorias na ferramenta: fallback pra página cheia com teto absoluto
+
+Adicionei `_with_hard_timeout()` (via `signal.alarm`) — trava real
+achada no Akihabara (>90s) não era coberta por nenhum timeout do
+Playwright configurado. Agora `snap_youtube()` tenta embed leve
+primeiro e, se vier bloqueado, cai pra página cheia com teto de 25s —
+nunca mais trava, na pior das hipóteses retorna erro rápido.
+
+### ❌ Plaza Garibaldi, Plaza Fundadores (Querétaro) — vídeos mortos
+Canal "Webcams MX" tem vários vídeos antigos indisponíveis na lista
+fonte. Rede (webcamsdemexico.com) parece legítima, mas os IDs
+específicos dessa lista morreram — vale visitar o site direto depois.
+
+### ❌ "City Center of Dover" — na verdade é demo de fabricante de câmera
+Stream de teste da empresa "use-IP Ltd" mostrando uma via/rotatória em
+Dover (Reino Unido) — sem pedestres, é demonstração de produto, não
+câmera de monitoramento urbano de propósito.
+
+### ❌ "Downtown, Amalie Arena" — na verdade é webcam da University of Tampa
+Vista de rio/campus, sem gente, painorâmica. Reprovada.
+
+Balanço: ~35 candidatas verificadas, 2 aprovadas. Continuando.
