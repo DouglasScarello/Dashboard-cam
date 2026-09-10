@@ -371,3 +371,51 @@ def test_camera_catalog_resolves_snapshot_and_direct_modes():
     assert resolve_source_type(hls_cam) == "direct", (
         "câmera M3U8/HLS real do catálogo precisa cair no modo de captura contínua"
     )
+
+
+# ─── Cadastro manual da watchlist pessoal (Workstream 1) ───────────────────────
+# enroll_person.py foi o pedido ORIGINAL do usuário (antes de pivotar pra usar
+# a lista do FBI) — cadastro manual de gente autorizada, category="watchlist".
+# Nunca teve teste de regressão nenhum, apesar de ser um caminho de código
+# real e ainda disponível (poetry run python3 enroll_person.py --name ...).
+
+def test_enroll_person_creates_watchlist_entry_and_copies_photo(sample_mugshot_path):
+    import shutil
+    from intelligence_db import DB, init_db
+    import enroll_person
+
+    init_db()
+    test_name = "Teste Regressão Watchlist Pessoal"
+    uid = enroll_person.generate_deterministic_uid(test_name)
+    dest_photo = enroll_person.PHOTO_DIR / f"{uid}.jpg"
+
+    try:
+        enroll_person.enroll(test_name, [str(sample_mugshot_path)], relationship="teste automatizado")
+
+        assert dest_photo.exists(), "enroll_person.py deveria copiar a foto pra watchlist_photos/"
+
+        db = DB()
+        row = db.execute(
+            "SELECT category, source, img_path FROM individuals WHERE id = ?", (uid,)
+        ).fetchone()
+        db.close()
+        assert row is not None, "cadastro não gravou o indivíduo no banco"
+        assert row["category"] == "watchlist"
+        assert row["source"] == "manual"
+        assert row["img_path"] == f"watchlist_photos/{uid}.jpg"
+    finally:
+        db = DB()
+        db.execute("DELETE FROM individuals WHERE id = ?", (uid,))
+        db.execute("DELETE FROM individual_images WHERE individual_id = ?", (uid,))
+        db.commit()
+        db.close()
+        if dest_photo.exists():
+            dest_photo.unlink()
+
+
+def test_enroll_person_rejects_reserved_fbi_categories():
+    import enroll_person
+
+    for reserved in enroll_person.RESERVED_CATEGORIES:
+        with pytest.raises(SystemExit):
+            enroll_person.enroll("Teste Categoria Reservada", ["/nao/importa.jpg"], category=reserved)
