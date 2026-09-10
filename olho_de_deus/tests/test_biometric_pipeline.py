@@ -457,3 +457,39 @@ def test_clip_similarity_search_finds_self_as_best_match():
     assert results[0]["score"] > 0.99, f"match consigo mesma deveria ter cosseno ~1.0, veio {results[0]['score']}"
     if len(results) > 1:
         assert results[0]["score"] > results[1]["score"], "resultado deveria vir ordenado por similaridade decrescente"
+
+
+# ─── OCR de documentos (EasyOCR) ────────────────────────────────────────────
+# ocr_documents.py só tinha contagem no health_check ("38 documentos, 37 com
+# texto") — nunca teve teste que roda o EasyOCR de verdade contra uma imagem
+# e confere que o texto extraído é real, não vazio/lixo. Usa uma imagem que já
+# foi processada em produção (sabe-se que tem "BUREAU" legível no resultado
+# salvo) e roda o reader de novo do zero, pra provar reprodutibilidade — se o
+# motor de OCR quebrar ou o resolve() de caminho mudar, isso acusa na hora.
+
+def test_ocr_extracts_real_text_from_document_image(db_conn):
+    easyocr = pytest.importorskip("easyocr")
+    from ocr_documents import resolve, DOCUMENT_LABEL
+
+    row = db_conn.execute(
+        "SELECT img_path, ocr_text FROM individuals "
+        "WHERE image_content_type = ? AND ocr_text IS NOT NULL AND ocr_text != '' LIMIT 1",
+        (DOCUMENT_LABEL,),
+    ).fetchone()
+    if not row:
+        pytest.skip("nenhum documento com ocr_text já processado no banco atual")
+
+    img_path = resolve(row[0])
+    if not img_path:
+        pytest.skip(f"imagem de documento não existe em disco: {row[0]}")
+
+    reader = easyocr.Reader(["en"], gpu=False, verbose=False)
+    fresh_text = " ".join(reader.readtext(str(img_path), detail=0)).strip()
+
+    assert fresh_text, "OCR deveria extrair algum texto dessa imagem (já extraiu antes, em produção)"
+    stored_words = set(row[1].upper().split())
+    fresh_words = set(fresh_text.upper().split())
+    assert stored_words & fresh_words, (
+        f"texto extraído agora ({fresh_text!r}) não tem nenhuma palavra em comum com o "
+        f"salvo em produção ({row[1]!r}) — motor de OCR pode ter regredido"
+    )
