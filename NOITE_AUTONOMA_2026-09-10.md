@@ -331,6 +331,33 @@ código com ceticismo depois de um trecho de trabalho intenso encontra
 bug de verdade — vale a pena fazer isso periodicamente durante a noite,
 não só no fim.
 
+## Investigando as categorias "esboço" e "borrada" por mais oportunidades
+
+Depois de recuperar os 5 casos de múltiplos rostos, fui ver se as outras
+categorias que o `classify_images.py` marca como "não utilizável" tinham
+mais alguma coisa recuperável, mesmo espírito da investigação anterior.
+
+- **"Esboço/desenho"**: são JOHN DOE/JANE DOE de verdade — reconstrução
+  forense facial de restos mortais não identificados. Corretamente
+  excluído (ArcFace não foi treinado pra reconhecer desenho, e comparar
+  contra fotos reais de câmera não faria sentido de qualquer forma).
+- **"Borrada/baixa qualidade"**: aqui achei uma falha real de precisão do
+  próprio CLIP — testei as 17 imagens direto no RetinaFace (sem o filtro)
+  e **16 de 17 tinham rosto detectável perfeitamente normal**. O CLIP
+  simplesmente erra a mão nessa categoria específica — provavelmente
+  confunde "baixa resolução da imagem original" (comum em fotos antigas
+  de caso do FBI) com "rosto ilegível", que são coisas diferentes.
+  Corrigido: tirei essa categoria do filtro, deixando o RetinaFace (que É
+  confiável pra essa decisão, via `enforce_detection=True`) decidir de
+  verdade. Resultado: +6 indivíduos recuperados (ex: Madalina Cojocari,
+  caso real de pessoa desaparecida, agora reconhece a si mesma
+  corretamente, confidence MEDIUM).
+
+Padrão que se repetiu a noite toda: nunca confiar que uma ferramenta
+"resolveu" sem testar contra dado real — o CLIP parecia estar certo (é
+plausível que fotos de caso antigas do FBI sejam borradas), só que
+testando de verdade a maioria não estava.
+
 ## Decisão sobre "pesquisar como proceder" (contexto pra IA)
 
 O usuário pediu pra eu pesquisar como evitar perder contexto numa sessão
