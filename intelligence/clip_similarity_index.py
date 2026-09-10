@@ -103,22 +103,34 @@ def build():
     print(f"[clip-sim] índice salvo com {index.ntotal} vetores → {INDEX_PATH}")
 
 
-def search(query_path: str, top_k: int = 5):
+def search_similar(query_path: str, top_k: int = 5) -> list:
+    """Busca de verdade (sem print) — usada pelo CLI e por testes automáticos.
+    Retorna [{"score", "uid", "title", "category"}], mais parecido primeiro."""
     if not INDEX_PATH.exists():
-        print("[clip-sim] índice não existe ainda — rode com --build primeiro.")
-        return
+        return []
     index = faiss.read_index(str(INDEX_PATH))
     with open(META_PATH, "r", encoding="utf-8") as f:
         meta = json.load(f)
 
     emb = _embed_image(Path(query_path)).reshape(1, -1)
     scores, ids = index.search(emb, top_k)
-    print(f"\nTop {top_k} mais parecidos com {query_path}:")
+    results = []
     for score, idx in zip(scores[0], ids[0]):
         if idx < 0:
             continue
         m = meta[idx]
-        print(f"  {score:.3f}  {m['title']}  ({m['category']})")
+        results.append({"score": float(score), "uid": m["uid"], "title": m["title"], "category": m["category"]})
+    return results
+
+
+def search(query_path: str, top_k: int = 5):
+    results = search_similar(query_path, top_k=top_k)
+    if not results and not INDEX_PATH.exists():
+        print("[clip-sim] índice não existe ainda — rode com --build primeiro.")
+        return
+    print(f"\nTop {top_k} mais parecidos com {query_path}:")
+    for r in results:
+        print(f"  {r['score']:.3f}  {r['title']}  ({r['category']})")
 
 
 if __name__ == "__main__":

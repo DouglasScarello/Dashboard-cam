@@ -419,3 +419,41 @@ def test_enroll_person_rejects_reserved_fbi_categories():
     for reserved in enroll_person.RESERVED_CATEGORIES:
         with pytest.raises(SystemExit):
             enroll_person.enroll("Teste Categoria Reservada", ["/nao/importa.jpg"], category=reserved)
+
+
+# ─── Busca por similaridade visual (tatuagem/veículo, CLIP+FAISS) ──────────────
+# clip_similarity_index.py só tinha health_check confirmando "o índice existe
+# com 39 vetores" — nunca tinha sido testado se uma busca de verdade retorna
+# resultado que faz sentido (a própria imagem como melhor match, não qualquer
+# coisa). search() só imprimia (não testável); extraído pra search_similar()
+# que retorna os resultados, sem mudar o que o CLI já fazia.
+
+def test_clip_similarity_search_finds_self_as_best_match():
+    from clip_similarity_index import search_similar, resolve
+    import json
+
+    meta_path = ROOT / "intelligence" / "data" / "clip_visual_metadata.json"
+    if not meta_path.exists():
+        pytest.skip("clip_visual_metadata.json não existe ainda")
+    meta = json.loads(meta_path.read_text())
+    if not meta:
+        pytest.skip("índice de similaridade visual está vazio")
+
+    con = sqlite3.connect(str(ROOT / "intelligence" / "data" / "intelligence.db"))
+    row = con.execute(
+        "SELECT img_path FROM individuals WHERE id = ?", (meta[0]["uid"],)
+    ).fetchone()
+    con.close()
+    if not row or not row[0]:
+        pytest.skip("indivíduo de amostra do índice não tem img_path")
+
+    query_path = resolve(row[0])
+    if not query_path:
+        pytest.skip(f"foto de amostra não existe em disco: {row[0]}")
+
+    results = search_similar(str(query_path), top_k=3)
+    assert results, "busca não retornou nada pra uma imagem que está no próprio índice"
+    assert results[0]["uid"] == meta[0]["uid"], "a própria imagem deveria ser o melhor match dela mesma"
+    assert results[0]["score"] > 0.99, f"match consigo mesma deveria ter cosseno ~1.0, veio {results[0]['score']}"
+    if len(results) > 1:
+        assert results[0]["score"] > results[1]["score"], "resultado deveria vir ordenado por similaridade decrescente"
