@@ -55,7 +55,12 @@ def get_live_url(
     cmd.append(f"https://www.youtube.com/watch?v={video_id}")
 
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=12)
+        # 12s estourava com frequência sob carga real (várias câmeras/processos
+        # rodando junto) — yt-dlp faz várias chamadas de rede (extractor +
+        # resolução de formato) que passam de 12s sob load, mesmo quando o
+        # vídeo está perfeitamente disponível (confirmado rodando o mesmo
+        # comando manualmente: sucede em ~12-15s nesses casos).
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=25)
         if result.returncode == 0 and result.stdout.strip():
             # Pode retornar múltiplas linhas (vídeo + áudio); pegar a primeira m3u8
             lines = [l.strip() for l in result.stdout.strip().split("\n") if l.strip()]

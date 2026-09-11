@@ -8,6 +8,7 @@ from typing import List, Optional
 from fastapi import FastAPI, Request, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
 from sse_starlette.sse import EventSourceResponse
 import uvicorn
 import os
@@ -40,6 +41,26 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# 2026-09-11: nunca existia serving estático nenhum pra essas pastas — o payload
+# de alerta já montava "evidence_url": f"/evidence/{filename}" há tempos, mas
+# a rota nunca foi criada (só funcionava dentro do app Tauri via comando Rust
+# get_image_base64, não no navegador puro). Monta as duas pastas que o
+# live_pipeline.py escreve pra dar pra ver a IA rodando de verdade no browser.
+_EVIDENCE_DIR = ROOT / "intelligence" / "evidence"
+_EVIDENCE_DIR.mkdir(parents=True, exist_ok=True)
+app.mount("/evidence", StaticFiles(directory=str(_EVIDENCE_DIR)), name="evidence")
+
+_LIVEVIEW_DIR = ROOT / "olho_de_deus" / "live_view"
+_LIVEVIEW_DIR.mkdir(parents=True, exist_ok=True)
+app.mount("/live-frames", StaticFiles(directory=str(_LIVEVIEW_DIR)), name="live-frames")
+
+# individuals.img_path/individual_images.img_path são relativos a intelligence/data/
+# (ver populate_db.py) — monta pra dar pra comparar a foto de referência do FBI
+# lado a lado com a evidência capturada ao vivo, sem depender do Tauri.
+_INTEL_DATA_DIR = ROOT / "intelligence" / "data"
+if _INTEL_DATA_DIR.exists():
+    app.mount("/ref-data", StaticFiles(directory=str(_INTEL_DATA_DIR)), name="ref-data")
 
 @app.get("/health")
 @app.get("/api/health")
@@ -101,11 +122,108 @@ async def matches_recent(limit: int = 10):
     db = DB()
     try:
         matches = get_recent_matches(db, limit=limit)
+        for m in matches:
+            fp = m.get("file_path")
+            m["evidence_url"] = f"/evidence/{os.path.basename(fp)}" if fp else None
+            m["ref_photo_url"] = f"/ref-data/{m['img_path']}" if m.get("img_path") else None
         return matches
     except Exception as e:
         return {"error": str(e), "matches": []}
     finally:
         db.close()
+
+
+@app.get("/live-ai", response_class=HTMLResponse)
+async def live_ai_view(camera: str = "globetv_soi11_bangkok"):
+    """Página standalone (sem build, sem React) pra ver a IA rodando de verdade
+    numa câmera: frame anotado (YOLO + ArcFace) atualizado por polling de imagem,
+    mais a lista de matches confirmados com foto da câmera lado a lado com a
+    foto de referência do banco — pra julgar visualmente, não só confiar no score.
+    Criada em 2026-09-11 a pedido do usuário pra comprovar visualmente o
+    reconhecimento funcionando, sem depender do app Tauri nem de WebRTC/go2rtc."""
+    return f"""<!DOCTYPE html>
+<html lang="pt-br"><head><meta charset="utf-8">
+<title>Olho de Deus — IA ao vivo</title>
+<style>
+  :root {{ color-scheme: dark; }}
+  * {{ box-sizing: border-box; }}
+  body {{ margin:0; background:#0a0e14; color:#d7e0ea; font-family:'Consolas','Menlo',monospace; }}
+  header {{ padding:10px 16px; border-bottom:1px solid #1c2531; display:flex; align-items:center; gap:12px; }}
+  header h1 {{ font-size:14px; letter-spacing:.05em; margin:0; color:#7fd8ff; text-transform:uppercase; }}
+  .dot {{ width:10px; height:10px; border-radius:50%; background:#3a4656; }}
+  .dot.live {{ background:#2ecc71; box-shadow:0 0 8px #2ecc71; }}
+  .dot.stale {{ background:#e74c3c; box-shadow:0 0 8px #e74c3c; }}
+  main {{ display:flex; gap:16px; padding:16px; flex-wrap:wrap; }}
+  .video-col {{ flex:2; min-width:420px; }}
+  .video-col img {{ width:100%; border:1px solid #1c2531; border-radius:6px; background:#000; display:block; }}
+  .feed-col {{ flex:1; min-width:320px; max-height:80vh; overflow-y:auto; }}
+  .feed-col h2 {{ font-size:12px; text-transform:uppercase; color:#8aa0b8; letter-spacing:.08em; }}
+  .card {{ display:flex; gap:8px; background:#111826; border:1px solid #1c2531; border-radius:6px; padding:8px; margin-bottom:8px; align-items:center; }}
+  .card img {{ width:56px; height:56px; object-fit:cover; border-radius:4px; background:#000; }}
+  .card .meta {{ font-size:11px; line-height:1.4; }}
+  .card .name {{ color:#ff6b6b; font-weight:bold; }}
+  .empty {{ color:#4a5b70; font-size:12px; padding:8px 0; }}
+  .badge {{ font-size:10px; padding:1px 6px; border-radius:3px; background:#1c2531; color:#8aa0b8; }}
+</style></head>
+<body>
+<header>
+  <div class="dot" id="dot"></div>
+  <h1>Olho de Deus — reconhecimento ao vivo</h1>
+  <span class="badge" id="cam">{camera}</span>
+</header>
+<main>
+  <div class="video-col">
+    <img id="frame" alt="aguardando frame...">
+    <p class="empty" id="frameinfo">conectando...</p>
+  </div>
+  <div class="feed-col">
+    <h2>Matches confirmados (câmera vs. banco)</h2>
+    <div id="feed"><p class="empty">nenhum match ainda — bom sinal se ninguém do banco passou na câmera.</p></div>
+  </div>
+</main>
+<script>
+const CAM = {camera!r};
+const img = document.getElementById('frame');
+const dot = document.getElementById('dot');
+const frameinfo = document.getElementById('frameinfo');
+const feed = document.getElementById('feed');
+
+function refreshFrame() {{
+  const probe = new Image();
+  const url = `/live-frames/${{CAM}}.jpg?t=${{Date.now()}}`;
+  probe.onload = () => {{ img.src = url; dot.className = 'dot live'; frameinfo.textContent = 'ao vivo — ' + new Date().toLocaleTimeString('pt-BR'); }};
+  probe.onerror = () => {{ dot.className = 'dot stale'; frameinfo.textContent = 'sem frame ainda (pipeline rodando? veja o terminal)'; }};
+  probe.src = url;
+}}
+setInterval(refreshFrame, 700);
+refreshFrame();
+
+let lastIds = new Set();
+async function refreshMatches() {{
+  try {{
+    const res = await fetch('/matches/recent?limit=15');
+    const matches = await res.json();
+    if (!Array.isArray(matches) || matches.length === 0) return;
+    feed.innerHTML = '';
+    for (const m of matches) {{
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.innerHTML = `
+        <img src="${{m.evidence_url || ''}}" title="foto da câmera">
+        <img src="${{m.ref_photo_url || ''}}" title="referência do banco">
+        <div class="meta">
+          <div class="name">${{m.name || m.individual_id}}</div>
+          <div>${{m.category || ''}} · câmera ${{m.camera_id || '?'}}</div>
+          <div>${{m.captured_at || ''}}</div>
+        </div>`;
+      feed.appendChild(card);
+    }}
+  }} catch (e) {{ /* silencioso — só tenta de novo no próximo tick */ }}
+}}
+setInterval(refreshMatches, 2000);
+refreshMatches();
+</script>
+</body></html>"""
 
 # ─────────────────────────────────────────────────────────────────────────────
 # ENDPOINTS PERICIAIS FORENSES (DIVISÃO 09 & CNJ 484)

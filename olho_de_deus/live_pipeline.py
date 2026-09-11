@@ -19,6 +19,7 @@ Correções de travamento (Fase 32-fix):
 
 import os
 import sys
+import hashlib
 import numpy as np
 
 # psutil e multiprocessing para afinidade tática mantidos para uso futuro, se estável.
@@ -511,7 +512,17 @@ class LivePipeline:
         
         _last_display_frame = None
         _last_watchdog_t = time.time()
-        
+        _last_liveview_t = 0.0
+        # ID de arquivo seguro (nomes com ':' de video_id do YouTube quebrariam path no Windows/alguns FS)
+        _liveview_safe_id = "".join(c if c.isalnum() or c in "-_" else "_" for c in str(self.camera_id))
+        _liveview_dir = ROOT / "olho_de_deus" / "live_view"
+        _liveview_dir.mkdir(parents=True, exist_ok=True)
+        _liveview_path = _liveview_dir / f"{_liveview_safe_id}.jpg"
+        # cv2.imwrite decide o formato PELA EXTENSÃO do path — terminar em ".tmp"
+        # (em vez de ".jpg") fazia falhar com "could not find a writer for the
+        # specified extension" em TODO frame, silenciosamente até eu logar o erro.
+        _liveview_tmp = _liveview_dir / f".{_liveview_safe_id}.tmp.jpg"
+
         try:
             while self.running:
                 loop_start = time.time()
@@ -537,7 +548,18 @@ class LivePipeline:
                     with self._results_lock:
                         results = list(self._last_results)
                     self._draw_hud(display_frame, results)
-                    
+
+                    # Snapshot anotado pro front (live-ai) conseguir mostrar a IA rodando
+                    # sem precisar de WebRTC/go2rtc — throttlado a ~2 FPS, escrita atômica
+                    # (tmp + replace) pra nunca servir um JPEG cortado no meio da escrita.
+                    if (now - _last_liveview_t) >= 0.4:
+                        _last_liveview_t = now
+                        try:
+                            cv2.imwrite(str(_liveview_tmp), display_frame)
+                            os.replace(_liveview_tmp, _liveview_path)
+                        except Exception as e:
+                            log.error(f"[liveview] falha ao escrever frame anotado: {e}")
+
                     # EXIBIÇÃO NA MAIN THREAD (Corrige "tela preta") — pulado em modo headless
                     if not self._headless:
                         cv2.imshow(win_name, display_frame)
@@ -694,12 +716,35 @@ def _handle_event_match(frame, match, track_id, db, cache, camera_id):
     cache.mark_alert_sent(uid, camera_id)
 
     # Persistência e Alertas (Mesma lógica do LivePipeline._process_match)
+    # Caminho ABSOLUTO (baseado em ROOT, não no cwd) — achado 2026-09-11: com
+    # caminho relativo, rodar a partir de diretórios diferentes espalhava
+    # evidência em pastas duplicadas (olho_de_deus/intelligence/evidence vs
+    # intelligence/evidence na raiz).
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     filename = f"match_{uid}_{timestamp}.jpg"
-    evidence_dir = Path("intelligence/evidence")
+    evidence_dir = ROOT / "intelligence" / "evidence"
     evidence_dir.mkdir(parents=True, exist_ok=True)
     file_path = evidence_dir / filename
     cv2.imwrite(str(file_path), frame)
+
+    # 2026-09-11: register_evidence/register_match_log já eram importados aqui
+    # mas nunca chamados — nada do que a IA via ao vivo ficava gravado em lugar
+    # nenhum consultável (só o Redis pub/sub, que fica mudo sem Redis rodando).
+    # Sem isso, /matches/recent (api_server.py) nunca mostrava nada real.
+    try:
+        file_hash = hashlib.sha256(file_path.read_bytes()).hexdigest()
+        evidence_id = f"ev_{uid}_{timestamp}"
+        register_evidence(db, evidence_id=evidence_id, individual_id=uid,
+                           file_hash=file_hash, file_path=str(file_path), camera_id=camera_id)
+    except Exception as e:
+        log.error(f"[event] Falha ao registrar evidência: {e}")
+
+    try:
+        register_match_log(db, individual_id=uid, distance=match["score"],
+                            probability=match.get("match_probability"),
+                            confidence=match.get("identity_confidence"), camera_id=camera_id)
+    except Exception as e:
+        log.error(f"[event] Falha ao registrar match_log: {e}")
 
     # Publicar no Dashboard (Redis Pub/Sub)
     cache.publish("tactical_alerts", {
