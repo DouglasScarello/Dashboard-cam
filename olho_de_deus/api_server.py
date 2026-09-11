@@ -19,7 +19,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "intelligence"))
 
-from intelligence_db import DB, get_recent_matches
+from intelligence_db import DB, get_recent_matches, get_recent_plate_reads
 from redis_cache import RedisCache
 from forensic_core import build_official_forensic_laudo, BayesianSLREngine, CNJLineupEngine
 from tactical_dispatch import LAPJVDispatchEngine, TacticalContainmentEngine, TacticalUnit, TacticalIncident
@@ -224,6 +224,113 @@ setInterval(refreshMatches, 2000);
 refreshMatches();
 </script>
 </body></html>"""
+
+
+@app.get("/plates/recent")
+async def plates_recent(limit: int = 20):
+    """Leituras de placa mais recentes (consenso multi-frame, monitor_plates.py)."""
+    db = DB()
+    try:
+        reads = get_recent_plate_reads(db, limit=limit)
+        for r in reads:
+            ep = r.get("evidence_path")
+            r["evidence_url"] = f"/evidence/{os.path.basename(ep)}" if ep else None
+        return reads
+    except Exception as e:
+        return {"error": str(e), "reads": []}
+    finally:
+        db.close()
+
+
+@app.get("/live-plates", response_class=HTMLResponse)
+async def live_plates_view(camera: str = "globetv_davao_leongarcia"):
+    """Irmã da /live-ai, mas pro lado de placa (monitor_plates.py) — mostra o
+    frame anotado (YOLO + votação de OCR por consenso) e a lista de placas já
+    fechadas (consenso atingido), com a foto da câmera como evidência. Criada
+    em 2026-09-11 junto com o pipeline de leitura de placa ao vivo."""
+    return f"""<!DOCTYPE html>
+<html lang="pt-br"><head><meta charset="utf-8">
+<title>Olho de Deus — Placas ao vivo</title>
+<style>
+  :root {{ color-scheme: dark; }}
+  * {{ box-sizing: border-box; }}
+  body {{ margin:0; background:#0a0e14; color:#d7e0ea; font-family:'Consolas','Menlo',monospace; }}
+  header {{ padding:10px 16px; border-bottom:1px solid #1c2531; display:flex; align-items:center; gap:12px; }}
+  header h1 {{ font-size:14px; letter-spacing:.05em; margin:0; color:#7fd8ff; text-transform:uppercase; }}
+  .dot {{ width:10px; height:10px; border-radius:50%; background:#3a4656; }}
+  .dot.live {{ background:#2ecc71; box-shadow:0 0 8px #2ecc71; }}
+  .dot.stale {{ background:#e74c3c; box-shadow:0 0 8px #e74c3c; }}
+  main {{ display:flex; gap:16px; padding:16px; flex-wrap:wrap; }}
+  .video-col {{ flex:2; min-width:420px; }}
+  .video-col img {{ width:100%; border:1px solid #1c2531; border-radius:6px; background:#000; display:block; }}
+  .feed-col {{ flex:1; min-width:320px; max-height:80vh; overflow-y:auto; }}
+  .feed-col h2 {{ font-size:12px; text-transform:uppercase; color:#8aa0b8; letter-spacing:.08em; }}
+  .card {{ display:flex; gap:8px; background:#111826; border:1px solid #1c2531; border-radius:6px; padding:8px; margin-bottom:8px; align-items:center; }}
+  .card img {{ width:72px; height:56px; object-fit:cover; border-radius:4px; background:#000; }}
+  .card .meta {{ font-size:11px; line-height:1.4; }}
+  .card .plate {{ color:#7fffd4; font-weight:bold; font-size:16px; letter-spacing:.05em; }}
+  .empty {{ color:#4a5b70; font-size:12px; padding:8px 0; }}
+  .badge {{ font-size:10px; padding:1px 6px; border-radius:3px; background:#1c2531; color:#8aa0b8; }}
+</style></head>
+<body>
+<header>
+  <div class="dot" id="dot"></div>
+  <h1>Olho de Deus — leitura de placa ao vivo</h1>
+  <span class="badge" id="cam">{camera}</span>
+</header>
+<main>
+  <div class="video-col">
+    <img id="frame" alt="aguardando frame...">
+    <p class="empty" id="frameinfo">conectando...</p>
+  </div>
+  <div class="feed-col">
+    <h2>Placas confirmadas (consenso de vários frames)</h2>
+    <div id="feed"><p class="empty">nenhuma placa fechada ainda — cada uma exige várias leituras concordando.</p></div>
+  </div>
+</main>
+<script>
+const CAM = {camera!r};
+const img = document.getElementById('frame');
+const dot = document.getElementById('dot');
+const frameinfo = document.getElementById('frameinfo');
+const feed = document.getElementById('feed');
+
+function refreshFrame() {{
+  const probe = new Image();
+  const url = `/live-frames/${{CAM}}_plates.jpg?t=${{Date.now()}}`;
+  probe.onload = () => {{ img.src = url; dot.className = 'dot live'; frameinfo.textContent = 'ao vivo — ' + new Date().toLocaleTimeString('pt-BR'); }};
+  probe.onerror = () => {{ dot.className = 'dot stale'; frameinfo.textContent = 'sem frame ainda (pipeline rodando? veja o terminal)'; }};
+  probe.src = url;
+}}
+setInterval(refreshFrame, 700);
+refreshFrame();
+
+async function refreshReads() {{
+  try {{
+    const res = await fetch('/plates/recent?limit=15');
+    const reads = await res.json();
+    if (!Array.isArray(reads) || reads.length === 0) return;
+    feed.innerHTML = '';
+    for (const r of reads) {{
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.innerHTML = `
+        <img src="${{r.evidence_url || ''}}" title="foto da câmera">
+        <div class="meta">
+          <div class="plate">${{r.plate_text}}</div>
+          <div>${{r.country_code || '?'}} · formato ${{r.plate_format || 'INCERTO'}} · confiança ${{Math.round((r.confidence||0)*100)}}%</div>
+          <div>${{r.frames_voted}} frames votados · câmera ${{r.camera_id || '?'}}</div>
+          <div>${{r.created_at || ''}}</div>
+        </div>`;
+      feed.appendChild(card);
+    }}
+  }} catch (e) {{ /* silencioso — só tenta de novo no próximo tick */ }}
+}}
+setInterval(refreshReads, 2000);
+refreshReads();
+</script>
+</body></html>"""
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # ENDPOINTS PERICIAIS FORENSES (DIVISÃO 09 & CNJ 484)

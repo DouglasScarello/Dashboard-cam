@@ -31,6 +31,8 @@ import numpy as np
 from fastapi import APIRouter, FastAPI, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 
+from plate_formats import get_format as get_plate_format
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 1. PROCESSAMENTO DE SINAIS & DESCONVOLUÇÃO FORENSE (WIENER & RICHARDSON-LUCY)
@@ -481,10 +483,17 @@ class ForensicALPR:
     DIGIT_TO_LETTER = {"0": "O", "1": "I", "5": "S", "2": "Z", "8": "B", "6": "G"}
     LETTER_TO_DIGIT = {"O": "0", "I": "1", "S": "5", "Z": "2", "B": "8", "G": "6", "Q": "0"}
 
-    def __init__(self, weights_path: str):
+    # Cache de leitores EasyOCR por conjunto de idiomas (2026-09-11) —
+    # compartilhado entre TODAS as instâncias/países, porque cada
+    # easyocr.Reader(...) novo custa ~20-30s pra inicializar (baixa/carrega
+    # pesos de detecção de texto). Sem isso, alternar país a cada chamada
+    # recarregaria o mesmo modelo repetidamente.
+    _reader_cache: Dict[Tuple[str, ...], Any] = {}
+
+    def __init__(self, weights_path: str, country: str = "BR"):
         self._weights_path = weights_path
         self._detector = None
-        self._reader = None
+        self.country = country.upper()
 
     def _get_detector(self):
         if self._detector is None:
@@ -492,11 +501,11 @@ class ForensicALPR:
             self._detector = YOLO(self._weights_path)
         return self._detector
 
-    def _get_reader(self):
-        if self._reader is None:
+    def _get_reader(self, langs: Tuple[str, ...]):
+        if langs not in self._reader_cache:
             import easyocr
-            self._reader = easyocr.Reader(["en"], gpu=False, verbose=False)
-        return self._reader
+            self._reader_cache[langs] = easyocr.Reader(list(langs), gpu=False, verbose=False)
+        return self._reader_cache[langs]
 
     def detect_plate_bbox(self, image_bgr: np.ndarray, conf_threshold: float = 0.25) -> Tuple[Optional[Tuple[int, int, int, int]], Optional[float]]:
         """Localiza a placa de verdade dentro do crop recebido — antes disso
@@ -540,15 +549,28 @@ class ForensicALPR:
                 out.append(ch)
         return "".join(out)
 
-    def read_plate(self, image_bgr: np.ndarray) -> Tuple[Optional[str], Optional[str], Optional[float]]:
-        """OCR real via EasyOCR + correção posicional + validação contra os
-        formatos oficiais (Mercosul: 5º caractere é sempre letra, conforme
-        Resolução CONTRAN 780/2019 — nunca dígito; formato antigo: 3 letras
-        + 4 dígitos). Retorna (texto, formato, confiança) ou (None, None,
-        None) se nada plausível foi lido — nunca inventa uma placa."""
+    def read_plate(self, image_bgr: np.ndarray, country: Optional[str] = None) -> Tuple[Optional[str], Optional[str], Optional[float]]:
+        """OCR real via EasyOCR + validação contra o formato oficial do país
+        (ver plate_formats.py — pesquisado em 2026-09-11 depois de descobrir,
+        testando com câmera japonesa, que o motor só reconhecia formato
+        brasileiro). `country` sobrescreve o país da instância pra essa
+        chamada só (útil quando o mesmo processo lê placas de câmeras de
+        países diferentes). Retorna (texto, formato, confiança) ou
+        (None, None, None) se nada plausível foi lido — nunca inventa placa.
+
+        Correção posicional dígito↔letra (_correct_for_format) só se aplica
+        pro Brasil — é conhecimento específico de como o CONTRAN define slot
+        fixo de letra/dígito; pra outros países só validamos a regex crua."""
+        fmt = get_plate_format(country or self.country)
+        is_pure_latin = fmt.script == "latin"
+
         try:
-            reader = self._get_reader()
-            results = reader.readtext(image_bgr, detail=1, allowlist="ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
+            reader = self._get_reader(tuple(fmt.ocr_langs))
+            # Allowlist restrito só faz sentido pra alfabeto puramente latino —
+            # pra kanji/thai/hangul/han ele bloquearia o próprio script que
+            # queremos ler.
+            kwargs = {"allowlist": "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"} if is_pure_latin else {}
+            results = reader.readtext(image_bgr, detail=1, **kwargs)
         except Exception as e:
             log_alpr_error(e)
             return None, None, None
@@ -560,18 +582,24 @@ class ForensicALPR:
         # placa em 2 blocos) ordenados da esquerda pra direita.
         results_sorted = sorted(results, key=lambda r: r[0][0][0])
         raw_text = "".join(r[1] for r in results_sorted).upper()
-        raw_text = re.sub(r"[^A-Z0-9]", "", raw_text)
+        if is_pure_latin:
+            raw_text = re.sub(r"[^A-Z0-9]", "", raw_text)
         avg_conf = float(np.mean([r[2] for r in results_sorted]))
 
-        for fmt_name, fmt_template, regex in (
-            ("MERCOSUL", self.MERCOSUL_FMT, ForensicPlateEnhancer.MERCOSUL_REGEX),
-            ("ANTIGO", self.ANTIGO_FMT, ForensicPlateEnhancer.ANTIGO_REGEX),
-        ):
-            if len(raw_text) != len(fmt_template):
-                continue
-            corrected = self._correct_for_format(raw_text, fmt_template)
-            if regex.match(corrected):
-                return corrected, fmt_name, round(avg_conf, 3)
+        if self.country == "BR" and country is None:
+            # Caminho original — 2 sub-formatos brasileiros com correção
+            # posicional, mantido idêntico ao comportamento de antes.
+            for fmt_name, fmt_template, regex in (
+                ("MERCOSUL", self.MERCOSUL_FMT, ForensicPlateEnhancer.MERCOSUL_REGEX),
+                ("ANTIGO", self.ANTIGO_FMT, ForensicPlateEnhancer.ANTIGO_REGEX),
+            ):
+                if len(raw_text) != len(fmt_template):
+                    continue
+                corrected = self._correct_for_format(raw_text, fmt_template)
+                if regex.match(corrected):
+                    return corrected, fmt_name, round(avg_conf, 3)
+        elif fmt.regex and fmt.regex.match(raw_text):
+            return raw_text, fmt.country_code, round(avg_conf, 3)
 
         # Nada bateu com um formato oficial — reporta o texto cru como
         # "candidato incerto" em vez de descartar silenciosamente ou de

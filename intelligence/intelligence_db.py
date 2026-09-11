@@ -173,6 +173,33 @@ CREATE TABLE IF NOT EXISTS match_logs (
     created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- 2026-09-11: pipeline de leitura de placa ao vivo (monitor_plates.py).
+-- plate_reads guarda toda leitura consolidada (por votação de vários frames,
+-- não frame único) — mesmo sem match nenhum, serve de log/auditoria, igual
+-- match_logs serve pro lado de rosto.
+CREATE TABLE IF NOT EXISTS plate_reads (
+    id              SERIAL PRIMARY KEY,
+    camera_id       TEXT,
+    country_code    TEXT,
+    plate_text      TEXT,
+    plate_format    TEXT,  -- nome do formato validado, ou 'INCERTO'
+    confidence      REAL,  -- fração de frames que concordaram no consenso (0-1)
+    frames_voted    INTEGER,
+    evidence_path   TEXT,
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- wanted_plates: lista de observação de placas (equivalente a individuals pro
+-- lado de rosto). Fica vazia até o usuário cadastrar algo de verdade — nunca
+-- inventamos dado aqui.
+CREATE TABLE IF NOT EXISTS wanted_plates (
+    plate_text      TEXT PRIMARY KEY,
+    country_code    TEXT,
+    reason          TEXT,
+    source          TEXT,
+    registered_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 """
 
 def init_db():
@@ -582,6 +609,35 @@ def register_match_log(db: DB, individual_id: str, distance: float, probability:
            VALUES (?, ?, ?, ?, ?)"""
     db.execute(q, (individual_id, camera_id, distance, probability, confidence))
     db.commit()
+
+
+def register_plate_read(db: DB, camera_id: str, country_code: str, plate_text: str,
+                         plate_format: str, confidence: float, frames_voted: int,
+                         evidence_path: str = None) -> None:
+    """Registra uma leitura de placa consolidada (monitor_plates.py) — só chamado
+    depois da votação por consenso entre vários frames, nunca por frame único."""
+    q = """INSERT INTO plate_reads
+           (camera_id, country_code, plate_text, plate_format, confidence, frames_voted, evidence_path)
+           VALUES (?, ?, ?, ?, ?, ?, ?)"""
+    db.execute(q, (camera_id, country_code, plate_text, plate_format, confidence, frames_voted, evidence_path))
+    db.commit()
+
+
+def get_recent_plate_reads(db: DB, limit: int = 20) -> List[Dict]:
+    """Leituras de placa mais recentes, mais novas primeiro."""
+    q = "SELECT * FROM plate_reads ORDER BY created_at DESC LIMIT ?"
+    try:
+        return [dict(r) for r in db.execute(q, (limit,)).fetchall()]
+    except Exception:
+        return []
+
+
+def check_plate_watchlist(db: DB, plate_text: str) -> Optional[Dict]:
+    """Confere se uma placa lida bate com a lista de observação (wanted_plates).
+    None se não achar — lista fica vazia até o usuário cadastrar algo real."""
+    cur = db.execute("SELECT * FROM wanted_plates WHERE plate_text = ?", (plate_text,))
+    row = cur.fetchone()
+    return dict(row) if row else None
 
 
 def get_full_individual_dossier(db: DB, individual_id: str) -> Optional[Dict]:
