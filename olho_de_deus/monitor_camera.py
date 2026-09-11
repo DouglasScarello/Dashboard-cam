@@ -23,7 +23,12 @@ from live_pipeline import LivePipeline
 def resolve_source_type(cam: dict) -> str:
     """Decide o modo de captura certo a partir do stream_format do catálogo.
     Extraído do corpo de main() pra dar pra testar sem precisar abrir stream de verdade."""
-    return "snapshot_jpeg" if cam.get("stream_format") == "SNAPSHOT_JPEG" else "direct"
+    fmt = cam.get("stream_format")
+    if fmt == "SNAPSHOT_JPEG":
+        return "snapshot_jpeg"
+    if fmt == "YOUTUBE":
+        return "youtube"
+    return "direct"
 
 
 def main():
@@ -58,8 +63,13 @@ def main():
     print(f"[monitor] {cam.get('nome')} | stream_format={cam.get('stream_format')} → source_type={source_type}")
     print(f"[monitor] URL: {cam.get('url')}")
 
+    # Pra youtube, LivePipeline.run() resolve a URL de verdade via
+    # get_live_url(self.camera_id, ...) — ou seja, camera_id PRECISA ser o
+    # video_id do YouTube nesse modo, não o id do catálogo (esquema antigo
+    # de cameras.json usava o video_id como id; o catálogo atual não).
+    pipeline_camera_id = cam["video_id"] if source_type == "youtube" and cam.get("video_id") else cam["id"]
     pipeline = LivePipeline(
-        camera_id=cam["id"], source_type=source_type, stream_url=cam["url"],
+        camera_id=pipeline_camera_id, source_type=source_type, stream_url=cam["url"],
         match_threshold=args.threshold, process_every_n=args.process_every,
     )
     if is_snapshot:

@@ -38,13 +38,63 @@ _ARCFACE_112_TEMPLATE = np.array([
 ], dtype=np.float32)
 
 
+# ─── Filtro de qualidade facial (2026-09-11) ───
+# Achado real testando câmera de rua ao vivo (Bangkok): sem filtro nenhum, rosto
+# pequeno/de lado/parcialmente coberto (capacete, óculos escuros) gerava "match"
+# contra o FBI em segundos — sempre falso-positivo confirmado visualmente pelo
+# usuário. Causa raiz: YuNet aceita QUALQUER blob face-like acima de 0.6 de
+# confiança (limiar pensado só pra "existe um rosto aqui", não pra "esse rosto
+# é confiável pra identificação"), sem checar tamanho, ângulo ou nitidez — o
+# ArcFace então embeda ruído (cor do capacete/óculos domina, não geometria
+# facial) e a busca por vizinho mais próximo acha "parecido" por acaso.
+#
+# Padrão da indústria (pesquisado): o próprio pipeline de limpeza de dataset do
+# InsightFace (WebFace42M) descarta rosto borrado, ocluso ou com pose > 45°
+# ANTES de treinar/comparar — pré-filtro é a alavanca que mais reduz erro,
+# mais do que ajustar o limiar de distância. NIST FRVT Part 3 (2019) documenta
+# que taxa de falso-positivo varia até 7203x entre grupos demográficos, e é
+# consistentemente pior em imagem de baixa qualidade — ou seja, o viés racial
+# que o usuário suspeitou é um efeito real e documentado, que piora ainda mais
+# quando a entrada já é ruim. Por isso o gate abaixo, não só o limiar de match.
+MIN_INTEROCULAR_PX = 40    # abaixo disso, rosto longe/pequeno demais pro ArcFace confiar (~48px é a referência da literatura pra "condição difícil")
+MIN_DET_CONFIDENCE = 0.85  # confiança do YuNet — 0.6 é limiar de "existe rosto", não de "confiável pra identificar"
+MAX_YAW_ASYMMETRY = 0.68   # proxy de perfil/pose extrema (~>45°) via posição do nariz entre os dois olhos
+MIN_BLUR_VARIANCE = 25.0   # variância do Laplaciano no rosto alinhado — abaixo disso, borrado demais
+
+
+def _face_quality_ok(landmarks: np.ndarray, det_score: float, aligned: np.ndarray) -> Tuple[bool, str]:
+    """Gate de qualidade ANTES do ArcFace — rejeitar aqui é mais barato e mais
+    eficaz que tentar compensar depois só com o limiar de distância."""
+    if det_score < MIN_DET_CONFIDENCE:
+        return False, f"confiança do detector baixa ({det_score:.2f})"
+
+    right_eye, left_eye, nose = landmarks[0], landmarks[1], landmarks[2]
+    interocular = float(np.linalg.norm(right_eye - left_eye))
+    if interocular < MIN_INTEROCULAR_PX:
+        return False, f"rosto pequeno demais ({interocular:.0f}px entre os olhos)"
+
+    d_r = abs(nose[0] - right_eye[0])
+    d_l = abs(nose[0] - left_eye[0])
+    yaw_ratio = d_r / max(d_r + d_l, 1e-6)
+    if yaw_ratio < (1 - MAX_YAW_ASYMMETRY) or yaw_ratio > MAX_YAW_ASYMMETRY:
+        return False, f"pose de lado demais (razão {yaw_ratio:.2f})"
+
+    gray = cv2.cvtColor(aligned, cv2.COLOR_BGR2GRAY)
+    blur = float(cv2.Laplacian(gray, cv2.CV_64F).var())
+    if blur < MIN_BLUR_VARIANCE:
+        return False, f"borrado demais (var={blur:.1f})"
+
+    return True, "ok"
+
+
 def _detect_and_align_face(face_detector, crop: np.ndarray, out_size: int = 112) -> Optional[np.ndarray]:
     """
     Roda YuNet dentro de um recorte de PESSOA (não do frame inteiro — mais rápido
     e evita achar rosto de outra pessoa ao fundo), e devolve o rosto já ALINHADO
     (rotação/escala pelos 5 pontos faciais, mesmo padrão que o ArcFace espera) em
     112x112 — pronto pra ir direto pro DeepFace com detector_backend="skip".
-    None se não achar rosto (pessoa de costas, ângulo ruim, fora de quadro).
+    None se não achar rosto (pessoa de costas, ângulo ruim, fora de quadro) OU
+    se o rosto encontrado não passar no filtro de qualidade (ver _face_quality_ok).
     """
     h, w = crop.shape[:2]
     if h < 10 or w < 10:
@@ -55,11 +105,16 @@ def _detect_and_align_face(face_detector, crop: np.ndarray, out_size: int = 112)
         return None
     best = max(faces, key=lambda f: f[14])  # coluna 14 = score de confiança
     landmarks = best[4:14].reshape(5, 2).astype(np.float32)
+    det_score = float(best[14])
 
     transform, _ = cv2.estimateAffinePartial2D(landmarks, _ARCFACE_112_TEMPLATE, method=cv2.LMEDS)
     if transform is None:
         return None
     aligned = cv2.warpAffine(crop, transform, (out_size, out_size), borderValue=0.0)
+
+    ok, _reason = _face_quality_ok(landmarks, det_score, aligned)
+    if not ok:
+        return None
     return aligned
 
 # ─── Confidence score (Etapa 1: calibração → probabilidade → classificação) ───
