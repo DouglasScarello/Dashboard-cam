@@ -61,6 +61,13 @@ MIN_DET_CONFIDENCE = 0.85  # confiança do YuNet — 0.6 é limiar de "existe ro
 MAX_YAW_ASYMMETRY = 0.68   # proxy de perfil/pose extrema (~>45°) via posição do nariz entre os dois olhos
 MIN_BLUR_VARIANCE = 25.0   # variância do Laplaciano no rosto alinhado — abaixo disso, borrado demais
 
+# 2026-09-11: em teste ao vivo numa câmera de rua real, o YOLO nano (vídeo
+# comprimido) de vez em quando "detectava pessoa" numa sombra ou bueiro na
+# calçada por 1 frame só, isolado. Exigir 2 detecções seguidas do mesmo track
+# antes de desenhar a caixa elimina esse ruído sem atraso perceptível pra
+# gente de verdade (que persiste dezenas de frames).
+MIN_HITS_TO_DISPLAY = 2
+
 
 def _face_quality_ok(landmarks: np.ndarray, det_score: float, aligned: np.ndarray) -> Tuple[bool, str]:
     """Gate de qualidade ANTES do ArcFace — rejeitar aqui é mais barato e mais
@@ -164,11 +171,19 @@ class TrackedFace:
         self.match = match
         self.last_seen = time.time()
         self.missed_frames = 0
+        # Achado 2026-09-11 testando ao vivo: YOLO (nano, vídeo comprimido de
+        # câmera pública) de vez em quando "detecta pessoa" numa sombra ou
+        # bueiro na calçada — um blob falso-positivo isolado, sem persistir.
+        # Exigir >=2 detecções seguidas antes de mostrar a caixa filtra esse
+        # ruído sem atrasar gente de verdade (que naturalmente persiste vários
+        # frames).
+        self.hits = 1
 
     def update(self, box: Tuple):
         self.box = box
         self.last_seen = time.time()
         self.missed_frames = 0
+        self.hits += 1
 
 
 class BiometricProcessor:
@@ -261,7 +276,13 @@ class BiometricProcessor:
         small_static = cv2.resize(frame, (320, 320))
 
         try:
-            # TUNING FASE 33-STABLE: conf=0.5, iou=0.45, classes=[0] (pessoa)
+            # TUNING FASE 33-STABLE: conf=0.5, iou=0.45, classes=[0] (pessoa) —
+            # 2026-09-11: cogitei subir pra 0.6 depois de achar falso-positivo
+            # em sombra/bueiro, mas medi direto (ver histórico) que gente real
+            # e visível nessa câmera às vezes fica com conf~0.38 (longe/pequena
+            # demais) — subir o limiar mataria detecção de verdade sem
+            # resolver o problema. O que corrige o falso-positivo é
+            # MIN_HITS_TO_DISPLAY (exigir 2 frames seguidos), não o limiar.
             detections = self.detector.track(
                 small_static, persist=True, verbose=False,
                 conf=0.5, iou=0.45, classes=[0],
@@ -304,12 +325,13 @@ class BiometricProcessor:
             if tid in self.tracked_faces:
                 track = self.tracked_faces[tid]
                 track.update((x1, y1, x2, y2))
-                results.append({
-                    "box": track.box,
-                    "conf": conf,
-                    "track_id": tid,
-                    "match": track.match
-                })
+                if track.hits >= MIN_HITS_TO_DISPLAY:
+                    results.append({
+                        "box": track.box,
+                        "conf": conf,
+                        "track_id": tid,
+                        "match": track.match
+                    })
             else:
                 embedding, match = None, None
                 if self.face_detector is not None:
@@ -323,12 +345,8 @@ class BiometricProcessor:
                 new_track = TrackedFace((x1, y1, x2, y2), embedding, match)
                 new_track.track_id = tid
                 self.tracked_faces[tid] = new_track
-                results.append({
-                    "box": (x1, y1, x2, y2),
-                    "conf": conf,
-                    "track_id": tid,
-                    "match": match
-                })
+                # hits=1 na criação — só aparece no HUD/resultado quando confirmado
+                # de novo no próximo frame (ver MIN_HITS_TO_DISPLAY)
 
         return results
 
@@ -351,7 +369,6 @@ class BiometricProcessor:
         small_static = cv2.resize(frame, (320, 320))
         scale_x = w / 320.0
         scale_y = h / 320.0
-        # TUNING FASE 33-STABLE: conf=0.5, iou=0.45, classes=[0]
         detections = self.detector(small_static, verbose=False, conf=0.5, iou=0.45, classes=[0])[0]
         detected_boxes = []
         for box in detections.boxes:
@@ -385,16 +402,17 @@ class BiometricProcessor:
                 track.update((bx[0], bx[1], bx[2], bx[3]))
                 matched_track_ids.add(track_id)
                 assigned_boxes.add(best_box_idx)
-                results.append({
-                    "box": track.box,
-                    "conf": detected_boxes[best_box_idx][4],
-                    "track_id": track_id,
-                    "match": track.match   # Reutiliza resultado anterior!
-                })
+                if track.hits >= MIN_HITS_TO_DISPLAY:
+                    results.append({
+                        "box": track.box,
+                        "conf": detected_boxes[best_box_idx][4],
+                        "track_id": track_id,
+                        "match": track.match   # Reutiliza resultado anterior!
+                    })
             else:
                 # Pessoa saiu do frame
                 track.missed_frames += 1
-                if track.missed_frames <= self.max_missed_frames:
+                if track.missed_frames <= self.max_missed_frames and track.hits >= MIN_HITS_TO_DISPLAY:
                     # Manter no resultado com a última posição conhecida
                     results.append({
                         "box": track.box,
@@ -428,13 +446,9 @@ class BiometricProcessor:
 
             new_track = TrackedFace((x1, y1, x2, y2), embedding, match)
             self.tracked_faces[new_track.track_id] = new_track
-
-            results.append({
-                "box": (x1, y1, x2, y2),
-                "conf": conf,
-                "track_id": new_track.track_id,
-                "match": match
-            })
+            # hits=1 na criação — só aparece no HUD/resultado quando confirmado
+            # de novo no próximo frame (ver MIN_HITS_TO_DISPLAY), pra não exibir
+            # blob falso-positivo isolado (sombra, bueiro) como se fosse pessoa
 
         # Remover tracks muito antigos
         self.tracked_faces = {
