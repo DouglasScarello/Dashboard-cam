@@ -40,8 +40,15 @@ def add_verified_street_camera(
     lat: Optional[float] = None,
     long: Optional[float] = None,
     video_id: Optional[str] = None,
+    tipo_area: str = "RUA_PEDESTRE",
+    setor: str = "RUA_PEDESTRE",
+    source: str = "GlobeTV-Rua-Verificada",
 ) -> bool:
-    """Retorna True se inseriu, False se o id já existia (idempotente)."""
+    """Retorna True se inseriu, False se o id já existia (idempotente).
+
+    tipo_area/setor/source têm default de câmera de rosto (RUA_PEDESTRE);
+    passe tipo_area='TRAFFIC' pra câmeras verificadas manualmente pra
+    leitura de placa (ver curadoria de 2026-09-11 em SESSAO_CAMERAS)."""
     conn = sqlite3.connect(DB_FILE)
     cur = conn.cursor()
     cur.execute("SELECT 1 FROM cameras WHERE id = ?", (id,))
@@ -53,8 +60,8 @@ def add_verified_street_camera(
         """INSERT INTO cameras
            (id, nome, local, cidade, pais, tipo_area, setor, url, video_id,
             lat, long, live_confirmed, live_status, stream_format, source)
-           VALUES (?, ?, ?, ?, ?, 'RUA_PEDESTRE', 'RUA_PEDESTRE', ?, ?, ?, ?, 1, 'LIVE_VERIFIED', ?, 'GlobeTV-Rua-Verificada')""",
-        (id, nome, cidade, cidade, pais, url, video_id, lat, long, stream_format),
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 'LIVE_VERIFIED', ?, ?)""",
+        (id, nome, cidade, cidade, pais, tipo_area, setor, url, video_id, lat, long, stream_format, source),
     )
     conn.commit()
     conn.close()

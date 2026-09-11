@@ -43,27 +43,26 @@ HLS_PLAYER_HTML = """<!DOCTYPE html><html><body style="margin:0;background:#000"
   // Achado 2026-09-10: carregar hls.js com <script src> direto no HTML de
   // set_content() não disparava (fica parado em networkState=NETWORK_NO_SOURCE,
   // sem erro nenhum) — script criado via JS + onload explícito funciona.
+  // Achado 2026-09-11: o Chromium do Playwright dá falso-positivo em
+  // canPlayType('application/vnd.apple.mpegurl') (retorna "maybe" sem
+  // decoder real) — usar sempre hls.js, nunca confiar nesse check.
   const video = document.getElementById('v');
   const src = {src!r};
   window.__snapError = null;
-  if (video.canPlayType('application/vnd.apple.mpegurl')) {{
-    video.src = src;
-  }} else {{
-    const tag = document.createElement('script');
-    tag.src = 'https://cdn.jsdelivr.net/npm/hls.js@1';
-    tag.onload = () => {{
-      if (window.Hls && window.Hls.isSupported()) {{
-        const hls = new Hls();
-        hls.loadSource(src);
-        hls.attachMedia(video);
-        hls.on(Hls.Events.ERROR, (_e, data) => {{ window.__snapError = JSON.stringify(data); }});
-      }} else {{
-        window.__snapError = 'Hls not supported';
-      }}
-    }};
-    tag.onerror = () => {{ window.__snapError = 'failed to load hls.js'; }};
-    document.head.appendChild(tag);
-  }}
+  const tag = document.createElement('script');
+  tag.src = 'https://cdn.jsdelivr.net/npm/hls.js@1';
+  tag.onload = () => {{
+    if (window.Hls && window.Hls.isSupported()) {{
+      const hls = new Hls();
+      hls.loadSource(src);
+      hls.attachMedia(video);
+      hls.on(Hls.Events.ERROR, (_e, data) => {{ window.__snapError = JSON.stringify(data); }});
+    }} else {{
+      window.__snapError = 'Hls not supported';
+    }}
+  }};
+  tag.onerror = () => {{ window.__snapError = 'failed to load hls.js'; }};
+  document.head.appendChild(tag);
 </script>
 </body></html>"""
 
@@ -122,7 +121,7 @@ def snap_hls(src_url: str, out_path: str, wait_s: float = 8.0) -> dict:
         browser = p.chromium.launch()
         page = browser.new_page(viewport={"width": 960, "height": 540})
         page.set_default_timeout(6000)
-        page.set_content(HLS_PLAYER_HTML.format(src=src_url))
+        page.set_content(HLS_PLAYER_HTML.format(src=src_url), wait_until="domcontentloaded", timeout=15000)
         time.sleep(wait_s)
         state = page.evaluate(
             "({readyState: document.querySelector('video')?.readyState, "

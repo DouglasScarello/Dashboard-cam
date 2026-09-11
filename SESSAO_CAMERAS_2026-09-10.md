@@ -367,3 +367,73 @@ sessão única maratona. Motivo: o trabalho é genuinamente "infinito"
 uma vez. Cada bloco: reverificar saúde do sistema, checar mais
 candidatas com o método já validado, cadastrar aprovadas, documentar,
 commitar, agendar próximo bloco. Continua até as 23h.
+
+## Interrupção: o `ScheduleWakeup` não sobrevive a desligamento (2026-09-10 23:46)
+
+O PC desligou por volta das 14:35 (queda de energia), então o próximo
+bloco agendado via `ScheduleWakeup` nunca disparou — a sessão inteira
+morreu junto. Nada de errado no código, só uma limitação real: esse
+mecanismo de retomada automática só funciona enquanto o processo da
+sessão continua vivo, não sobrevive a reinício de máquina. Retomado
+manualmente às 23:46 quando o usuário voltou.
+
+## Mudança de escopo (2026-09-10 23:48): de "infinito" pra 6 câmeras de teste
+
+O usuário simplificou o pedido: em vez de catalogar câmeras
+indefinidamente, precisa de **3 câmeras boas pra reconhecimento facial**
+e **3 câmeras de trânsito boas pra leitura de placa**, ambas só pra
+teste. Isso fecha esta frente de trabalho (não é mais "infinita").
+
+### Câmeras de rosto (3/3 completas)
+1. `globetv_krupowki_zakopane_1`/`_2` — Krupówki, Zakopane, Polônia
+   (já aprovadas no bloco anterior)
+2. `globetv_soi11_bangkok` — Soi 11, Sukhumvit Road, Bangkok, Tailândia.
+   Câmera de rua de verdade, montada baixa (nível de fachada de loja,
+   não elevada), 4K, canal "The Real Samui Webcam" (156 mil inscritos,
+   webcam pública de rua conhecida). Zoom confirmou nitidez de detalhe
+   fino (texto de placas de propaganda legível) — suficiente pra rosto
+   de pedestre passando perto. Testadas antes e descartadas por serem
+   câmeras elevadas demais (rosto pequeno demais mesmo com multidão
+   real): Shibuya Scramble Crossing (2 canais/ângulos diferentes, ambos
+   de topo de prédio) e Streets of Shibuya (mesmo problema). Aprendizado
+   confirmado de novo: altura de instalação da câmera importa mais que
+   volume de gente.
+
+### Câmeras de trânsito/placa (3/3 completas)
+Fonte: ITIC Foundation (Intelligent Traffic Information Center,
+Tailândia) — infraestrutura real de câmeras de trânsito municipais/
+universitárias em Khon Kaen, servidas via `camerai1.iticfoundation.org`.
+1. `iticf_kk01_central_norte` — interseção Central Norte. Ângulo de
+   perseguição de veículos parados no sinal, resolução 704px nativa —
+   dá pra ver a existência da placa traseira, ainda que não
+   perfeitamente nítida nesse frame específico.
+2. `iticf_kk27_neu_sul` — interseção perto da universidade NEU, sul.
+   Melhor resolução das três — nitidez o bastante pra ler a marca
+   "ISUZU" no capô de um veículo, confirma que o sensor/bitrate suporta
+   detalhe fino o bastante pra placa quando o veículo não estiver
+   obstruído.
+3. `iticf_kk25_neu_oeste` — interseção NEU oeste, fluxo de carros saindo
+   do cruzamento, mesma resolução boa.
+
+**Cuidado descoberto com essa fonte**: o mesmo provedor (ITIC
+Foundation) expõe também câmeras que NÃO são de trânsito — testei
+`kk12` ("ป้อมยามสามเหลี่ยม1") e era uma câmera INTERNA de escritório/sala
+de servidor (mesa, cadeiras, monitor), claramente um canal de CCTV
+privado do prédio, não câmera de rua. Descartada imediatamente, não
+adicionada ao catálogo. Fica registrado: ao usar essa fonte no futuro,
+verificar visualmente cada `kk<N>` individualmente antes de cadastrar —
+não assumir que todos os números da sequência são câmeras de trânsito
+só porque alguns são.
+
+**Bug real corrigido na ferramenta** (`snap_camera.py`): o Chromium
+usado pelo Playwright dá falso-positivo em
+`video.canPlayType('application/vnd.apple.mpegurl')` (retorna "maybe"
+sem decoder de verdade), então o player pulava o carregamento via
+hls.js e travava em vídeo preto sem erro nenhum. Corrigido pra sempre
+usar hls.js, nunca confiar nesse check — não afeta a pipeline real de
+reconhecimento (que usa OpenCV/FFmpeg via `cv2.VideoCapture`, sem esse
+problema), só afetava esta ferramenta de verificação visual.
+
+**Resultado final desta frente**: 6/6 câmeras de teste aprovadas e
+cadastradas (3 rosto + 3 placa). Tarefa de curadoria de câmeras
+encerrada por aqui — objetivo do usuário atingido.
