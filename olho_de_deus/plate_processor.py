@@ -30,8 +30,12 @@ log = logging.getLogger("plate_processor")
 
 VEHICLE_CLASSES = [2, 3, 5, 7]  # car, motorcycle, bus, truck (COCO)
 
-MIN_FRAMES_FOR_CONSENSUS = 4   # amostras mínimas antes de aceitar uma leitura
-MIN_CONSENSUS_CONFIDENCE = 0.5  # fração mínima de concordância na posição mais fraca
+# 2026-09-11: 4 amostras / 50% provou ser fraco demais na prática — primeira
+# placa fechada com esses valores ("7822") não batia com a placa real da
+# evidência ("LXB827"-ish). Subindo pra exigir bem mais concordância antes
+# de aceitar qualquer leitura como definitiva.
+MIN_FRAMES_FOR_CONSENSUS = 8    # amostras mínimas antes de aceitar uma leitura
+MIN_CONSENSUS_CONFIDENCE = 0.7  # fração mínima de concordância na posição mais fraca
 MAX_MISSED_FRAMES = 8
 
 
@@ -181,6 +185,7 @@ class PlateProcessor:
         if plate_img.size == 0:
             return
         text, fmt_name, conf = alpr_engine.read_plate(plate_img, country=self.country)
+        log.info(f"[voto] track={track.track_id} leu={text!r} conf={conf} plate_crop_shape={plate_img.shape[:2]}")
         if text:
             track.add_vote(text)
             if track.try_resolve():

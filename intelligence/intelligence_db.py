@@ -634,10 +634,21 @@ def get_recent_plate_reads(db: DB, limit: int = 20) -> List[Dict]:
 
 def check_plate_watchlist(db: DB, plate_text: str) -> Optional[Dict]:
     """Confere se uma placa lida bate com a lista de observação (wanted_plates).
-    None se não achar — lista fica vazia até o usuário cadastrar algo real."""
-    cur = db.execute("SELECT * FROM wanted_plates WHERE plate_text = ?", (plate_text,))
-    row = cur.fetchone()
-    return dict(row) if row else None
+    None se não achar — lista fica vazia até o usuário cadastrar algo real.
+
+    Compara NORMALIZADO (sem espaço/hífen, maiúsculo) dos dois lados — o OCR
+    ao vivo (read_plate) sempre remove esses caracteres antes de devolver o
+    texto, mas várias placas reais do FBI foram registradas com espaço/hífen
+    ("EM 62829", "936-VET") porque é assim que aparecem no boletim original.
+    Sem essa normalização, essas nunca dariam match."""
+    def _normalize(s: str) -> str:
+        return re.sub(r"[^A-Z0-9]", "", s.upper())
+
+    target = _normalize(plate_text)
+    for row in db.execute("SELECT * FROM wanted_plates").fetchall():
+        if _normalize(row["plate_text"]) == target:
+            return dict(row)
+    return None
 
 
 def get_full_individual_dossier(db: DB, individual_id: str) -> Optional[Dict]:
