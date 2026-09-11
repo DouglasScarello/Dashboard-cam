@@ -126,6 +126,15 @@ def main():
                 time.sleep(2)
                 if consecutive_failures > 10:
                     raise SystemExit("Muitas falhas de captura seguidas — desistindo.")
+                if source_type == "youtube":
+                    # 2026-09-11: achado ao vivo — a URL assinada do googlevideo.com
+                    # tem prazo de validade embutido (?expire=...). Reabrir a MESMA
+                    # URL depois que ela expira falha sempre (OpenCV nem reporta o
+                    # motivo real, só um erro genérico de parsing). Tem que resolver
+                    # de novo a cada reconexão, não reusar a antiga.
+                    fresh_url = get_live_url(video_id)
+                    if fresh_url:
+                        stream_url = fresh_url
                 cap = cv2.VideoCapture(stream_url)
                 continue
             consecutive_failures = 0
