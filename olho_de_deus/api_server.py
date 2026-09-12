@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import List, Optional
 
 
-from fastapi import FastAPI, Request, BackgroundTasks
+from fastapi import FastAPI, Request, BackgroundTasks, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -19,7 +19,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "intelligence"))
 
-from intelligence_db import DB, get_recent_matches, get_recent_plate_reads
+from intelligence_db import (
+    DB, get_recent_matches, get_recent_plate_reads,
+    get_recurring_vehicles, get_vehicle_history, get_all_vehicles,
+    get_recurring_persons, get_person_history, get_all_persons,
+)
 from redis_cache import RedisCache
 from forensic_core import build_official_forensic_laudo, BayesianSLREngine, CNJLineupEngine
 from tactical_dispatch import LAPJVDispatchEngine, TacticalContainmentEngine, TacticalUnit, TacticalIncident
@@ -50,6 +54,22 @@ app.add_middleware(
 _EVIDENCE_DIR = ROOT / "intelligence" / "evidence"
 _EVIDENCE_DIR.mkdir(parents=True, exist_ok=True)
 app.mount("/evidence", StaticFiles(directory=str(_EVIDENCE_DIR)), name="evidence")
+
+
+def evidence_url(path: Optional[str]) -> Optional[str]:
+    """Converte um caminho absoluto de evidência pra URL servível — usa o
+    caminho RELATIVO a _EVIDENCE_DIR (não só o nome do arquivo), porque
+    evidência de pessoa anônima fica numa subpasta (evidence/anonimos/...),
+    e os.path.basename sozinho perderia esse prefixo e quebraria a URL."""
+    if not path:
+        return None
+    try:
+        rel = os.path.relpath(path, _EVIDENCE_DIR)
+        if rel.startswith(".."):
+            return f"/evidence/{os.path.basename(path)}"  # fora de _EVIDENCE_DIR, fallback simples
+        return f"/evidence/{rel}"
+    except Exception:
+        return f"/evidence/{os.path.basename(path)}"
 
 _LIVEVIEW_DIR = ROOT / "olho_de_deus" / "live_view"
 _LIVEVIEW_DIR.mkdir(parents=True, exist_ok=True)
@@ -233,11 +253,81 @@ async def plates_recent(limit: int = 20):
     try:
         reads = get_recent_plate_reads(db, limit=limit)
         for r in reads:
-            ep = r.get("evidence_path")
-            r["evidence_url"] = f"/evidence/{os.path.basename(ep)}" if ep else None
+            r["evidence_url"] = evidence_url(r.get("evidence_path"))
         return reads
     except Exception as e:
         return {"error": str(e), "reads": []}
+    finally:
+        db.close()
+
+
+@app.get("/api/vehicles")
+async def api_vehicles(limit: int = 200, recurring_only: bool = False):
+    """Galeria de cards de veículo — cada um com código próprio (V-000001),
+    cor/carroceria (CLIP) e quantas vezes já visto. Base da aba de veículos
+    na interface (2026-09-12)."""
+    db = DB()
+    try:
+        rows = get_recurring_vehicles(db, limit=limit) if recurring_only else get_all_vehicles(db, limit=limit)
+        return rows
+    except Exception as e:
+        return {"error": str(e), "vehicles": []}
+    finally:
+        db.close()
+
+
+@app.get("/api/vehicles/{vehicle_id}")
+async def api_vehicle_detail(vehicle_id: int):
+    """Ficha de um veículo: dados + linha do tempo completa de onde/quando
+    apareceu (get_vehicle_history), com URL de evidência de cada leitura."""
+    db = DB()
+    try:
+        row = db.execute("SELECT * FROM vehicles WHERE id = ?", (vehicle_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Veículo não encontrado")
+        vehicle = dict(row)
+        history = get_vehicle_history(db, vehicle_id)
+        for h in history:
+            h["evidence_url"] = evidence_url(h.get("evidence_path"))
+        vehicle["history"] = history
+        return vehicle
+    finally:
+        db.close()
+
+
+@app.get("/api/persons")
+async def api_persons(limit: int = 200, recurring_only: bool = False):
+    """Galeria de cards de pessoa anônima — código próprio (P-000001),
+    NUNCA nome real. Base da aba de pessoas na interface (2026-09-12)."""
+    db = DB()
+    try:
+        rows = get_recurring_persons(db, limit=limit) if recurring_only else get_all_persons(db, limit=limit)
+        for r in rows:
+            r.pop("reference_embedding", None)  # binário, não serializa bem em JSON e não serve pro front
+        return rows
+    except Exception as e:
+        return {"error": str(e), "persons": []}
+    finally:
+        db.close()
+
+
+@app.get("/api/persons/{person_id}")
+async def api_person_detail(person_id: int):
+    """Ficha de uma pessoa anônima: código + linha do tempo completa de
+    onde/quando apareceu, com foto de evidência de cada passagem — o
+    'relatório ao vivo de lugares e câmeras' pedido pelo usuário."""
+    db = DB()
+    try:
+        row = db.execute("SELECT * FROM anonymous_persons WHERE id = ?", (person_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Pessoa não encontrada")
+        person = dict(row)
+        person.pop("reference_embedding", None)
+        history = get_person_history(db, person_id)
+        for h in history:
+            h["evidence_url"] = evidence_url(h.get("evidence_path"))
+        person["history"] = history
+        return person
     finally:
         db.close()
 

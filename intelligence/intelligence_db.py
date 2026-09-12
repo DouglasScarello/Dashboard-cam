@@ -878,6 +878,26 @@ def get_recurring_persons(db: DB, limit: int = 50) -> List[Dict]:
         return []
 
 
+def get_all_persons(db: DB, limit: int = 200) -> List[Dict]:
+    """TODO código de pessoa anônima já catalogado (não só recorrente) —
+    pra galeria de cards, mais recente primeiro."""
+    q = "SELECT * FROM anonymous_persons ORDER BY last_seen_at DESC LIMIT ?"
+    try:
+        return [dict(r) for r in db.execute(q, (limit,)).fetchall()]
+    except Exception:
+        return []
+
+
+def get_all_vehicles(db: DB, limit: int = 200) -> List[Dict]:
+    """TODO veículo já catalogado (não só recorrente) — pra galeria de
+    cards, mais recente primeiro."""
+    q = "SELECT * FROM vehicles ORDER BY last_seen_at DESC LIMIT ?"
+    try:
+        return [dict(r) for r in db.execute(q, (limit,)).fetchall()]
+    except Exception:
+        return []
+
+
 def check_plate_watchlist(db: DB, plate_text: str) -> Optional[Dict]:
     """Confere se uma placa lida bate com a lista de observação (wanted_plates).
     None se não achar — lista fica vazia até o usuário cadastrar algo real.
