@@ -67,7 +67,10 @@ sys.path.insert(0, str(ROOT / "intelligence"))
 from biometric_processor import BiometricProcessor
 from youtube_stream import get_live_url
 from alert_dispatcher import dispatch_sync
-from intelligence_db import DB, init_db, register_evidence, register_match_log, get_threat_score, get_full_individual_dossier
+from intelligence_db import (
+    DB, init_db, register_evidence, register_match_log, get_threat_score, get_full_individual_dossier,
+    find_or_create_person, register_face_sighting,
+)
 from score_engine import ThreatScorer
 from forensic_report import generate_dossier_pdf
 from redis_cache import RedisCache
@@ -147,6 +150,11 @@ class LivePipeline:
         self.display_thread = None
         
         self.alerted_tracks = set()
+        # 2026-09-12: registro de identidade anônima (find_or_create_person) —
+        # separado de alerted_tracks porque roda pra TODO rosto de qualidade
+        # boa, bata ou não com o banco de procurados (pedido do usuário:
+        # catalogar quem passa, não só quem já é procurado).
+        self.registered_anon_tracks = set()
         self.process_every_n = max(1, process_every_n)
         
         # Target FPS Dinâmico
@@ -445,7 +453,8 @@ class LivePipeline:
 
             current_track_ids = {res["track_id"] for res in results}
             self.alerted_tracks = {tid for tid in self.alerted_tracks if tid in current_track_ids}
-            
+            self.registered_anon_tracks = {tid for tid in self.registered_anon_tracks if tid in current_track_ids}
+
             for res in results:
                 track_id = res["track_id"]
                 match = res.get("match")
@@ -453,12 +462,26 @@ class LivePipeline:
                     # OTIMIZAÇÃO ROI: Copia apenas o recorte do rosto (~20KB) em vez do frame (~1.5MB)
                     x1, y1, x2, y2 = res["box"]
                     face_roi = frame[max(0, y1):y2, max(0, x1):x2].copy()
-                    
+
                     # Envia para o EVENT LOOP (Event Bus)
                     # Passamos o ROI para evidência e o frame original (opcional)
                     # Aqui, para manter compatibilidade com _process_match, passamos o ROI
                     self._event_bus.put((face_roi, match, track_id))
                     self.alerted_tracks.add(track_id)
+
+                # 2026-09-12: catalogar TODO rosto de qualidade boa com um
+                # código anônimo (P-000001...), bata ou não com o banco de
+                # procurados — "identidade que ninguém sabe que tem", pedido
+                # explícito do usuário. Roda direto aqui (mesma thread, sem
+                # fila de processo) porque é síncrono e barato comparado ao
+                # embedding que já foi calculado.
+                embedding = res.get("embedding")
+                if embedding is not None and track_id not in self.registered_anon_tracks:
+                    self.registered_anon_tracks.add(track_id)
+                    try:
+                        self._register_anonymous_sighting(frame, res["box"], embedding)
+                    except Exception as e:
+                        log.error(f"[anon] Falha ao registrar pessoa anônima: {e}")
             
             # Drift-Free Sleep
             sleep_time = next_t - time.perf_counter()
@@ -595,6 +618,40 @@ class LivePipeline:
             except Exception:
                 pass
             self.db.close()
+
+    def _register_anonymous_sighting(self, frame, box, embedding):
+        """Cataloga TODO rosto de qualidade boa com um código anônimo
+        (P-000001...) — pedido do usuário 2026-09-12: 'uma identidade que
+        ninguém sabe que tem'. Roda pra QUALQUER rosto, bata ou não com o
+        banco de procurados (é isso que diferencia de _process_match, que
+        só age em cima de match confirmado). Salva a foto de evidência e
+        grava a passagem — se a pessoa for vista nesta câmera ou em outra
+        de novo amanhã/mês que vem, entra automaticamente no histórico do
+        mesmo código, sem eu precisar fazer nada manual."""
+        x1, y1, x2, y2 = box
+        h, w = frame.shape[:2]
+        face_roi = frame[max(0, y1):min(h, y2), max(0, x1):min(w, x2)]
+        if face_roi.size == 0:
+            return
+
+        person = find_or_create_person(self.db, embedding, camera_id=self.camera_id)
+
+        evidence_dir = ROOT / "intelligence" / "evidence" / "anonimos"
+        evidence_dir.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+        filename = f"{person['code']}_{timestamp}.jpg"
+        evidence_path = evidence_dir / filename
+        cv2.imwrite(str(evidence_path), face_roi)
+
+        register_face_sighting(
+            self.db, camera_id=self.camera_id, person_id=person["id"],
+            distance=person["distance"], evidence_path=str(evidence_path),
+        )
+        if person["is_recurring"]:
+            log.info(f"[anon] 🔁 {person['code']} visto de novo (câmera {self.camera_id}, "
+                     f"{person['times_seen']}ª vez, distância={person['distance']:.3f})")
+        else:
+            log.info(f"[anon] Novo código {person['code']} catalogado (câmera {self.camera_id})")
 
     def _draw_hud(self, frame, results):
         """Interface tática sobre o frame de vídeo."""

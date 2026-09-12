@@ -407,7 +407,8 @@ class BiometricProcessor:
                         "box": track.box,
                         "conf": detected_boxes[best_box_idx][4],
                         "track_id": track_id,
-                        "match": track.match   # Reutiliza resultado anterior!
+                        "match": track.match,   # Reutiliza resultado anterior!
+                        "embedding": track.embedding,  # None se o rosto nunca passou no filtro de qualidade
                     })
             else:
                 # Pessoa saiu do frame
@@ -418,7 +419,8 @@ class BiometricProcessor:
                         "box": track.box,
                         "conf": 0.0,
                         "track_id": track_id,
-                        "match": track.match
+                        "match": track.match,
+                        "embedding": track.embedding,
                     })
 
         # --- Novas faces não associadas — processar biometria (ArcFace só aqui; tracks reutilizam match) ---

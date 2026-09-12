@@ -200,6 +200,7 @@ CREATE TABLE IF NOT EXISTS plate_reads (
 -- pequena variação de OCR entre leituras).
 CREATE TABLE IF NOT EXISTS vehicles (
     id              SERIAL PRIMARY KEY,
+    code            TEXT UNIQUE,  -- ex: "V-000001" — registro nosso, independente da placa real
     plate_text      TEXT NOT NULL,
     country_code    TEXT,
     first_seen_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -219,6 +220,35 @@ CREATE TABLE IF NOT EXISTS wanted_plates (
     reason          TEXT,
     source          TEXT,
     registered_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 2026-09-12: equivalente do `vehicles` mas pro rosto — pedido do usuário
+-- (mesmo raciocínio da placa: catalogar quem passa, reconhecer de novo
+-- depois, SEM nome real, só um código nosso). A "biometria" de verdade é o
+-- embedding ArcFace (512 floats, mesmo vetor já usado pra comparar contra
+-- o banco de procurados) — a foto é só evidência/referência visual, quem
+-- decide "é a mesma pessoa" é a distância entre embeddings, não a foto.
+CREATE TABLE IF NOT EXISTS anonymous_persons (
+    id                    SERIAL PRIMARY KEY,
+    code                  TEXT UNIQUE,            -- ex: "P-000001", nunca nome real
+    reference_embedding   BYTEA,                  -- ArcFace 512-d, float32, normalizado L2
+    first_seen_at         TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_seen_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    times_seen            INTEGER DEFAULT 1,
+    cameras_seen          TEXT
+);
+
+-- Equivalente do `plate_reads` — TODA vez que um rosto de qualidade boa é
+-- identificado (já passou pelo filtro de qualidade existente, ver
+-- biometric_processor._face_quality_ok), bata ou não com o banco de
+-- procurados. É o registro de movimentação, igual pedido pra placa.
+CREATE TABLE IF NOT EXISTS face_sightings (
+    id              SERIAL PRIMARY KEY,
+    camera_id       TEXT,
+    person_id       INTEGER REFERENCES anonymous_persons(id),
+    distance        REAL,     -- distância L2 até o embedding de referência (0 = primeira vez)
+    evidence_path   TEXT,
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 """
@@ -280,6 +310,7 @@ def init_db():
         "ALTER TABLE plate_reads ADD COLUMN vehicle_type TEXT",
         "ALTER TABLE vehicles ADD COLUMN color TEXT",
         "ALTER TABLE vehicles ADD COLUMN body_type TEXT",
+        "ALTER TABLE vehicles ADD COLUMN code TEXT",
     ):
         try:
             db.execute(stmt)
@@ -727,8 +758,12 @@ def find_or_create_vehicle(db: DB, plate_text: str, country_code: str, camera_id
         (plate_text, country_code, camera_id, color, body_type),
     )
     db.commit()
+    new_id = cur.lastrowid
+    code = f"V-{new_id:06d}"
+    db.execute("UPDATE vehicles SET code = ? WHERE id = ?", (code, new_id))
+    db.commit()
     return {
-        "id": cur.lastrowid, "plate_text": plate_text, "country_code": country_code,
+        "id": new_id, "code": code, "plate_text": plate_text, "country_code": country_code,
         "times_seen": 1, "cameras_seen": camera_id, "first_seen_at": None,
         "last_seen_at": None, "is_recurring": False, "match_score": 1.0,
         "color": color, "body_type": body_type,
@@ -749,6 +784,93 @@ def get_recurring_vehicles(db: DB, limit: int = 50) -> List[Dict]:
     """Veículos vistos mais de 1 vez, mais recorrentes primeiro — a lista
     de 'já vimos esse aqui antes' pra mostrar na interface."""
     q = ("SELECT * FROM vehicles WHERE times_seen > 1 "
+         "ORDER BY times_seen DESC, last_seen_at DESC LIMIT ?")
+    try:
+        return [dict(r) for r in db.execute(q, (limit,)).fetchall()]
+    except Exception:
+        return []
+
+
+def find_or_create_person(db: DB, embedding: List[float], camera_id: str,
+                           threshold: float = 0.6) -> Dict:
+    """Equivalente do find_or_create_vehicle, mas pro rosto — compara o
+    embedding ArcFace (normalizado L2) contra todo `anonymous_persons` já
+    visto por distância euclidiana (mesma métrica/threshold já calibrada
+    pro FAISS do banco de procurados, ver biometric_processor.py). NUNCA
+    associa nome real — só um código sequencial (P-000001, P-000002...).
+
+    Busca linear de propósito (não FAISS) — simples de acertar primeiro;
+    se o número de pessoas distintas crescer muito com meses de operação
+    24/7, trocar por um índice é um passo futuro direto, não uma reescrita."""
+    import struct
+    import numpy as np
+
+    query = np.asarray(embedding, dtype=np.float32)
+    norm = np.linalg.norm(query)
+    if norm > 0:
+        query = query / norm
+
+    rows = db.execute(
+        "SELECT id, code, reference_embedding, times_seen, cameras_seen FROM anonymous_persons"
+    ).fetchall()
+
+    best_row, best_dist = None, float("inf")
+    for r in rows:
+        ref = np.frombuffer(r["reference_embedding"], dtype=np.float32)
+        dist = float(np.linalg.norm(query - ref))
+        if dist < best_dist:
+            best_row, best_dist = r, dist
+
+    if best_row is not None and best_dist < threshold:
+        cameras = set(c for c in (best_row["cameras_seen"] or "").split(",") if c)
+        cameras.add(camera_id)
+        db.execute(
+            "UPDATE anonymous_persons SET last_seen_at=CURRENT_TIMESTAMP, "
+            "times_seen=times_seen+1, cameras_seen=? WHERE id=?",
+            (",".join(sorted(cameras)), best_row["id"]),
+        )
+        db.commit()
+        return {
+            "id": best_row["id"], "code": best_row["code"], "is_recurring": True,
+            "distance": best_dist, "times_seen": best_row["times_seen"] + 1,
+        }
+
+    blob = struct.pack(f"{len(query)}f", *query.tolist())
+    cur = db.execute(
+        "INSERT INTO anonymous_persons (code, reference_embedding, cameras_seen) VALUES (?, ?, ?)",
+        ("PENDENTE", blob, camera_id),
+    )
+    db.commit()
+    new_id = cur.lastrowid
+    code = f"P-{new_id:06d}"
+    db.execute("UPDATE anonymous_persons SET code = ? WHERE id = ?", (code, new_id))
+    db.commit()
+    return {"id": new_id, "code": code, "is_recurring": False, "distance": 0.0, "times_seen": 1}
+
+
+def register_face_sighting(db: DB, camera_id: str, person_id: int, distance: float,
+                            evidence_path: str = None) -> None:
+    """Registra UMA passagem de rosto — igual register_plate_read, gravado
+    sempre, bata ou não com o banco de procurados (registro de movimentação,
+    não só alarme)."""
+    q = """INSERT INTO face_sightings (camera_id, person_id, distance, evidence_path)
+           VALUES (?, ?, ?, ?)"""
+    db.execute(q, (camera_id, person_id, distance, evidence_path))
+    db.commit()
+
+
+def get_person_history(db: DB, person_id: int) -> List[Dict]:
+    """Linha do tempo de onde/quando um código de pessoa anônima apareceu."""
+    q = "SELECT * FROM face_sightings WHERE person_id = ? ORDER BY created_at ASC"
+    try:
+        return [dict(r) for r in db.execute(q, (person_id,)).fetchall()]
+    except Exception:
+        return []
+
+
+def get_recurring_persons(db: DB, limit: int = 50) -> List[Dict]:
+    """Pessoas anônimas vistas mais de 1 vez, mais recorrentes primeiro."""
+    q = ("SELECT * FROM anonymous_persons WHERE times_seen > 1 "
          "ORDER BY times_seen DESC, last_seen_at DESC LIMIT ?")
     try:
         return [dict(r) for r in db.execute(q, (limit,)).fetchall()]
