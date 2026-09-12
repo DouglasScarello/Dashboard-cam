@@ -36,11 +36,12 @@ import cv2
 import db_manager
 from monitor_camera import resolve_source_type
 from plate_processor import PlateProcessor
+from vehicle_attributes import vehicle_attribute_classifier
 from youtube_stream import get_live_url
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "intelligence"))
-from intelligence_db import DB, init_db, register_plate_read, check_plate_watchlist  # noqa: E402
+from intelligence_db import DB, init_db, register_plate_read, check_plate_watchlist, find_or_create_vehicle  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger("monitor_plates")
@@ -151,16 +152,30 @@ def main():
                     filename = f"plate_{res['plate_text']}_{timestamp}.jpg"
                     evidence_path = EVIDENCE_DIR / filename
                     x1, y1, x2, y2 = res["box"]
-                    cv2.imwrite(str(evidence_path), frame[max(0, y1):y2, max(0, x1):x2])
+                    vehicle_crop = frame[max(0, y1):y2, max(0, x1):x2]
+                    cv2.imwrite(str(evidence_path), vehicle_crop)
 
+                    color, body_type, color_conf, body_conf = vehicle_attribute_classifier.classify(vehicle_crop)
+
+                    vehicle = find_or_create_vehicle(
+                        db, plate_text=res["plate_text"], country_code=country,
+                        camera_id=args.camera_id, color=color, body_type=body_type,
+                    )
                     register_plate_read(
                         db, camera_id=args.camera_id, country_code=country,
                         plate_text=res["plate_text"], plate_format=fmt_name or "INCERTO",
                         confidence=res["plate_conf"], frames_voted=res["votes_so_far"],
-                        evidence_path=str(evidence_path),
+                        evidence_path=str(evidence_path), vehicle_id=vehicle["id"],
+                        vehicle_color=color, vehicle_type=body_type,
                     )
-                    log.info(f"[REGISTRADO] placa='{res['plate_text']}' conf={res['plate_conf']:.0%} "
-                             f"formato={fmt_name} evidencia={filename}")
+                    descricao = f"{color or '?'} {body_type or '?'}"
+                    if vehicle["is_recurring"]:
+                        log.info(f"[REGISTRADO] placa='{res['plate_text']}' ({descricao}) conf={res['plate_conf']:.0%} "
+                                 f"— 🔁 JÁ VISTO ANTES (veículo #{vehicle['id']}, "
+                                 f"{vehicle['times_seen']}ª vez, match={vehicle['match_score']:.0%})")
+                    else:
+                        log.info(f"[REGISTRADO] placa='{res['plate_text']}' ({descricao}) conf={res['plate_conf']:.0%} "
+                                 f"formato={fmt_name} evidencia={filename} (veículo novo #{vehicle['id']})")
 
                     hit = check_plate_watchlist(db, res["plate_text"])
                     if hit:

@@ -186,7 +186,28 @@ CREATE TABLE IF NOT EXISTS plate_reads (
     confidence      REAL,  -- fração de frames que concordaram no consenso (0-1)
     frames_voted    INTEGER,
     evidence_path   TEXT,
+    vehicle_id      INTEGER REFERENCES vehicles(id),
+    vehicle_color   TEXT,  -- classificado por CLIP zero-shot (vehicle_attributes.py)
+    vehicle_type    TEXT,  -- carroceria: sedã/SUV/picape/van/caminhão/ônibus/moto/triciclo
     created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 2026-09-12: identidade de veículo pra reidentificação ao longo do tempo
+-- (pedido do usuário: catalogar placa numa área e reconhecer de novo dias/
+-- meses depois, na mesma câmera). plate_text aqui é o texto CANÔNICO — a
+-- leitura mais confiável já vista pra esse veículo (ver plate_matching.py
+-- pra como uma leitura nova é ligada a um vehicle_id existente mesmo com
+-- pequena variação de OCR entre leituras).
+CREATE TABLE IF NOT EXISTS vehicles (
+    id              SERIAL PRIMARY KEY,
+    plate_text      TEXT NOT NULL,
+    country_code    TEXT,
+    first_seen_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_seen_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    times_seen      INTEGER DEFAULT 1,
+    cameras_seen    TEXT,  -- lista de camera_id separados por vírgula (histórico simples)
+    color           TEXT,  -- última classificação CLIP (vehicle_attributes.py)
+    body_type       TEXT
 );
 
 -- wanted_plates: lista de observação de placas (equivalente a individuals pro
@@ -245,6 +266,26 @@ def init_db():
         db.commit()
     except Exception:
         pass  # coluna já existe
+
+    # 2026-09-12: liga cada leitura de placa ao veículo reidentificado
+    # (ver find_or_create_vehicle) — banco já existia sem essa coluna.
+    try:
+        db.execute("ALTER TABLE plate_reads ADD COLUMN vehicle_id INTEGER REFERENCES vehicles(id)")
+        db.commit()
+    except Exception:
+        pass  # coluna já existe
+
+    for stmt in (
+        "ALTER TABLE plate_reads ADD COLUMN vehicle_color TEXT",
+        "ALTER TABLE plate_reads ADD COLUMN vehicle_type TEXT",
+        "ALTER TABLE vehicles ADD COLUMN color TEXT",
+        "ALTER TABLE vehicles ADD COLUMN body_type TEXT",
+    ):
+        try:
+            db.execute(stmt)
+            db.commit()
+        except Exception:
+            pass  # coluna já existe
 
     db.commit()
     db.close()
@@ -613,19 +654,102 @@ def register_match_log(db: DB, individual_id: str, distance: float, probability:
 
 def register_plate_read(db: DB, camera_id: str, country_code: str, plate_text: str,
                          plate_format: str, confidence: float, frames_voted: int,
-                         evidence_path: str = None) -> None:
+                         evidence_path: str = None, vehicle_id: int = None,
+                         vehicle_color: str = None, vehicle_type: str = None) -> None:
     """Registra uma leitura de placa consolidada (monitor_plates.py) — só chamado
-    depois da votação por consenso entre vários frames, nunca por frame único."""
+    depois da votação por consenso entre vários frames, nunca por frame único.
+
+    2026-09-12: TODA leitura é gravada aqui, com hora exata, batendo ou não
+    com qualquer lista de observação — pedido explícito do usuário: isso é
+    um registro de movimentação urbana (pra treinar/calibrar a própria IA
+    depois), não só um alarme de "achou o procurado". vehicle_color/
+    vehicle_type vêm do CLIP zero-shot (vehicle_attributes.py)."""
     q = """INSERT INTO plate_reads
-           (camera_id, country_code, plate_text, plate_format, confidence, frames_voted, evidence_path)
-           VALUES (?, ?, ?, ?, ?, ?, ?)"""
-    db.execute(q, (camera_id, country_code, plate_text, plate_format, confidence, frames_voted, evidence_path))
+           (camera_id, country_code, plate_text, plate_format, confidence, frames_voted,
+            evidence_path, vehicle_id, vehicle_color, vehicle_type)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
+    db.execute(q, (camera_id, country_code, plate_text, plate_format, confidence, frames_voted,
+                   evidence_path, vehicle_id, vehicle_color, vehicle_type))
     db.commit()
 
 
 def get_recent_plate_reads(db: DB, limit: int = 20) -> List[Dict]:
     """Leituras de placa mais recentes, mais novas primeiro."""
     q = "SELECT * FROM plate_reads ORDER BY created_at DESC LIMIT ?"
+    try:
+        return [dict(r) for r in db.execute(q, (limit,)).fetchall()]
+    except Exception:
+        return []
+
+
+def find_or_create_vehicle(db: DB, plate_text: str, country_code: str, camera_id: str,
+                            threshold: float = 0.75, color: str = None, body_type: str = None) -> Dict:
+    """Liga uma leitura nova a um veículo já visto antes — mesmo que a
+    leitura de OCR varie um pouco (ver plate_matching.py) — ou cria um
+    veículo novo. É essa função que faz o pedido do usuário funcionar:
+    'catalogar placa e reconhecer de novo dias/meses depois'.
+
+    Retorna o registro do veículo (dict) com uma chave extra
+    'is_recurring' (True se já existia) e 'match_score'."""
+    from plate_matching import find_best_match
+
+    rows = db.execute(
+        "SELECT * FROM vehicles WHERE country_code = ?", (country_code,)
+    ).fetchall()
+    known = {r["plate_text"]: dict(r) for r in rows}
+    match = find_best_match(plate_text, list(known.keys()), threshold=threshold)
+
+    if match:
+        matched_text, score = match
+        vehicle = known[matched_text]
+        cameras = set(c for c in (vehicle.get("cameras_seen") or "").split(",") if c)
+        cameras.add(camera_id)
+        # Só sobrescreve cor/carroceria se essa leitura conseguiu classificar
+        # (evita apagar um dado bom com um None de uma tentativa que falhou).
+        new_color = color or vehicle.get("color")
+        new_body = body_type or vehicle.get("body_type")
+        db.execute(
+            "UPDATE vehicles SET last_seen_at=CURRENT_TIMESTAMP, times_seen=times_seen+1, "
+            "cameras_seen=?, color=?, body_type=? WHERE id=?",
+            (",".join(sorted(cameras)), new_color, new_body, vehicle["id"]),
+        )
+        db.commit()
+        vehicle["times_seen"] = vehicle["times_seen"] + 1
+        vehicle["cameras_seen"] = ",".join(sorted(cameras))
+        vehicle["color"] = new_color
+        vehicle["body_type"] = new_body
+        vehicle["is_recurring"] = True
+        vehicle["match_score"] = score
+        return vehicle
+
+    cur = db.execute(
+        "INSERT INTO vehicles (plate_text, country_code, cameras_seen, color, body_type) VALUES (?, ?, ?, ?, ?)",
+        (plate_text, country_code, camera_id, color, body_type),
+    )
+    db.commit()
+    return {
+        "id": cur.lastrowid, "plate_text": plate_text, "country_code": country_code,
+        "times_seen": 1, "cameras_seen": camera_id, "first_seen_at": None,
+        "last_seen_at": None, "is_recurring": False, "match_score": 1.0,
+        "color": color, "body_type": body_type,
+    }
+
+
+def get_vehicle_history(db: DB, vehicle_id: int) -> List[Dict]:
+    """Todas as leituras já ligadas a esse veículo, mais antigas primeiro —
+    a 'linha do tempo' de onde/quando ele apareceu."""
+    q = "SELECT * FROM plate_reads WHERE vehicle_id = ? ORDER BY created_at ASC"
+    try:
+        return [dict(r) for r in db.execute(q, (vehicle_id,)).fetchall()]
+    except Exception:
+        return []
+
+
+def get_recurring_vehicles(db: DB, limit: int = 50) -> List[Dict]:
+    """Veículos vistos mais de 1 vez, mais recorrentes primeiro — a lista
+    de 'já vimos esse aqui antes' pra mostrar na interface."""
+    q = ("SELECT * FROM vehicles WHERE times_seen > 1 "
+         "ORDER BY times_seen DESC, last_seen_at DESC LIMIT ?")
     try:
         return [dict(r) for r in db.execute(q, (limit,)).fetchall()]
     except Exception:
