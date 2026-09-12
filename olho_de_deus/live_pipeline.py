@@ -72,7 +72,16 @@ from intelligence_db import (
     find_or_create_person, register_face_sighting,
 )
 from score_engine import ThreatScorer
-from forensic_report import generate_dossier_pdf
+# 2026-09-13: trocado de forensic_report.generate_dossier_pdf pra
+# forensic_core.build_official_forensic_laudo — achado numa auditoria que
+# generate_dossier_pdf gravava "pades_lta_certified": True no manifesto
+# SEMPRE, sem nunca chamar o assinador de verdade (PAdESLTASigner). Era
+# exatamente o bug que o PLANO_CONTINUACAO.md (Regra Especial 2) já
+# documentava como corrigido — só que a correção foi feita em
+# forensic_core.py e essa chamada aqui, no pipeline AO VIVO, continuava
+# usando o arquivo velho com o bug. Mesma assinatura de função
+# (dossier, output_path) -> caminho do PDF, troca direta.
+from forensic_core import build_official_forensic_laudo as generate_dossier_pdf
 from redis_cache import RedisCache
 
 # Logging (Fase 17: Centralizado)
