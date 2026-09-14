@@ -31,9 +31,18 @@ from graph_engine import TacticalGraphEngine
 from spatial_engine import global_spatial_index, CrossCameraHandoverEngine
 from streaming_cluster import global_cluster_manager
 from forensic_sr_engine import forensic_sr_router
+from pipeline_control import list_pipelines, start_pipeline, stop_pipeline
 
 # Instância global do motor de grafos
 global_graph_engine = TacticalGraphEngine()
+
+# 2026-09-12: achado testando a interface nova sob carga real (3 pipelines
+# de IA rodando 24/7 no mesmo processador) — /status criava um RedisCache()
+# NOVO (tentando conectar de novo) a cada chamada, e sob contenção de CPU
+# isso fez o endpoint levar ~27s pra responder (confirmado com curl -w
+# time_total). Uma instância só, criada 1x na subida do processo, resolve —
+# a tentativa de conexão só acontece uma vez, não a cada poll do front.
+global_redis_cache = RedisCache()
 
 app = FastAPI(title="Olho de Deus — Tactical C4ISR API (10k Scale)", version="35.0.0")
 app.include_router(forensic_sr_router)
@@ -82,6 +91,14 @@ _INTEL_DATA_DIR = ROOT / "intelligence" / "data"
 if _INTEL_DATA_DIR.exists():
     app.mount("/ref-data", StaticFiles(directory=str(_INTEL_DATA_DIR)), name="ref-data")
 
+# "Mesa de Investigação" (2026-09-12) — interface nova, estática (sem build/
+# React), servida à parte do app catalog/ existente (Tauri) pra não mexer em
+# nada que o usuário já está construindo lá. html=True serve index.html
+# automaticamente em /mesa/.
+_WEB_DIR = ROOT / "olho_de_deus" / "web"
+if _WEB_DIR.exists():
+    app.mount("/mesa", StaticFiles(directory=str(_WEB_DIR), html=True), name="mesa")
+
 @app.get("/health")
 @app.get("/api/health")
 async def health_check():
@@ -127,14 +144,37 @@ async def get_dashboard():
 @app.get("/status")
 async def get_status():
     """Retorna o status geral do sistema e do cache."""
-    cache = RedisCache()
     return {
         "status": "ONLINE",
         "timestamp": datetime.now().isoformat(),
-        "redis": cache.health(),
+        "redis": global_redis_cache.health(),
         "subscribers": len(manager.subscribers),
         "version": "34.0.0-C4ISR-Hardened"
     }
+
+@app.get("/api/pipelines")
+async def api_list_pipelines():
+    """Status ao vivo (systemd) dos pipelines de IA controláveis manualmente
+    (rosto/placas) — ver pipeline_control.py pro porquê deles não rodarem
+    mais 24/7 sozinhos por padrão."""
+    return list_pipelines()
+
+
+@app.post("/api/pipelines/{pipeline_id}/start")
+async def api_start_pipeline(pipeline_id: str):
+    result = start_pipeline(pipeline_id)
+    if result.get("status") == "ERROR" and result.get("message") == "Pipeline desconhecido":
+        raise HTTPException(status_code=404, detail=result["message"])
+    return result
+
+
+@app.post("/api/pipelines/{pipeline_id}/stop")
+async def api_stop_pipeline(pipeline_id: str):
+    result = stop_pipeline(pipeline_id)
+    if result.get("status") == "ERROR" and result.get("message") == "Pipeline desconhecido":
+        raise HTTPException(status_code=404, detail=result["message"])
+    return result
+
 
 @app.get("/matches/recent")
 async def matches_recent(limit: int = 10):
@@ -254,6 +294,7 @@ async def plates_recent(limit: int = 20):
         reads = get_recent_plate_reads(db, limit=limit)
         for r in reads:
             r["evidence_url"] = evidence_url(r.get("evidence_path"))
+            r["plate_evidence_url"] = evidence_url(r.get("plate_evidence_path"))
         return reads
     except Exception as e:
         return {"error": str(e), "reads": []}
@@ -289,6 +330,7 @@ async def api_vehicle_detail(vehicle_id: int):
         history = get_vehicle_history(db, vehicle_id)
         for h in history:
             h["evidence_url"] = evidence_url(h.get("evidence_path"))
+            h["plate_evidence_url"] = evidence_url(h.get("plate_evidence_path"))
         vehicle["history"] = history
         return vehicle
     finally:
@@ -841,8 +883,7 @@ def publish_match_event(match_data: dict):
 
 async def redis_event_listener():
     """Listener em background não-bloqueante que consome do Redis Pub/Sub."""
-    cache = RedisCache()
-    pubsub = cache.get_pubsub()
+    pubsub = global_redis_cache.get_pubsub()
     if not pubsub:
         print("[API] ⚠️ Redis Pub/Sub indisponível. SSE operará apenas via chamadas diretas.")
         return
