@@ -57,6 +57,21 @@ database/camera_liveness_state.json
 # Poetry lock (opcional manter, mas pesado)
 # poetry.lock
 
+# Logs de execução dos serviços systemd. Os .log antigos que já estão
+# rastreados (audit.log, live.log, killswitch.log) continuam versionados de
+# propósito — são trilha de auditoria, não ruído.
+olho_de_deus/logs/api_server.log
+olho_de_deus/logs/camera_curation.log
+olho_de_deus/logs/camera_grid_server.log
+olho_de_deus/logs/monitor_camera.log
+olho_de_deus/logs/monitor_plates.log
+
+# Scripts descartáveis de patch/exploração — one-offs de sessão, não código
+# do sistema. Ficam no disco pra consulta, fora do histórico.
+scratch/
+patch_*.py
+test_cors.js
+
 # Outros
 .pdm-python
 .python-version
