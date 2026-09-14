@@ -222,47 +222,9 @@ export const ImageEnhancementToolbar: React.FC<ImageEnhancementToolbarProps> = (
 
             {/* Barra Principal de Ferramentas */}
             <div className="h-16 px-4 flex items-center justify-between gap-3 overflow-x-auto">
-                {/* 1. Lado Esquerdo: Modos de Ferramenta Interativa */}
-                <div className="flex items-center gap-1.5 bg-black/50 p-1 rounded-xl border border-white/5 shrink-0">
-                    <button
-                        onClick={() => handleToolSelect('PAN')}
-                        title="Modo Navegação e Arrastar (Pan)"
-                        className={`p-2 rounded-lg flex items-center gap-1.5 text-xs font-bold transition-all ${
-                            activeTool === 'PAN'
-                                ? 'bg-accent-emerald text-black shadow-[0_0_12px_rgba(16,185,129,0.4)]'
-                                : 'text-muted hover:text-white hover:bg-white/5'
-                        }`}
-                    >
-                        <Move className="w-4 h-4" />
-                        <span className="hidden lg:inline">PAN</span>
-                    </button>
-
-                    <button
-                        onClick={() => handleToolSelect('LOUPE')}
-                        title="Lupa Tática Digital de Alta Resolução"
-                        className={`p-2 rounded-lg flex items-center gap-1.5 text-xs font-bold transition-all ${
-                            activeTool === 'LOUPE'
-                                ? 'bg-accent-amber text-black shadow-[0_0_12px_rgba(245,158,11,0.4)]'
-                                : 'text-muted hover:text-white hover:bg-white/5'
-                        }`}
-                    >
-                        <Search className="w-4 h-4" />
-                        <span className="hidden lg:inline">LUPA</span>
-                    </button>
-
-                    <button
-                        onClick={() => handleToolSelect('ROI_SELECT')}
-                        title="Selecionar Região de Interesse para Perícia"
-                        className={`p-2 rounded-lg flex items-center gap-1.5 text-xs font-bold transition-all ${
-                            activeTool === 'ROI_SELECT'
-                                ? 'bg-cyan-400 text-black shadow-[0_0_12px_rgba(34,211,238,0.4)]'
-                                : 'text-muted hover:text-white hover:bg-white/5'
-                        }`}
-                    >
-                        <Crop className="w-4 h-4" />
-                        <span className="hidden lg:inline">CROP ROI</span>
-                    </button>
-
+                {/* 1. Lado Esquerdo: Ferramentas Interativas */}
+                <div className="flex items-center gap-1.5 shrink-0">
+                    {/* Removido botões de Lupa e Crop ROI a pedido do usuário, mantendo interface limpa */}
                     {zoomLevel > 1.0 && (
                         <button
                             onClick={() => {
@@ -277,84 +239,30 @@ export const ImageEnhancementToolbar: React.FC<ImageEnhancementToolbarProps> = (
                     )}
                 </div>
 
-                {/* 2. Centro: BOTÕES PERICIAIS DE 1-CLIQUE (Destaque Primário) */}
+                {/* 2. Centro: STATUS REAL DA IA (FUSÃO MULTI-FRAME) e BOTÃO PERICIAL */}
                 <div className="flex items-center gap-2 bg-black/60 p-1.5 rounded-xl border border-white/10 shrink-0">
-                    {/* Botão MELHORAR PLACA */}
-                    <button
-                        onClick={() => handleQuickEnhance('plate')}
-                        title="Aprimoramento Forense de Placas Veiculares (Homografia + ALPR + 4x SR)"
-                        className="px-3.5 py-2 bg-emerald-950/60 hover:bg-emerald-900/80 border-2 border-emerald-500/60 hover:border-emerald-400 text-emerald-300 rounded-lg text-xs font-black flex items-center gap-2 transition-all shadow-[0_0_15px_rgba(16,185,129,0.3)] hover:scale-105 active:scale-95"
-                    >
-                        <Car className="w-4 h-4 text-emerald-400 animate-pulse" />
-                        <span className="tracking-wider">MELHORAR PLACAS</span>
-                        <span className="text-[9px] px-1 py-0.5 bg-emerald-500/30 text-emerald-200 rounded font-bold">ALPR</span>
-                    </button>
-
-                    {/* Botão MELHORAR ROSTO */}
-                    <button
-                        onClick={() => handleQuickEnhance('face')}
-                        title="Restauração Facial Forense sem Alucinação (CNJ 484 + CLAHE + 4x SR)"
-                        className="px-3.5 py-2 bg-cyan-950/60 hover:bg-cyan-900/80 border-2 border-cyan-500/60 hover:border-cyan-400 text-cyan-300 rounded-lg text-xs font-black flex items-center gap-2 transition-all shadow-[0_0_15px_rgba(6,182,212,0.3)] hover:scale-105 active:scale-95"
-                    >
-                        <UserCheck className="w-4 h-4 text-cyan-400 animate-pulse" />
-                        <span className="tracking-wider">MELHORAR ROSTO</span>
-                        <span className="text-[9px] px-1 py-0.5 bg-cyan-500/30 text-cyan-200 rounded font-bold">CNJ 484</span>
-                    </button>
-
-                    {/* Botão SUPER-NITIDEZ 4X */}
-                    <button
-                        onClick={() => handleQuickEnhance('general')}
-                        title="Super-Resolução 4x Geral com Desconvolução de Movimento"
-                        className="px-3 py-2 bg-amber-950/60 hover:bg-amber-900/80 border border-amber-500/60 hover:border-amber-400 text-amber-300 rounded-lg text-xs font-black flex items-center gap-1.5 transition-all shadow-[0_0_12px_rgba(245,158,11,0.25)] hover:scale-105 active:scale-95"
-                    >
-                        <Zap className="w-4 h-4 text-amber-400" />
-                        <span className="tracking-wider">SUPER-NITIDEZ 4X</span>
-                    </button>
-                </div>
-
-                {/* 3. Lado Direito: Presets de Visão, Sliders, Snapshot e Fullscreen */}
-                <div className="flex items-center gap-1.5 shrink-0">
-                    <button
-                        onClick={() => applyPreset('NIGHT_VISION')}
-                        className={`px-2.5 py-1.5 rounded-lg text-[10px] font-black flex items-center gap-1 transition-all ${
-                            activePreset === 'NIGHT_VISION'
-                                ? 'bg-green-500 text-black font-black shadow-[0_0_10px_rgba(34,197,94,0.3)]'
-                                : 'text-green-400 hover:bg-green-500/10'
-                        }`}
-                        title="Visão Noturna NVG P43"
-                    >
-                        <Moon className="w-3.5 h-3.5" />
-                        <span className="hidden xl:inline">NVG</span>
-                    </button>
-
-                    <button
-                        onClick={() => applyPreset('THERMAL_IRONBOW')}
-                        className={`px-2.5 py-1.5 rounded-lg text-[10px] font-black flex items-center gap-1 transition-all ${
-                            activePreset === 'THERMAL_IRONBOW'
-                                ? 'bg-orange-500 text-black font-black shadow-[0_0_10px_rgba(249,115,22,0.3)]'
-                                : 'text-orange-400 hover:bg-orange-500/10'
-                        }`}
-                        title="Térmica FLIR Ironbow"
-                    >
-                        <Flame className="w-3.5 h-3.5" />
-                        <span className="hidden xl:inline">FLIR</span>
-                    </button>
+                    <div className="px-3.5 py-2 bg-emerald-950/60 border border-emerald-500/30 text-emerald-300 rounded-lg text-xs font-black flex items-center gap-2 shadow-[0_0_10px_rgba(16,185,129,0.1)]">
+                        <Car className="w-4 h-4 text-emerald-400" />
+                        <span className="tracking-wider">ALPR ATIVO</span>
+                        <span className="text-[9px] px-1 py-0.5 bg-emerald-500/20 text-emerald-200 rounded font-bold border border-emerald-500/30 animate-pulse">FUSÃO MULTI-FRAME</span>
+                    </div>
 
                     <button
                         onClick={() => {
-                            tacticalAudio.playClick();
-                            setShowSlidersPanel(!showSlidersPanel);
+                            tacticalAudio.playAlert();
+                            onOpenForensicDrawer('plate');
                         }}
-                        className={`p-2 rounded-lg border transition-all ${
-                            showSlidersPanel
-                                ? 'bg-white/20 text-white border-white/30'
-                                : 'bg-white/5 hover:bg-white/10 text-muted hover:text-white border-white/10'
-                        }`}
-                        title="Ajuste Granular de Filtros"
+                        title="Abrir laboratório forense com Inteligência Artificial Generativa"
+                        className="px-3.5 py-2 ml-2 bg-indigo-950/60 hover:bg-indigo-900/80 border-2 border-indigo-500/60 hover:border-indigo-400 text-indigo-300 rounded-lg text-xs font-black flex items-center gap-2 transition-all shadow-[0_0_15px_rgba(99,102,241,0.3)] hover:scale-105 active:scale-95"
                     >
-                        <Sliders className="w-4 h-4" />
+                        <Zap className="w-4 h-4 text-indigo-400" />
+                        <span className="tracking-wider">LABORATÓRIO FORENSE</span>
+                        <span className="text-[9px] px-1 py-0.5 bg-indigo-500/30 text-indigo-200 rounded font-bold">HAT / CODEFORMER</span>
                     </button>
+                </div>
 
+                {/* 3. Lado Direito: Snapshot e Fullscreen */}
+                <div className="flex items-center gap-1.5 shrink-0">
                     <button
                         onClick={() => {
                             tacticalAudio.playShutter();

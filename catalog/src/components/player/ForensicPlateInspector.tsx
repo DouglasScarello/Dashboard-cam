@@ -238,7 +238,7 @@ export const ForensicPlateInspector: React.FC<ForensicPlateInspectorProps> = ({
                     }`}
                 >
                     <Car className="w-4 h-4 text-emerald-400" />
-                    <span>PLACAS (ALPR)</span>
+                    <span>FUSÃO TEMPORAL (PLACAS)</span>
                 </button>
 
                 <button
@@ -250,7 +250,7 @@ export const ForensicPlateInspector: React.FC<ForensicPlateInspectorProps> = ({
                     }`}
                 >
                     <UserCheck className="w-4 h-4 text-cyan-400" />
-                    <span>ROSTOS (CNJ 484)</span>
+                    <span>CODEFORMER (ROSTOS)</span>
                 </button>
 
                 <button
@@ -262,7 +262,7 @@ export const ForensicPlateInspector: React.FC<ForensicPlateInspectorProps> = ({
                     }`}
                 >
                     <Zap className="w-4 h-4 text-amber-400" />
-                    <span>SUPER-NITIDEZ 4X</span>
+                    <span>HAT (SUPER-RESOLUÇÃO)</span>
                 </button>
             </div>
 
