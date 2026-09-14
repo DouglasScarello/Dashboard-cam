@@ -187,15 +187,46 @@ class ForensicPlateEnhancer:
             [0, target_h - 1]
         ], dtype=np.float32)
 
+        img_area = float(image.shape[0] * image.shape[1])
+
         for c in contours:
             peri = cv2.arcLength(c, True)
             approx = cv2.approxPolyDP(c, 0.04 * peri, True)
 
-            if len(approx) == 4:
-                src_pts = cls.order_quad_points(approx.astype(np.float32))
-                M = cv2.getPerspectiveTransform(src_pts, dst_pts)
-                rectified = cv2.warpPerspective(image, M, (target_w, target_h), flags=cv2.INTER_LANCZOS4)
-                return rectified, True
+            if len(approx) != 4:
+                continue
+
+            # Achado (2026-09-14): antes bastava achar QUALQUER contorno de 4
+            # lados e a homografia era aplicada cegamente. Num recorte já
+            # apertado na placa, o maior quadrilátero costuma ser um detalhe
+            # interno (parafuso, moldura, sombra) — esticá-lo pra 400x130
+            # apagava a placa inteira e devolvia um retângulo cinza vazio,
+            # destruindo uma leitura que funcionava (confirmado: LAB3415 lia
+            # com 0.998 no recorte cru e virava None depois do deskew).
+            # Um quadrilátero só é aceito como "a placa" se ocupa parte
+            # relevante da imagem e tem proporção de placa.
+            quad_area = abs(cv2.contourArea(approx))
+            if quad_area < 0.20 * img_area:
+                continue
+
+            src_pts = cls.order_quad_points(approx.astype(np.float32))
+            width_top = np.linalg.norm(src_pts[1] - src_pts[0])
+            width_bottom = np.linalg.norm(src_pts[2] - src_pts[3])
+            height_left = np.linalg.norm(src_pts[3] - src_pts[0])
+            height_right = np.linalg.norm(src_pts[2] - src_pts[1])
+            avg_w = (width_top + width_bottom) / 2.0
+            avg_h = (height_left + height_right) / 2.0
+            if avg_h <= 1.0:
+                continue
+            aspect = avg_w / avg_h
+            # Placas do mundo real vão de ~2:1 (Mercosul/europeia) a ~5:1
+            # (faixa única americana antiga). Fora disso não é placa.
+            if not (1.5 <= aspect <= 6.0):
+                continue
+
+            M = cv2.getPerspectiveTransform(src_pts, dst_pts)
+            rectified = cv2.warpPerspective(image, M, (target_w, target_h), flags=cv2.INTER_LANCZOS4)
+            return rectified, True
 
         # Fallback: resize Lanczos com proporção canônica
         rectified = cv2.resize(image, target_size, interpolation=cv2.INTER_LANCZOS4)
@@ -549,6 +580,55 @@ class ForensicALPR:
                 out.append(ch)
         return "".join(out)
 
+    # Nenhuma placa real do mundo (nem as combinadas tipo Tailândia/Japão,
+    # que misturam script local + números) passa disso — é uma rede de
+    # segurança contra o OCR concatenar texto de objetos diferentes da cena
+    # (outra placa, letreiro de loja, poste) num "candidato" sem sentido.
+    MIN_PLAUSIBLE_PLATE_LEN = 4
+    MAX_PLAUSIBLE_PLATE_LEN = 10
+
+    @staticmethod
+    def _cluster_text_blocks(results: list, y_tolerance_factor: float = 0.6,
+                              gap_factor: float = 1.8) -> List[list]:
+        """Agrupa os blocos de texto do EasyOCR por proximidade espacial.
+
+        Achado (2026-09-14): `read_plate` concatenava TODOS os blocos de
+        texto detectados na imagem inteira, ordenados só por X — numa cena
+        de cruzamento com vários carros e uma fachada ao fundo, isso juntava
+        a placa de um carro com o texto de uma placa comercial vizinha,
+        produzindo um "candidato" de 17 caracteres sem nexo (visto ao vivo:
+        `NV31404WS61620189`). Uma placa de verdade é um bloco compacto — os
+        caracteres ficam próximos em X e alinhados em Y. Isso separa blocos
+        que só por coincidência caíram na mesma ordem da esquerda pra
+        direita mas pertencem a objetos físicos diferentes."""
+        if not results:
+            return []
+
+        def bbox_metrics(bbox):
+            xs = [p[0] for p in bbox]
+            ys = [p[1] for p in bbox]
+            return min(xs), max(xs), (min(ys) + max(ys)) / 2.0, max(ys) - min(ys)
+
+        enriched = []
+        for r in results:
+            x0, x1, y_center, height = bbox_metrics(r[0])
+            enriched.append({"x0": x0, "x1": x1, "y_center": y_center,
+                              "height": max(height, 1.0), "text": r[1], "conf": r[2]})
+        enriched.sort(key=lambda e: e["x0"])
+
+        clusters: List[list] = []
+        current = [enriched[0]]
+        for prev, cur in zip(enriched, enriched[1:]):
+            same_row = abs(cur["y_center"] - prev["y_center"]) <= y_tolerance_factor * max(cur["height"], prev["height"])
+            close_enough = (cur["x0"] - prev["x1"]) <= gap_factor * max(cur["height"], prev["height"])
+            if same_row and close_enough:
+                current.append(cur)
+            else:
+                clusters.append(current)
+                current = [cur]
+        clusters.append(current)
+        return clusters
+
     def read_plate(self, image_bgr: np.ndarray, country: Optional[str] = None) -> Tuple[Optional[str], Optional[str], Optional[float]]:
         """OCR real via EasyOCR + validação contra o formato oficial do país
         (ver plate_formats.py — pesquisado em 2026-09-11 depois de descobrir,
@@ -578,33 +658,47 @@ class ForensicALPR:
         if not results:
             return None, None, None
 
-        # Concatena os fragmentos de texto lidos (o OCR às vezes separa a
-        # placa em 2 blocos) ordenados da esquerda pra direita.
-        results_sorted = sorted(results, key=lambda r: r[0][0][0])
-        raw_text = "".join(r[1] for r in results_sorted).upper()
-        if is_pure_latin:
-            raw_text = re.sub(r"[^A-Z0-9]", "", raw_text)
-        avg_conf = float(np.mean([r[2] for r in results_sorted]))
+        # Em vez de concatenar cegamente tudo que o OCR achou na cena
+        # inteira, agrupa por proximidade espacial primeiro — cada cluster
+        # é candidato a ser UMA placa (ou fragmento dela).
+        clusters = self._cluster_text_blocks(results)
 
-        if self.country == "BR" and country is None:
-            # Caminho original — 2 sub-formatos brasileiros com correção
-            # posicional, mantido idêntico ao comportamento de antes.
-            for fmt_name, fmt_template, regex in (
-                ("MERCOSUL", self.MERCOSUL_FMT, ForensicPlateEnhancer.MERCOSUL_REGEX),
-                ("ANTIGO", self.ANTIGO_FMT, ForensicPlateEnhancer.ANTIGO_REGEX),
-            ):
-                if len(raw_text) != len(fmt_template):
-                    continue
-                corrected = self._correct_for_format(raw_text, fmt_template)
-                if regex.match(corrected):
-                    return corrected, fmt_name, round(avg_conf, 3)
-        elif fmt.regex and fmt.regex.match(raw_text):
-            return raw_text, fmt.country_code, round(avg_conf, 3)
+        best_incerto: Optional[Tuple[str, float]] = None
+        for cluster in clusters:
+            raw_text = "".join(b["text"] for b in cluster).upper()
+            if is_pure_latin:
+                raw_text = re.sub(r"[^A-Z0-9]", "", raw_text)
+            if not raw_text:
+                continue
+            avg_conf = float(np.mean([b["conf"] for b in cluster]))
 
-        # Nada bateu com um formato oficial — reporta o texto cru como
-        # "candidato incerto" em vez de descartar silenciosamente ou de
-        # forçar num formato que não confere.
-        return raw_text or None, "INCERTO" if raw_text else None, round(avg_conf, 3) if raw_text else None
+            if self.country == "BR" and country is None:
+                # Caminho original — 2 sub-formatos brasileiros com correção
+                # posicional, mantido idêntico ao comportamento de antes,
+                # agora aplicado por cluster em vez da imagem inteira.
+                for fmt_name, fmt_template, regex in (
+                    ("MERCOSUL", self.MERCOSUL_FMT, ForensicPlateEnhancer.MERCOSUL_REGEX),
+                    ("ANTIGO", self.ANTIGO_FMT, ForensicPlateEnhancer.ANTIGO_REGEX),
+                ):
+                    if len(raw_text) != len(fmt_template):
+                        continue
+                    corrected = self._correct_for_format(raw_text, fmt_template)
+                    if regex.match(corrected):
+                        return corrected, fmt_name, round(avg_conf, 3)
+            elif fmt.regex and fmt.regex.match(raw_text):
+                return raw_text, fmt.country_code, round(avg_conf, 3)
+
+            # Nenhum formato oficial bateu nesse cluster — guarda como
+            # possível "candidato incerto", mas só se o tamanho for
+            # fisicamente plausível pra uma placa (descarta lixo tipo
+            # concatenação de dois blocos que escaparam do agrupamento).
+            if self.MIN_PLAUSIBLE_PLATE_LEN <= len(raw_text) <= self.MAX_PLAUSIBLE_PLATE_LEN:
+                if best_incerto is None or avg_conf > best_incerto[1]:
+                    best_incerto = (raw_text, avg_conf)
+
+        if best_incerto:
+            return best_incerto[0], "INCERTO", round(best_incerto[1], 3)
+        return None, None, None
 
 
 def log_alpr_error(e: Exception) -> None:
@@ -791,6 +885,19 @@ async def enhance_roi(payload: EnhanceROIRequest):
         # nunca retorna uma placa inventada; sem leitura plausível, os 3
         # campos ficam None e a resposta reflete isso com honestidade.
         plate_ocr, plate_fmt, plate_ocr_conf = alpr_engine.read_plate(enhanced_img)
+
+        # Sem bbox de placa detectada, `enhanced_img` é o recorte inteiro da
+        # cena — não uma placa verificada. Qualquer texto que o OCR ache ali
+        # é texto de ALGUMA coisa (emblema do capô, letreiro de loja,
+        # telefone de fachada, letreiro de linha de ônibus), e reportar isso
+        # como "candidato a placa" é a origem dos falsos positivos relatados
+        # repetidamente pelo usuário (telefone da fachada, "TAXI", rota de
+        # ônibus, e agora o emblema "FIAT" lido como FIHT em Tubarão,
+        # 2026-09-14). Só aceitamos leitura sem bbox se ela bateu com o
+        # formato oficial de placa do país — aí a própria regex é a
+        # evidência de que é placa, não o detector.
+        if plate_bbox is None and plate_fmt == "INCERTO":
+            plate_ocr, plate_fmt, plate_ocr_conf = None, None, None
 
     metrics_enh = quality_assessor.evaluate(enhanced_img)
     sha256_enh = hashlib.sha256(enhanced_img.tobytes()).hexdigest().upper()

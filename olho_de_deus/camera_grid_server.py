@@ -337,19 +337,27 @@ async def resolve_stream_url(camera_id: str, source_url: str) -> Optional[str]:
 # Captura de frame (instantâneo via YouTube CDN + fallback OpenCV)
 # --------------------------------------------------------------------------
 
-def _capture_thumbnail_sync(camera_id: str, source_url: str) -> bytes:
+def _capture_thumbnail_sync(camera_id: str, source_url: str, fresh: bool = False) -> bytes:
     """Retorna JPEG bytes de um frame REAL e atual da transmissão — não a
     thumbnail estática do YouTube (que pode ser de qualquer momento, ou
     inexistente pra uma live). Achado de auditoria: tanto esta função
     quanto o endpoint `/snapshot` só buscavam a imagem estática do YouTube
     antes desta correção — o usuário reportou "quero um print real de
-    agora, não thumbnail do YouTube"."""
+    agora, não thumbnail do YouTube".
+
+    `fresh=True` ignora o cache de leitura (usado pela captura forense —
+    o usuário clica esperando o frame *daquele exato instante*, não um
+    frame de até THUMBNAIL_TTL segundos atrás que o worker de detecção de
+    perigo pode ter deixado no cache ao rodar o round-robin em background
+    sobre todas as câmeras). O resultado ainda é gravado no cache no final,
+    então o worker de perigo se beneficia do frame recém-capturado."""
     now = time.time()
     lock = _get_camera_lock(camera_id)
     with lock:
-        cached = _thumbnail_cache.get(camera_id)
-        if cached is not None and (now - cached["ts"]) < THUMBNAIL_TTL:
-            return cached["bytes"]
+        if not fresh:
+            cached = _thumbnail_cache.get(camera_id)
+            if cached is not None and (now - cached["ts"]) < THUMBNAIL_TTL:
+                return cached["bytes"]
 
         cam = db_manager.get_camera_by_id(camera_id) or {}
         video_id = cam.get("video_id")
@@ -370,9 +378,9 @@ def _capture_thumbnail_sync(camera_id: str, source_url: str) -> bytes:
         return jpeg_bytes
 
 
-async def capture_thumbnail(camera_id: str, source_url: str) -> bytes:
+async def capture_thumbnail(camera_id: str, source_url: str, fresh: bool = False) -> bytes:
     loop = asyncio.get_running_loop()
-    return await loop.run_in_executor(_IO_EXECUTOR, _capture_thumbnail_sync, camera_id, source_url)
+    return await loop.run_in_executor(_IO_EXECUTOR, _capture_thumbnail_sync, camera_id, source_url, fresh)
 
 
 # --------------------------------------------------------------------------
@@ -680,6 +688,57 @@ async def get_camera_detail(camera_id: str):
     }
 
 
+def _extract_youtube_id(raw: str) -> str:
+    """Aceita URL completa do YouTube ou o ID cru — pra não exigir que o
+    usuário saiba extrair o ID manualmente ao colar um link."""
+    raw = raw.strip()
+    if "youtube.com/watch" in raw and "v=" in raw:
+        return raw.split("v=")[1].split("&")[0]
+    if "youtu.be/" in raw:
+        return raw.split("youtu.be/")[1].split("?")[0]
+    if "youtube.com/live/" in raw:
+        return raw.split("youtube.com/live/")[1].split("?")[0]
+    return raw
+
+
+@app.get("/api/camera-candidates")
+async def list_camera_candidates():
+    """Câmeras candidatas testadas na aba 'Câmeras Teste' — workspace
+    separado da grade principal, pra assistir ao vivo (mesmo player tático)
+    antes de promover uma candidata pra virar câmera oficial de um
+    pipeline (ver diagnóstico de resolução/legitimidade, 2026-09-13)."""
+    return db_manager.get_test_candidates()
+
+
+@app.post("/api/camera-candidates")
+async def add_camera_candidate(
+    nome: str, youtube: str, pais: Optional[str] = None,
+    local: Optional[str] = None, test_notes: Optional[str] = None,
+):
+    video_id = _extract_youtube_id(youtube)
+    camera_id = f"test_{video_id}"
+    # Achado (2026-09-14): sem a `url` de verdade, `_capture_real_frame_jpeg`
+    # não consegue resolver o stream ao vivo via yt-dlp e o sistema cai
+    # sempre no fallback estático (`_fetch_youtube_thumbnail`) — o usuário
+    # reportou receber prints antigos/de outra câmera, e essa era a causa:
+    # nenhuma captura real de ffmpeg jamais acontecia, sempre era a
+    # thumbnail estática do YouTube.
+    watch_url = f"https://www.youtube.com/watch?v={video_id}"
+    cam = db_manager.add_test_candidate(
+        camera_id=camera_id, nome=nome, video_id=video_id, url=watch_url,
+        pais=pais, local=local, test_notes=test_notes,
+    )
+    return cam
+
+
+@app.delete("/api/camera-candidates/{camera_id}")
+async def remove_camera_candidate(camera_id: str):
+    deleted = db_manager.delete_test_candidate(camera_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Candidata não encontrada")
+    return {"status": "OK"}
+
+
 @app.get("/api/cameras/{camera_id}/thumbnail.jpg")
 async def camera_thumbnail(camera_id: str):
     cam = db_manager.get_camera_by_id(camera_id)
@@ -735,12 +794,19 @@ async def camera_live_url(camera_id: str):
 
 @app.get("/api/cameras/{camera_id}/snapshot")
 @app.post("/api/cameras/{camera_id}/snapshot")
-async def camera_snapshot_native(camera_id: str):
+async def camera_snapshot_native(camera_id: str, fresh: bool = False):
     """
     Captura um frame REAL e atual da transmissão pra uso forense (crop de
     placa/rosto). Antes só buscava a thumbnail estática do YouTube — o
     usuário reportou que isso não reflete o que a câmera está gravando
     agora, e pra perícia isso importa de verdade, não é cosmético.
+
+    `fresh=true` (usado pelos botões de captura forense/snapshot no player)
+    força uma nova conexão ffmpeg agora, em vez de servir o que estiver no
+    cache de até THUMBNAIL_TTL segundos — esse cache é compartilhado com o
+    worker de detecção de perigo, que fica capturando todas as câmeras em
+    background, então sem isso o "print de agora" podia vir de um instante
+    anterior ao clique.
     """
     cam = db_manager.get_camera_by_id(camera_id)
     if not cam:
@@ -755,7 +821,7 @@ async def camera_snapshot_native(camera_id: str):
 
     real_id = str(cam.get("id", camera_id))
     source_url = cam.get("url", "")
-    jpeg_bytes = await capture_thumbnail(real_id, source_url)
+    jpeg_bytes = await capture_thumbnail(real_id, source_url, fresh=fresh)
 
     return Response(
         content=jpeg_bytes,
