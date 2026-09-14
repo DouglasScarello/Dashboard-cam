@@ -30,12 +30,24 @@ import sys
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 ROOT = Path(__file__).resolve().parent.parent
-CAMERAS_PATH = ROOT / "database" / "live_cameras.json"
-LIVENESS_STATE_PATH = ROOT / "database" / "camera_liveness_state.json"
+DB_PATH = ROOT / "database" / "live_cameras.db"
 REMOVED_ARCHIVE_PATH = ROOT / "database" / "live_cameras_removed_archive.json"
+
+# Os dois JSON abaixo eram a fonte de dados deste script. Ficaram pra trás numa
+# migração pela metade: camera_liveness.py passou a ler E escrever o SQLite,
+# enquanto este script continuou lendo o JSON — congelado em 2026-08-31 — e
+# escrevendo por cima dele, enquanto o resto do sistema (db_manager,
+# camera_grid_server, monitor_plates) lê o .db com 8.221 linhas.
+#
+# Ou seja: consertar só o SELECT quebrado do liveness transformaria uma falha
+# barulhenta diária numa decisão silenciosa tomada em cima de dado de um mês
+# atrás. Por isso a leitura foi portada junto. Mantidos aqui só como
+# documentação de onde estava a fonte antiga.
+LEGADO_CAMERAS_JSON = ROOT / "database" / "live_cameras.json"
+LEGADO_LIVENESS_JSON = ROOT / "database" / "camera_liveness_state.json"
 
 # Coordenadas dentro desta distância (graus) E mesmo nome normalizado =
 # considerado o mesmo ponto físico reingerido. ~0.0005° ≈ 55m no equador —
@@ -55,6 +67,33 @@ def save_json(path: Path, data):
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
     tmp.replace(path)
+
+
+def carrega_cameras_do_db() -> List[Dict[str, Any]]:
+    """Catálogo vivo, direto do SQLite que o resto do sistema usa."""
+    import sqlite3
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        return [dict(r) for r in conn.execute("SELECT * FROM cameras")]
+    finally:
+        conn.close()
+
+
+def status_de_liveness(cam: Dict[str, Any]) -> Optional[str]:
+    """Traduz as colunas do banco pros mesmos rótulos que o JSON usava, pra
+    não ter que reescrever a lógica de decisão logo abaixo.
+
+    Regra deliberadamente conservadora: só chama de DEAD quem foi de fato
+    checado e reprovado. Linha nunca checada (confirmed_dead=0 e
+    live_confirmed=0, o estado inicial de toda câmera recém-ingerida) devolve
+    None, que a curadoria trata como 'nunca checada — não remove'.
+    """
+    if cam.get("confirmed_dead"):
+        return "DEAD"
+    if cam.get("live_confirmed"):
+        return "LIVE"
+    return None
 
 
 def normalize_name(name: str) -> str:
@@ -94,6 +133,20 @@ def find_duplicates(cameras: List[Dict[str, Any]]) -> Dict[str, str]:
             continue
         kept = group[0]
         for other in group[1:]:
+            # URL de stream diferente = câmera FÍSICA diferente, ponto final.
+            #
+            # Achado (2026-09-14), pego rodando o dry-run antes de aplicar: a
+            # regra nome+coordenada sozinha marcava 366 câmeras como duplicata,
+            # e 363 delas eram falso positivo. O caso que denunciou foi a malha
+            # de rodovia de SP, onde o mesmo quilômetro tem duas câmeras —
+            # SP055-KM211A e SP055-KM211B, os dois sentidos da pista. Mesmo
+            # nome, mesma coordenada, streams distintos. Com --apply isso teria
+            # apagado metade da malha de SP de uma vez.
+            url1 = (kept.get("url") or "").strip()
+            url2 = (other.get("url") or "").strip()
+            if url1 and url2 and url1 != url2:
+                continue
+
             lat1, lon1 = kept.get("lat"), kept.get("long")
             lat2, lon2 = other.get("lat"), other.get("long")
             if lat1 is None or lon1 is None or lat2 is None or lon2 is None:
@@ -112,8 +165,12 @@ def curate(refresh_liveness: bool, concurrency: int) -> Tuple[List[Dict[str, Any
             check=True,
         )
 
-    cameras = load_json(CAMERAS_PATH, [])
-    liveness = load_json(LIVENESS_STATE_PATH, {})
+    cameras = carrega_cameras_do_db()
+    # O status de liveness agora mora na própria linha da câmera (colunas
+    # confirmed_dead / live_status), escritas por camera_liveness.py.
+    liveness = {
+        str(c["id"]): {"status": status_de_liveness(c)} for c in cameras
+    }
     now = datetime.now(timezone.utc).isoformat()
 
     duplicate_of = find_duplicates(cameras)
@@ -169,19 +226,29 @@ def main():
         print("\n[DRY-RUN] Nada foi escrito. Rode com --apply pra aplicar de verdade.", file=sys.stderr)
         return
 
-    # Backup antes de sobrescrever — mesmo arquivo que já foi acidentalmente
-    # truncado uma vez nesta mesma sessão (ver PLANO_CONTINUACAO.md).
-    if CAMERAS_PATH.exists():
-        backup_path = CAMERAS_PATH.with_name(f"live_cameras.json.bak-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S')}")
-        backup_path.write_bytes(CAMERAS_PATH.read_bytes())
-        print(f"Backup salvo em {backup_path}", file=sys.stderr)
+    # Backup do banco inteiro antes de apagar linha. O arquivo de catálogo já
+    # foi truncado por acidente uma vez (ver PLANO_CONTINUACAO.md) — aqui a
+    # cópia é do .db, que é o que vale agora.
+    carimbo = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
+    backup_path = DB_PATH.with_name(f"live_cameras.db.bak-{carimbo}")
+    backup_path.write_bytes(DB_PATH.read_bytes())
+    print(f"Backup do banco salvo em {backup_path}", file=sys.stderr)
 
-    save_json(CAMERAS_PATH, kept)
-
+    # Arquivo de remoções continua em JSON de propósito: é trilha de auditoria
+    # append-only, com o registro inteiro e o motivo. Se uma remoção se provar
+    # errada, dá pra reinserir a linha a partir daqui.
     existing_archive = load_json(REMOVED_ARCHIVE_PATH, [])
     save_json(REMOVED_ARCHIVE_PATH, existing_archive + removed)
 
-    print(f"Aplicado: {summary['mantidas']} câmeras mantidas, {len(removed)} arquivadas em {REMOVED_ARCHIVE_PATH.name}", file=sys.stderr)
+    import sqlite3
+    conn = sqlite3.connect(DB_PATH)
+    with conn:
+        conn.executemany("DELETE FROM cameras WHERE id = ?",
+                         [(str(r["id"]),) for r in removed])
+    conn.close()
+
+    print(f"Aplicado: {summary['mantidas']} câmeras mantidas, {len(removed)} "
+          f"removidas do banco e arquivadas em {REMOVED_ARCHIVE_PATH.name}", file=sys.stderr)
 
 
 if __name__ == "__main__":

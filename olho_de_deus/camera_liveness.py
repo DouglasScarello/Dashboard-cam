@@ -124,7 +124,12 @@ def run(concurrency: int, limit: Optional[int], attempt_recovery: bool) -> Dict[
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     
-    query = "SELECT id, url, video_id, channel_url FROM cameras WHERE confirmed_dead = 0"
+    # `channel_url` não existe na tabela `cameras` — ficou pra trás numa
+    # migração. O SELECT quebrava com "no such column", o script saía com 1, e
+    # camera_curation.py (que chama este aqui com check=True) morria junto. O
+    # timer diário das 04:00 falhava havia semanas por causa disso. O uso lá
+    # embaixo já é `cam.get("channel_url")`, então some sem quebrar nada.
+    query = "SELECT id, url, video_id FROM cameras WHERE confirmed_dead = 0"
     if limit:
         query += f" LIMIT {limit}"
         
