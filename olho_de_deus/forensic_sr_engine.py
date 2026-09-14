@@ -713,6 +713,14 @@ def log_alpr_error(e: Exception) -> None:
 class EnhanceROIRequest(BaseModel):
     image_base64: str = Field(..., description="Imagem ou crop do ROI em Base64")
     roi_type: str = Field("plate", description="Tipo do ROI: 'plate', 'face', 'general'")
+    # Achado (2026-09-14): sem isso o laboratório forense assumia Brasil pra
+    # qualquer câmera. A correção posicional do formato Mercosul (LLLNLNN, que
+    # exige LETRA na 5ª posição) era então aplicada em placa filipina (LLLNNNN),
+    # e todo dígito na 5ª posição virava letra: LAF6673 saía LAF6G73, MAZ6041
+    # saía MAZ6O41. Medido no gabarito de 26 placas: 77% de acerto com o país
+    # certo contra 31% assumindo BR. O pipeline 24/7 já passava o país
+    # (plate_processor.py:207); só este caminho estava sem.
+    country: Optional[str] = Field(None, description="ISO alpha-2 do país da câmera (ex.: BR, PH). Sem isso, assume o formato brasileiro.")
     scale_factor: int = Field(4, ge=1, le=8, description="Fator de Super-Resolução (2x, 4x, 8x)")
     apply_deskew: bool = Field(True, description="Executa retificação homográfica de perspectiva")
     deblur_method: str = Field("none", description="Método de deblur: 'wiener', 'richardson_lucy', 'none'")
@@ -884,7 +892,7 @@ async def enhance_roi(payload: EnhanceROIRequest):
         # OCR real (EasyOCR) + correção posicional + validação de formato —
         # nunca retorna uma placa inventada; sem leitura plausível, os 3
         # campos ficam None e a resposta reflete isso com honestidade.
-        plate_ocr, plate_fmt, plate_ocr_conf = alpr_engine.read_plate(enhanced_img)
+        plate_ocr, plate_fmt, plate_ocr_conf = alpr_engine.read_plate(enhanced_img, country=payload.country)
 
         # Sem bbox de placa detectada, `enhanced_img` é o recorte inteiro da
         # cena — não uma placa verificada. Qualquer texto que o OCR ache ali

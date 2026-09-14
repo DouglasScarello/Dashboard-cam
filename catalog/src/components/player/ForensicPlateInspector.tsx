@@ -102,6 +102,11 @@ export const ForensicPlateInspector: React.FC<ForensicPlateInspectorProps> = ({
                 body: JSON.stringify({
                     image_base64: imgBase64,
                     roi_type: type,
+                    // Sem o país, o backend assume formato brasileiro e força
+                    // letra na 5ª posição — o que destrói qualquer placa de
+                    // país com padrão diferente (medido em placa filipina:
+                    // 77% de acerto com o país certo, 31% sem).
+                    country: camera.pais ?? null,
                     scale_factor: scaleFactor,
                     apply_deskew: type === 'plate' ? applyDeskew : false,
                     deblur_method: deblurMethod,
