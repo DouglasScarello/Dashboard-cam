@@ -79,6 +79,20 @@ _ARCFACE_112_TEMPLATE = np.array([
 # quando a entrada já é ruim. Por isso o gate abaixo, não só o limiar de match.
 MIN_INTEROCULAR_PX = 40    # abaixo disso, rosto longe/pequeno demais pro ArcFace confiar (~48px é a referência da literatura pra "condição difícil")
 MIN_DET_CONFIDENCE = 0.85  # confiança do YuNet — 0.6 é limiar de "existe rosto", não de "confiável pra identificar"
+
+# Achado (2026-09-15, integrando o backend InsightFace/SCRFD): a confiança
+# do SCRFD NÃO está na mesma escala da do YuNet — um rosto frontal nítido,
+# bem enquadrado, real (testado com foto de referência), deu det_score=0.58
+# no SCRFD contra tipicamente >0.85 no YuNet pra caso equivalente. Usar o
+# mesmo MIN_DET_CONFIDENCE=0.85 pros dois backends rejeitaria quase toda
+# detecção real do SCRFD — bug de calibração emprestada, não do detector.
+# Valor abaixo é PROVISÓRIO: só um pouco acima do det_thresh=0.5 que o
+# próprio SCRFD usa como "existe rosto" (mesmo raciocínio do comentário do
+# YuNet acima) — precisa de calibração com volume real de câmera de
+# produção antes de virar padrão, mesma disciplina já usada pra
+# MIN_INTEROCULAR_PX (~48px veio de medição, não chute).
+MIN_DET_CONFIDENCE_INSIGHTFACE = 0.55
+
 MAX_YAW_ASYMMETRY = 0.68   # proxy de perfil/pose extrema (~>45°) via posição do nariz entre os dois olhos
 MIN_BLUR_VARIANCE = 25.0   # variância do Laplaciano no rosto alinhado — abaixo disso, borrado demais
 
@@ -90,10 +104,16 @@ MIN_BLUR_VARIANCE = 25.0   # variância do Laplaciano no rosto alinhado — abai
 MIN_HITS_TO_DISPLAY = 2
 
 
-def _face_quality_ok(landmarks: np.ndarray, det_score: float, aligned: np.ndarray) -> Tuple[bool, str]:
+def _face_quality_ok(landmarks: np.ndarray, det_score: float, aligned: np.ndarray,
+                      min_det_confidence: float = MIN_DET_CONFIDENCE) -> Tuple[bool, str]:
     """Gate de qualidade ANTES do ArcFace — rejeitar aqui é mais barato e mais
-    eficaz que tentar compensar depois só com o limiar de distância."""
-    if det_score < MIN_DET_CONFIDENCE:
+    eficaz que tentar compensar depois só com o limiar de distância.
+
+    `min_det_confidence` é parametrizável porque a confiança de detecção
+    NÃO é comparável entre backends (YuNet vs SCRFD têm escalas diferentes
+    — ver MIN_DET_CONFIDENCE_INSIGHTFACE). O padrão preserva o comportamento
+    de sempre (YuNet, 0.85) pra quem chama sem passar o parâmetro."""
+    if det_score < min_det_confidence:
         return False, f"confiança do detector baixa ({det_score:.2f})"
 
     right_eye, left_eye, nose = landmarks[0], landmarks[1], landmarks[2]
@@ -115,27 +135,64 @@ def _face_quality_ok(landmarks: np.ndarray, det_score: float, aligned: np.ndarra
     return True, "ok"
 
 
+# Fase 1 do plano de mesclar técnicas de projetos maduros (2026-09-15):
+# backend de detecção/reconhecimento facial selecionável, sem apagar o
+# caminho já em produção. "yunet_deepface" (padrão, inalterado) usa YuNet +
+# DeepFace/ArcFace via TensorFlow; "insightface_onnx" usa o detector SCRFD +
+# reconhecedor ArcFace reais do InsightFace (pacote buffalo_sc, otimizado
+# pra CCTV), via onnxruntime puro — ver insightface_onnx.py pra como foi
+# portado (leitura do código-fonte real da lib, não reimplementação
+# aproximada). Os dois convivem até haver comparação real lado a lado
+# (taxa de aceite no gate, distância de auto-match) numa câmera de produção.
+FACE_BACKEND = os.environ.get("FACE_BACKEND", "yunet_deepface")
+
+
+def _detecta_landmarks_yunet(face_detector, crop: np.ndarray):
+    h, w = crop.shape[:2]
+    if h < 10 or w < 10:
+        return None
+    face_detector.setInputSize((w, h))
+    _, faces = face_detector.detect(crop)
+    if faces is None or len(faces) == 0:
+        return None
+    best = max(faces, key=lambda f: f[14])  # coluna 14 = score de confiança
+    landmarks = best[4:14].reshape(5, 2).astype(np.float32)
+    det_score = float(best[14])
+    return landmarks, det_score
+
+
+def _detecta_landmarks_insightface(crop: np.ndarray):
+    from insightface_onnx import detecta_rosto_scrfd
+    resultado = detecta_rosto_scrfd(crop)
+    if resultado is None:
+        return None
+    return resultado["landmarks"], resultado["det_score"]
+
+
 def _detect_and_align_face(face_detector, crop: np.ndarray, out_size: int = 112) -> Optional[np.ndarray]:
     """
-    Roda YuNet dentro de um recorte de PESSOA (não do frame inteiro — mais rápido
-    e evita achar rosto de outra pessoa ao fundo), e devolve o rosto já ALINHADO
-    (rotação/escala pelos 5 pontos faciais, mesmo padrão que o ArcFace espera) em
-    112x112 — pronto pra ir direto pro DeepFace com detector_backend="skip".
-    None se não achar rosto (pessoa de costas, ângulo ruim, fora de quadro) OU
-    se o rosto encontrado não passar no filtro de qualidade (ver _face_quality_ok).
+    Roda o detector de rosto (YuNet ou SCRFD, ver FACE_BACKEND) dentro de um
+    recorte de PESSOA (não do frame inteiro — mais rápido e evita achar
+    rosto de outra pessoa ao fundo), e devolve o rosto já ALINHADO (rotação/
+    escala pelos 5 pontos faciais, mesmo padrão que o ArcFace espera) em
+    112x112. None se não achar rosto (pessoa de costas, ângulo ruim, fora de
+    quadro) OU se o rosto encontrado não passar no filtro de qualidade (ver
+    _face_quality_ok) — o gate é o MESMO pros dois backends, só quem acha os
+    5 pontos muda.
     """
     h, w = crop.shape[:2]
     if h < 10 or w < 10:
         _report_gate_result("recorte_pequeno_demais")
         return None
-    face_detector.setInputSize((w, h))
-    _, faces = face_detector.detect(crop)
-    if faces is None or len(faces) == 0:
+
+    if FACE_BACKEND == "insightface_onnx":
+        detectado = _detecta_landmarks_insightface(crop)
+    else:
+        detectado = _detecta_landmarks_yunet(face_detector, crop)
+    if detectado is None:
         _report_gate_result("nenhum_rosto_no_recorte")
         return None
-    best = max(faces, key=lambda f: f[14])  # coluna 14 = score de confiança
-    landmarks = best[4:14].reshape(5, 2).astype(np.float32)
-    det_score = float(best[14])
+    landmarks, det_score = detectado
 
     transform, _ = cv2.estimateAffinePartial2D(landmarks, _ARCFACE_112_TEMPLATE, method=cv2.LMEDS)
     if transform is None:
@@ -143,7 +200,9 @@ def _detect_and_align_face(face_detector, crop: np.ndarray, out_size: int = 112)
         return None
     aligned = cv2.warpAffine(crop, transform, (out_size, out_size), borderValue=0.0)
 
-    ok, reason = _face_quality_ok(landmarks, det_score, aligned)
+    limiar_confianca = (MIN_DET_CONFIDENCE_INSIGHTFACE if FACE_BACKEND == "insightface_onnx"
+                         else MIN_DET_CONFIDENCE)
+    ok, reason = _face_quality_ok(landmarks, det_score, aligned, min_det_confidence=limiar_confianca)
     if not ok:
         _report_gate_result(reason)
         return None
@@ -526,16 +585,22 @@ class BiometricProcessor:
             return None, None
 
         try:
-            objs = DeepFace.represent(
-                img_path=face_img,
-                model_name="ArcFace",
-                enforce_detection=False,
-                detector_backend="skip"
-            )
-            if not objs:
-                return None, None
-
-            embedding = objs[0]["embedding"]
+            if FACE_BACKEND == "insightface_onnx":
+                # Mesmo contrato de entrada que o DeepFace recebe hoje: rosto
+                # já alinhado 112x112 (ver _detect_and_align_face) — só troca
+                # quem calcula o vetor.
+                from insightface_onnx import embedding_arcface_onnx
+                embedding = embedding_arcface_onnx(face_img).tolist()
+            else:
+                objs = DeepFace.represent(
+                    img_path=face_img,
+                    model_name="ArcFace",
+                    enforce_detection=False,
+                    detector_backend="skip"
+                )
+                if not objs:
+                    return None, None
+                embedding = objs[0]["embedding"]
 
             # 2. MATCH VETORIAL (Ghost Search)
             # Primeiro tentamos o Cache Redis para latência zero
