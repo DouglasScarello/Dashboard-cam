@@ -23,6 +23,7 @@ from intelligence_db import (
     DB, get_recent_matches, get_recent_plate_reads,
     get_recurring_vehicles, get_vehicle_history, get_all_vehicles,
     get_recurring_persons, get_person_history, get_all_persons,
+    get_latest_match_for_individual,
 )
 import db_manager
 from redis_cache import RedisCache
@@ -471,17 +472,41 @@ refreshReads();
 
 @app.post("/api/forensics/generate-laudo/{target_id}")
 async def generate_forensic_laudo(target_id: str):
-    """Gera laudo pericial oficial em PDF/A-1b assinado digitalmente com PAdES-LTA."""
+    """Gera laudo pericial oficial em PDF/A-1b assinado digitalmente com PAdES-LTA.
+
+    Achado (2026-09-15): esta função hardcodava match_score (0.85 sem
+    registro, 0.88 com registro) — um "LAUDO PERICIAL DE CONFRONTO
+    BIOMÉTRICO FACIAL" nunca era, de fato, um confronto: o número que
+    alimentava o cálculo de Razão de Verossimilhança Bayesiana (ver
+    forensic_core.py::BayesianSLREngine) era sempre inventado, nunca uma
+    comparação real. Agora:
+      - target_id que não existe em `individuals` -> 404 (Não encontrado).
+      - indivíduo existe mas nunca foi avistado ao vivo (sem match_logs —
+        caso ESPERADO pra cadastro recém-ingerido de BNMP/FBI, não exceção)
+        -> 409, recusa gerar o documento. Nunca existe um laudo de
+        "confronto biométrico" sem confronto nenhum.
+      - indivíduo com match ao vivo registrado -> usa a probabilidade
+        REAL desse match (ver get_latest_match_for_individual)."""
     db = DB()
     try:
         cur = db.execute("SELECT * FROM individuals WHERE id = ?", (target_id,))
         row = cur.fetchone()
         if not row:
-            dossier = {"id": target_id, "name": f"SUSPEITO-{target_id}", "match_score": 0.85, "source": "BNMP 3.0"}
-        else:
-            dossier = dict(row)
-            dossier["match_score"] = 0.88
-            
+            raise HTTPException(status_code=404, detail=f"Indivíduo '{target_id}' não encontrado no catálogo")
+
+        dossier = dict(row)
+        match = get_latest_match_for_individual(db, target_id)
+        if not match:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "Nenhum confronto biométrico ao vivo registrado para este "
+                    "indivíduo — laudo de confronto não pode ser gerado sem "
+                    "um match real (ver match_logs)."
+                ),
+            )
+        dossier["match_score"] = match["probability"]
+
         out_dir = os.path.join(str(ROOT), "pesquisa", "laudos")
         os.makedirs(out_dir, exist_ok=True)
         pdf_path = os.path.join(out_dir, f"LAUDO_PERICIAL_{target_id}_{int(time.time())}.pdf")
@@ -507,6 +532,12 @@ async def generate_forensic_laudo(target_id: str):
             "cnj_484_lineup_generated": manifest.get("cnj_484_lineup_generated", False),
             "created_at_utc": datetime.utcnow().isoformat()
         }
+    except HTTPException:
+        # Sem isso, o `except Exception` genérico abaixo engolia o 404/409
+        # (HTTPException também é uma Exception) e devolvia 200 com um corpo
+        # {"status": "ERROR", ...} — exatamente o risco que faria "sem
+        # match" ser indistinguível de "erro de sistema" pro chamador.
+        raise
     except Exception as e:
         return {"status": "ERROR", "message": str(e)}
     finally:
