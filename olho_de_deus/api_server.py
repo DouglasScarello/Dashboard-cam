@@ -24,6 +24,7 @@ from intelligence_db import (
     get_recurring_vehicles, get_vehicle_history, get_all_vehicles,
     get_recurring_persons, get_person_history, get_all_persons,
 )
+import db_manager
 from redis_cache import RedisCache
 from forensic_core import build_official_forensic_laudo, BayesianSLREngine, CNJLineupEngine
 from tactical_dispatch import LAPJVDispatchEngine, TacticalContainmentEngine, TacticalUnit, TacticalIncident
@@ -912,21 +913,25 @@ async def redis_event_listener():
 
 @app.on_event("startup")
 async def startup_event():
-    json_path = ROOT / "database" / "live_cameras.json"
-    if json_path.exists():
-        try:
-            with open(json_path, "r", encoding="utf-8") as f:
-                cams = json.load(f)
-            for c in cams:
-                cid = str(c.get("id"))
-                lat = float(c.get("lat") or -23.5505)
-                lon = float(c.get("long") or c.get("lon") or -46.6333)
-                global_spatial_index.index_camera(cid, c.get("nome", ""), lat, lon, metadata=c)
-                global_cluster_manager.register_camera(cid, c.get("nome", ""), c.get("url", ""), lat, lon)
-            print(f"[API] 📍 Indexadas {len(cams)} câmeras no Spatial H3 Index e Cluster Manager.")
-        except Exception as e:
-            print(f"[API] ⚠️ Erro ao carregar câmeras no startup: {e}")
-            
+    # Achado (2026-09-15): esta função lia database/live_cameras.json,
+    # congelado desde 2026-08-31 — mesma causa raiz da liveness de câmera
+    # corrigida nesta sessão (ver camera_grid_server.py). `global_spatial_index`
+    # já se indexa sozinho a partir do SQLite no import de spatial_engine.py
+    # (load_from_sqlite), então aqui só falta popular `global_cluster_manager`,
+    # que não tem bootstrap próprio.
+    try:
+        cams = db_manager.get_cameras_by_filters()
+        for c in cams:
+            cid = str(c.get("id"))
+            lat = c.get("lat")
+            lon = c.get("long")
+            if lat is None or lon is None:
+                continue
+            global_cluster_manager.register_camera(cid, c.get("nome", ""), c.get("url", ""), float(lat), float(lon))
+        print(f"[API] 📍 {len(cams)} câmeras registradas no Cluster Manager (Spatial H3 Index já indexado no import).")
+    except Exception as e:
+        print(f"[API] ⚠️ Erro ao carregar câmeras no startup: {e}")
+
     asyncio.create_task(redis_event_listener())
 
 if __name__ == "__main__":

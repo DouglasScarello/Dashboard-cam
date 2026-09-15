@@ -195,7 +195,15 @@ class SpatialH3CameraIndex:
         return sorted(results, key=lambda x: x["distance_m"])
 
     def load_from_json(self, file_path: str):
-        """Carrega e indexa todas as câmeras a partir do arquivo JSON."""
+        """Carrega e indexa todas as câmeras a partir do arquivo JSON.
+
+        Mantido por compatibilidade retroativa, mas não é mais chamado no
+        bootstrap deste módulo (ver `load_from_sqlite` abaixo) — o JSON
+        `database/live_cameras.json` parou de ser atualizado em 2026-08-31,
+        então indexar a partir dele significava que o índice espacial H3 (e
+        os endpoints `/api/tactical/spatial/nearby`/`/handover`) nunca
+        viam câmera nenhuma adicionada, removida ou reposicionada depois
+        dessa data."""
         import json
         p = Path(file_path)
         if not p.exists():
@@ -207,6 +215,34 @@ class SpatialH3CameraIndex:
             lon = c.get("long") or c.get("lon") or -46.6333
             self.index_camera(str(c.get("id")), c.get("nome", ""), float(lat), float(lon), metadata=c)
         log.info(f"SpatialH3CameraIndex carregou {len(cams)} câmeras com sucesso.")
+
+    def load_from_sqlite(self, db_path: str):
+        """Carrega e indexa as câmeras direto do catálogo SQLite vivo
+        (`database/live_cameras.db`) — substitui `load_from_json`, cuja
+        fonte ficou congelada desde 2026-08-31 (achado da mesma sessão que
+        corrigiu a liveness pública de câmera, ver camera_grid_server.py).
+        Mesmo filtro de "câmera real" usado no resto do sistema: precisa
+        ter `video_id` ou `url`, e não ser candidata de teste (essas ficam
+        de fora da grade principal de propósito, ver db_manager.py)."""
+        import sqlite3
+        p = Path(db_path)
+        if not p.exists():
+            return
+        conn = sqlite3.connect(str(p))
+        conn.row_factory = sqlite3.Row
+        query = """
+            SELECT * FROM cameras
+            WHERE lat IS NOT NULL AND long IS NOT NULL
+              AND (video_id IS NOT NULL OR (url IS NOT NULL AND url != ''))
+              AND (is_test_candidate IS NULL OR is_test_candidate = 0)
+        """
+        cams = [dict(r) for r in conn.execute(query).fetchall()]
+        conn.close()
+        for c in cams:
+            lat = c.get("lat") or -23.5505
+            lon = c.get("long") or c.get("lon") or -46.6333
+            self.index_camera(str(c.get("id")), c.get("nome", ""), float(lat), float(lon), metadata=c)
+        log.info(f"SpatialH3CameraIndex carregou {len(cams)} câmeras do SQLite com sucesso.")
 
     @staticmethod
     def get_postgres_h3_v4_ddl(table_name: str = "pontos_acesso", res: int = 8) -> str:
@@ -279,11 +315,12 @@ class CrossCameraHandoverEngine:
         }
 
 
-# Instância global do motor espacial inicializada com as 10.000 câmeras reais
+# Instância global do motor espacial inicializada com as câmeras reais do
+# catálogo vivo (SQLite) — ver load_from_sqlite acima.
 global_spatial_index = SpatialH3CameraIndex()
 try:
-    _json_path = Path(__file__).resolve().parent.parent / "database" / "live_cameras.json"
-    global_spatial_index.load_from_json(str(_json_path))
+    _db_path = Path(__file__).resolve().parent.parent / "database" / "live_cameras.db"
+    global_spatial_index.load_from_sqlite(str(_db_path))
 except Exception as e:
     log.warning(f"Não foi possível carregar base de câmeras inicial: {e}")
 
