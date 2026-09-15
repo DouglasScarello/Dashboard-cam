@@ -29,6 +29,7 @@ import argparse
 import json
 import os
 import sys
+import threading
 import time
 from typing import Any, Dict, List, Optional
 
@@ -56,15 +57,22 @@ CONF_PLACA = 0.25
 # produção os recortes abaixo de 60px saem todos como leu=None.
 LARGURA_MINIMA_UTIL = 70
 
-_detector_veiculo = None
+# Achado (2026-09-15, paralelizando o Estágio B do lote de triagem): um
+# singleton global com "if None: cria" não é thread-safe — sob
+# ThreadPoolExecutor, threads que chegam ao mesmo tempo carregam cada uma
+# sua própria cópia do modelo (mesmo bug já corrigido em
+# camera_scoring_common.py). Thread-local resolve sem lock: cada thread
+# carrega e reusa a SUA própria instância.
+_thread_local = threading.local()
 
 
 def _get_detector_veiculo():
-    global _detector_veiculo
-    if _detector_veiculo is None:
+    detector = getattr(_thread_local, "detector_veiculo", None)
+    if detector is None:
         from ultralytics import YOLO
-        _detector_veiculo = YOLO(YOLO_VEICULO, task="detect")
-    return _detector_veiculo
+        detector = YOLO(YOLO_VEICULO, task="detect")
+        _thread_local.detector_veiculo = detector
+    return detector
 
 
 def _analisa_frame(jpeg_bytes: bytes) -> Optional[Dict[str, Any]]:

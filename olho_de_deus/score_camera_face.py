@@ -32,6 +32,7 @@ import argparse
 import json
 import os
 import sys
+import threading
 import time
 from typing import Any, Dict, List, Optional
 
@@ -65,25 +66,29 @@ CLASSE_PESSOA = [0]  # COCO "person"
 # placa: detecta, mas não dá pra confiar no resultado).
 INTEROCULAR_MARGINAL_MIN = 25
 
-_detector_pessoa = None
-_face_detector = None
+# Achado (2026-09-15, paralelizando o Estágio B do lote de triagem): mesmo
+# bug de singleton não thread-safe já corrigido em camera_scoring_common.py
+# e score_camera_alpr.py — thread-local em vez de global, sem lock.
+_thread_local = threading.local()
 
 
 def _get_detector_pessoa():
-    global _detector_pessoa
-    if _detector_pessoa is None:
+    detector = getattr(_thread_local, "detector_pessoa", None)
+    if detector is None:
         from ultralytics import YOLO
-        _detector_pessoa = YOLO(YOLO_PESSOA, task="detect")
-    return _detector_pessoa
+        detector = YOLO(YOLO_PESSOA, task="detect")
+        _thread_local.detector_pessoa = detector
+    return detector
 
 
 def _get_face_detector():
-    global _face_detector
-    if _face_detector is None:
-        _face_detector = cv2.FaceDetectorYN.create(
+    detector = getattr(_thread_local, "face_detector", None)
+    if detector is None:
+        detector = cv2.FaceDetectorYN.create(
             str(YUNET_MODEL_PATH), "", (320, 320), score_threshold=0.6
         )
-    return _face_detector
+        _thread_local.face_detector = detector
+    return detector
 
 
 def _detecta_melhor_rosto(recorte_pessoa: np.ndarray) -> Optional[Dict[str, Any]]:

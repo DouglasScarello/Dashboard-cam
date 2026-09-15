@@ -77,6 +77,11 @@ PROGRESSO_A_CADA = 200
 
 FRAMES_ESTAGIO_B_PADRAO = 8
 INTERVALO_ESTAGIO_B_PADRAO = 10.0
+# Achado (2026-09-15): rodar as 2378 promissoras do Estágio A serial (uma
+# câmera de cada vez) levaria dias. 4 é deliberadamente baixo — Estágio B
+# usa modelo de verdade (YOLO+OCR/ArcFace) por frame, CPU sem GPU dedicada,
+# não I/O puro como o Estágio A (que aguenta 15+ threads).
+CONCURRENCY_ESTAGIO_B_PADRAO = 4
 
 
 def _estagio_a_uma_camera(cam: Dict[str, Any]) -> Dict[str, Any]:
@@ -207,14 +212,33 @@ def rodar_estagio_a(limit: Optional[int], dry_run: bool, forcar: bool,
     print("Gravado em camera_scoring_estagio_a.", file=sys.stderr)
 
 
-def rodar_estagio_b(limit: Optional[int], dry_run: bool, forcar_todas: bool,
-                     frames: int, interval: float) -> None:
-    # Import tardio: score_camera_alpr.py/score_camera_face.py puxam
-    # ultralytics/deepface/faiss — pesado, só vale pagar esse custo se
-    # Estágio B for de fato executado.
+def _estagio_b_uma_camera(item):
+    """Roda o(s) scorer(s) completo(s) pra UMA câmera — unidade de trabalho
+    do ThreadPoolExecutor. Import tardio de score_camera_alpr/
+    score_camera_face aqui dentro (não no topo do módulo) porque essas duas
+    libs puxam ultralytics/deepface/faiss — pesado, só vale pagar por
+    thread que efetivamente processa uma câmera."""
     import score_camera_alpr
     import score_camera_face
 
+    cam, info, frames, interval = item
+    alpr_veredito = alpr_largura = face_veredito = face_interocular = None
+
+    if info.get("promissora_placa"):
+        r = score_camera_alpr.avalia_camera(cam, frames, interval)
+        alpr_veredito = r["veredito"]
+        alpr_largura = r["bbox_largura_media"]
+
+    if info.get("promissora_rosto"):
+        r = score_camera_face.avalia_camera(cam, frames, interval)
+        face_veredito = r["veredito"]
+        face_interocular = r["interocular_medio"]
+
+    return cam, alpr_veredito, alpr_largura, face_veredito, face_interocular
+
+
+def rodar_estagio_b(limit: Optional[int], dry_run: bool, forcar_todas: bool,
+                     frames: int, interval: float, concorrencia: int) -> None:
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     garante_schema_scoring(conn)
@@ -236,37 +260,37 @@ def rodar_estagio_b(limit: Optional[int], dry_run: bool, forcar_todas: bool,
     conn.close()
 
     print(f"Estágio B: {len(cams)} câmeras "
-          f"{'(--forcar-todas, ignorando o filtro do Estágio A)' if forcar_todas else '(promissoras do Estágio A)'}",
+          f"{'(--forcar-todas, ignorando o filtro do Estágio A)' if forcar_todas else '(promissoras do Estágio A)'} "
+          f"— concorrência={concorrencia}",
           file=sys.stderr)
     if not cams:
         print("Nada pra fazer — rode o Estágio A primeiro, ou use --forcar-todas.", file=sys.stderr)
         return
 
+    # Achado (2026-09-15, ver score_camera_alpr.py/score_camera_face.py):
+    # concorrência aqui limita ao mesmo tempo I/O (captura de frame) e CPU
+    # (YOLO+OCR) — diferente do Estágio A, que separa os dois com um
+    # semáforo à parte, aqui não dá (avalia_camera() intercala captura e
+    # inferência frame a frame, sem gancho pra separar). Por isso o valor
+    # de concorrência já É o limite de inferência simultânea — mantido
+    # baixo de propósito (CPU sem GPU dedicada).
+    itens = [(cam, promissoras.get(cam["id"], {"promissora_placa": 1, "promissora_rosto": 1}), frames, interval)
+             for cam in cams]
+
     t0 = time.time()
-    for i, cam in enumerate(cams, start=1):
-        info = promissoras.get(cam["id"], {"promissora_placa": 1, "promissora_rosto": 1})
-        alpr_veredito = alpr_largura = face_veredito = face_interocular = None
+    with concurrent.futures.ThreadPoolExecutor(max_workers=concorrencia) as ex:
+        for i, (cam, alpr_veredito, alpr_largura, face_veredito, face_interocular) in enumerate(
+                ex.map(_estagio_b_uma_camera, itens), start=1):
+            print(f"[{i}/{len(cams)}] {cam.get('nome') or cam['id']}: "
+                  f"placa={alpr_veredito or '—'} rosto={face_veredito or '—'}", file=sys.stderr, flush=True)
 
-        if info.get("promissora_placa"):
-            r = score_camera_alpr.avalia_camera(cam, frames, interval)
-            alpr_veredito = r["veredito"]
-            alpr_largura = r["bbox_largura_media"]
+            if not dry_run:
+                conn = sqlite3.connect(DB_PATH)
+                salvar_resultado_scoring(conn, cam["id"], alpr_veredito, alpr_largura,
+                                          face_veredito, face_interocular)
+                conn.close()
 
-        if info.get("promissora_rosto"):
-            r = score_camera_face.avalia_camera(cam, frames, interval)
-            face_veredito = r["veredito"]
-            face_interocular = r["interocular_medio"]
-
-        print(f"[{i}/{len(cams)}] {cam.get('nome') or cam['id']}: "
-              f"placa={alpr_veredito or '—'} rosto={face_veredito or '—'}", file=sys.stderr, flush=True)
-
-        if not dry_run:
-            conn = sqlite3.connect(DB_PATH)
-            salvar_resultado_scoring(conn, cam["id"], alpr_veredito, alpr_largura,
-                                      face_veredito, face_interocular)
-            conn.close()
-
-        _progresso(i, len(cams), t0)
+            _progresso(i, len(cams), t0)
 
     print("Estágio B concluído." + (" [DRY-RUN, nada gravado]" if dry_run else ""), file=sys.stderr)
 
@@ -292,13 +316,16 @@ def main() -> int:
                      help="Ignora o filtro do Estágio A — roda em todas as câmeras vivas ainda não pontuadas")
     pb.add_argument("--frames", type=int, default=FRAMES_ESTAGIO_B_PADRAO)
     pb.add_argument("--interval", type=float, default=INTERVALO_ESTAGIO_B_PADRAO)
+    pb.add_argument("--concurrency", type=int, default=CONCURRENCY_ESTAGIO_B_PADRAO,
+                     help=f"Câmeras processadas em paralelo (padrão {CONCURRENCY_ESTAGIO_B_PADRAO} — "
+                          "CPU-bound, não subir sem medir antes)")
 
     args = p.parse_args()
 
     if args.comando == "estagio-a":
         rodar_estagio_a(args.limit, args.dry_run, args.forcar, args.concurrency, args.retry_falhas)
     else:
-        rodar_estagio_b(args.limit, args.dry_run, args.forcar_todas, args.frames, args.interval)
+        rodar_estagio_b(args.limit, args.dry_run, args.forcar_todas, args.frames, args.interval, args.concurrency)
 
     return 0
 
