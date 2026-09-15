@@ -296,6 +296,33 @@ CREATE TABLE IF NOT EXISTS face_sightings (
     created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Par "anonymous_persons"/"face_sightings" pro CORPO (Fase 2 do plano de
+-- 2026-09-15 — re-identificação por aparência via OSNet, ver reid_osnet.py).
+-- Deliberadamente uma tabela SEPARADA da de rosto: um mesmo body_id pode
+-- ter zero ou vários person_id associados ao longo do tempo (rosto nem
+-- sempre é visível — de costas, de longe, ângulo ruim — mas o corpo pode
+-- ainda ser rastreável). NUNCA usar isto sozinho pra confirmar identidade
+-- — roupa parecida no mesmo dia gera similaridade alta sem ser a mesma
+-- pessoa; serve só pra SUGERIR correlação de movimento entre câmeras.
+CREATE TABLE IF NOT EXISTS anonymous_bodies (
+    id                    SERIAL PRIMARY KEY,
+    code                  TEXT UNIQUE,            -- ex: "B-000001", nunca nome real
+    reference_embedding   BYTEA,                  -- OSNet 512-d, float32, normalizado L2
+    first_seen_at         TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_seen_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    times_seen            INTEGER DEFAULT 1,
+    cameras_seen          TEXT
+);
+
+CREATE TABLE IF NOT EXISTS body_sightings (
+    id              SERIAL PRIMARY KEY,
+    camera_id       TEXT,
+    body_id         INTEGER REFERENCES anonymous_bodies(id),
+    similarity      REAL,     -- similaridade de cosseno com o embedding de referência (1.0 = primeira vez)
+    evidence_path   TEXT,
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 """
 
 def init_db():
@@ -1017,6 +1044,99 @@ def get_all_persons(db: DB, limit: int = 200) -> List[Dict]:
     """TODO código de pessoa anônima já catalogado (não só recorrente) —
     pra galeria de cards, mais recente primeiro."""
     q = "SELECT * FROM anonymous_persons ORDER BY last_seen_at DESC LIMIT ?"
+    try:
+        return [dict(r) for r in db.execute(q, (limit,)).fetchall()]
+    except Exception:
+        return []
+
+
+def find_or_create_body(db: DB, embedding: List[float], camera_id: str,
+                         threshold: float = 0.75) -> Dict:
+    """Equivalente de `find_or_create_person`, mas pro CORPO (re-id de
+    aparência via OSNet, ver reid_osnet.py) — compara por SIMILARIDADE DE
+    COSSENO (maior = mais parecido), não distância L2 como o de rosto,
+    porque `reid_osnet.similaridade_corpo` já trabalha nessa escala.
+    threshold=0.75 é o ponto médio entre o que foi medido numa câmera real
+    nesta sessão (mesma pessoa entre frames: 0.80-1.00; pessoas diferentes:
+    ~0.38-0.39) — margem folgada dos dois lados, mas ainda not calibrado
+    com volume de produção (mesma ressalva de MIN_DET_CONFIDENCE_INSIGHTFACE
+    em biometric_processor.py).
+
+    Busca linear de propósito, mesma razão do `find_or_create_person`:
+    simples de acertar primeiro, trocar por índice é passo futuro direto
+    se o volume crescer demais."""
+    import numpy as np
+    import struct
+
+    query = np.asarray(embedding, dtype=np.float32)
+    norm = np.linalg.norm(query)
+    if norm > 0:
+        query = query / norm
+
+    rows = db.execute(
+        "SELECT id, code, reference_embedding, times_seen, cameras_seen FROM anonymous_bodies"
+    ).fetchall()
+
+    best_row, best_sim = None, -1.0
+    for r in rows:
+        ref = np.frombuffer(r["reference_embedding"], dtype=np.float32)
+        sim = float(np.dot(query, ref))
+        if sim > best_sim:
+            best_row, best_sim = r, sim
+
+    if best_row is not None and best_sim >= threshold:
+        cameras = set(c for c in (best_row["cameras_seen"] or "").split(",") if c)
+        cameras.add(camera_id)
+        db.execute(
+            "UPDATE anonymous_bodies SET last_seen_at=CURRENT_TIMESTAMP, "
+            "times_seen=times_seen+1, cameras_seen=? WHERE id=?",
+            (",".join(sorted(cameras)), best_row["id"]),
+        )
+        db.commit()
+        return {
+            "id": best_row["id"], "code": best_row["code"], "is_recurring": True,
+            "similarity": best_sim, "times_seen": best_row["times_seen"] + 1,
+        }
+
+    blob = struct.pack(f"{len(query)}f", *query.tolist())
+    cur = db.execute(
+        "INSERT INTO anonymous_bodies (code, reference_embedding, cameras_seen) VALUES (?, ?, ?)",
+        ("PENDENTE", blob, camera_id),
+    )
+    db.commit()
+    new_id = cur.lastrowid
+    code = generate_entity_code("B", new_id)
+    db.execute("UPDATE anonymous_bodies SET code = ? WHERE id = ?", (code, new_id))
+    db.commit()
+    return {"id": new_id, "code": code, "is_recurring": False, "similarity": 1.0, "times_seen": 1}
+
+
+def register_body_sighting(db: DB, camera_id: str, body_id: int, similarity: float,
+                            evidence_path: str = None) -> None:
+    """Registra UMA passagem de corpo — igual `register_face_sighting`,
+    gravado sempre (registro de movimentação, não só quando reconhece)."""
+    q = """INSERT INTO body_sightings (camera_id, body_id, similarity, evidence_path)
+           VALUES (?, ?, ?, ?)"""
+    db.execute(q, (camera_id, body_id, similarity, evidence_path))
+    db.commit()
+
+
+def get_body_history(db: DB, body_id: int) -> List[Dict]:
+    """Linha do tempo de onde/quando um código de corpo anônimo apareceu —
+    é isto que responde "essa pessoa passou por quais câmeras", já que o
+    rosto sozinho não captura isso quando o ângulo/distância não permite
+    reconhecimento facial."""
+    q = "SELECT * FROM body_sightings WHERE body_id = ? ORDER BY created_at ASC"
+    try:
+        return [dict(r) for r in db.execute(q, (body_id,)).fetchall()]
+    except Exception:
+        return []
+
+
+def get_recurring_bodies(db: DB, limit: int = 50) -> List[Dict]:
+    """Corpos anônimos vistos mais de 1 vez, mais recorrentes primeiro."""
+    q = ("SELECT * FROM anonymous_bodies WHERE times_seen > 1 "
+         "ORDER BY times_seen DESC, last_seen_at DESC LIMIT ?")
     try:
         return [dict(r) for r in db.execute(q, (limit,)).fetchall()]
     except Exception:

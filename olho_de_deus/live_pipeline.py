@@ -70,6 +70,7 @@ from alert_dispatcher import dispatch_sync
 from intelligence_db import (
     DB, init_db, register_evidence, register_match_log, get_threat_score, get_full_individual_dossier,
     find_or_create_person, register_face_sighting,
+    find_or_create_body, register_body_sighting,
 )
 from score_engine import ThreatScorer
 # 2026-09-13: trocado de forensic_report.generate_dossier_pdf pra
@@ -164,6 +165,12 @@ class LivePipeline:
         # boa, bata ou não com o banco de procurados (pedido do usuário:
         # catalogar quem passa, não só quem já é procurado).
         self.registered_anon_tracks = set()
+        # Fase 2 (2026-09-15) — mesma ideia, mas por CORPO (ver
+        # _register_anonymous_body_sighting): conjunto separado porque roda
+        # em condição diferente (todo track, mesmo sem embedding facial —
+        # é justamente o caso "rosto não deu, mas corpo talvez dê" que essa
+        # fase existe pra cobrir).
+        self.registered_anon_body_tracks = set()
         self.process_every_n = max(1, process_every_n)
         
         # Target FPS Dinâmico
@@ -467,6 +474,7 @@ class LivePipeline:
             current_track_ids = {res["track_id"] for res in results}
             self.alerted_tracks = {tid for tid in self.alerted_tracks if tid in current_track_ids}
             self.registered_anon_tracks = {tid for tid in self.registered_anon_tracks if tid in current_track_ids}
+            self.registered_anon_body_tracks = {tid for tid in self.registered_anon_body_tracks if tid in current_track_ids}
 
             for res in results:
                 track_id = res["track_id"]
@@ -495,6 +503,17 @@ class LivePipeline:
                         self._register_anonymous_sighting(frame, res["box"], embedding)
                     except Exception as e:
                         log.error(f"[anon] Falha ao registrar pessoa anônima: {e}")
+
+                # Fase 2 (2026-09-15) — re-id de CORPO roda independente do
+                # rosto, inclusive quando `embedding` é None (rosto não
+                # passou no gate: de costas, longe, ângulo ruim) — é
+                # justamente o caso que o corpo cobre e o rosto não.
+                if track_id not in self.registered_anon_body_tracks:
+                    self.registered_anon_body_tracks.add(track_id)
+                    try:
+                        self._register_anonymous_body_sighting(frame, res["box"])
+                    except Exception as e:
+                        log.error(f"[anon-corpo] Falha ao registrar corpo anônimo: {e}")
             
             # Drift-Free Sleep
             sleep_time = next_t - time.perf_counter()
@@ -665,6 +684,48 @@ class LivePipeline:
                      f"{person['times_seen']}ª vez, distância={person['distance']:.3f})")
         else:
             log.info(f"[anon] Novo código {person['code']} catalogado (câmera {self.camera_id})")
+
+    def _register_anonymous_body_sighting(self, frame, box):
+        """Fase 2 do plano de 2026-09-15 (mesclar técnicas de projetos
+        maduros) — equivalente de `_register_anonymous_sighting`, mas por
+        APARÊNCIA DE CORPO (OSNet, ver reid_osnet.py), não rosto.
+
+        Por que existe separado: `box` já é o recorte de PESSOA (YOLO), não
+        um recorte apertado de rosto — o mesmo `box` que alimenta o gate
+        facial serve de entrada aqui sem nenhum recorte adicional. Roda pra
+        TODO track, mesmo quando o rosto não passou no gate de qualidade
+        (pessoa de costas, longe, ângulo ruim) — é justamente o caso onde
+        rosto não resolve e corpo pode. NUNCA confirma identidade sozinho —
+        só correlaciona "este corpo pareceu em outra câmera", com a
+        similaridade sempre exposta pra quem for revisar (não escondida
+        atrás de um "match" binário como o rosto)."""
+        x1, y1, x2, y2 = box
+        h, w = frame.shape[:2]
+        body_roi = frame[max(0, y1):min(h, y2), max(0, x1):min(w, x2)]
+        if body_roi.size == 0:
+            return
+
+        from reid_osnet import embedding_corpo
+        embedding = embedding_corpo(body_roi)
+
+        body = find_or_create_body(self.db, embedding.tolist(), camera_id=self.camera_id)
+
+        evidence_dir = ROOT / "intelligence" / "evidence" / "anonimos_corpo"
+        evidence_dir.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+        filename = f"{body['code']}_{timestamp}.jpg"
+        evidence_path = evidence_dir / filename
+        cv2.imwrite(str(evidence_path), body_roi)
+
+        register_body_sighting(
+            self.db, camera_id=self.camera_id, body_id=body["id"],
+            similarity=body["similarity"], evidence_path=str(evidence_path),
+        )
+        if body["is_recurring"]:
+            log.info(f"[anon-corpo] 🔁 {body['code']} visto de novo (câmera {self.camera_id}, "
+                     f"{body['times_seen']}ª vez, similaridade={body['similarity']:.3f})")
+        else:
+            log.info(f"[anon-corpo] Novo código {body['code']} catalogado (câmera {self.camera_id})")
 
     def _draw_hud(self, frame, results):
         """Interface tática sobre o frame de vídeo."""
