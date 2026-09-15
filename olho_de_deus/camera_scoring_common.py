@@ -22,6 +22,7 @@ pré-filtro.
 from __future__ import annotations
 
 import sqlite3
+import threading
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -34,16 +35,26 @@ PESSOA_CLASSE = 0
 VEICULO_CLASSES = [2, 3, 5, 7]
 CLASSES_COMBINADAS = [PESSOA_CLASSE] + VEICULO_CLASSES
 
-_detector_combinado = None
+# Achado (2026-09-15, testando o Estágio A pela primeira vez com
+# concorrência real): um singleton global com "if None: cria" não é
+# thread-safe — em `camera_scoring_batch.py` (ThreadPoolExecutor), 3
+# threads chegaram simultaneamente antes da primeira terminar de atribuir
+# a variável global, e cada uma carregou sua própria cópia do modelo
+# (visto no log: "Loading ... for OpenVINO inference" 3x). Thread-local
+# resolve isso sem lock: cada thread carrega e reusa a SUA própria
+# instância, sem estado compartilhado — também evita qualquer dúvida sobre
+# segurança de chamadas concorrentes no mesmo objeto YOLO/OpenVINO.
+_thread_local = threading.local()
 
 
 def _get_detector_combinado():
-    global _detector_combinado
-    if _detector_combinado is None:
+    detector = getattr(_thread_local, "detector", None)
+    if detector is None:
         from ultralytics import YOLO
         modelo = str(Path(__file__).resolve().parent / "yolov8n_openvino_model")
-        _detector_combinado = YOLO(modelo, task="detect")
-    return _detector_combinado
+        detector = YOLO(modelo, task="detect")
+        _thread_local.detector = detector
+    return detector
 
 
 def detecta_pessoas_e_veiculos(frame: np.ndarray) -> Tuple[List[Tuple[int, int, int, int]],
