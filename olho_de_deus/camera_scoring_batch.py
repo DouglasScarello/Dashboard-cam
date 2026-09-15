@@ -122,26 +122,53 @@ def _progresso(i: int, total: int, t0: float) -> None:
           file=sys.stderr, flush=True)
 
 
-def rodar_estagio_a(limit: Optional[int], dry_run: bool, forcar: bool) -> None:
+def _buscar_falhas_de_captura(conn: sqlite3.Connection) -> List[Dict[str, Any]]:
+    """Câmeras que já passaram pelo Estágio A mas tiveram falha TOTAL de
+    captura (`frames_checados = 0`) — não foram avaliadas de verdade,
+    "sem pessoa nem veículo" pra elas é um artefato de rede/rate-limit, não
+    uma conclusão real. Achado (2026-09-15): rodando o catálogo inteiro,
+    750 caíram nessa categoria, 694 delas do mesmo host (digitraffic.fi,
+    câmeras da Finlândia) que já tinha dado rate-limit (HTTP 429) no
+    checador de liveness — sintoma de bater rápido demais nesse host com
+    concorrência alta, não de câmera ruim."""
+    linhas = conn.execute("""
+        SELECT c.* FROM camera_scoring_estagio_a e
+        JOIN cameras c ON c.id = e.camera_id
+        WHERE e.frames_checados = 0
+    """).fetchall()
+    return [dict(r) for r in linhas]
+
+
+def rodar_estagio_a(limit: Optional[int], dry_run: bool, forcar: bool,
+                     concorrencia: int, retry_falhas: bool) -> None:
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     garante_schema_scoring(conn)
     garante_tabela_estagio_a(conn)
     conn.commit()
 
-    cams = buscar_candidatas_scoring(conn, apenas_nao_pontuadas=not forcar, limit=limit)
+    if retry_falhas:
+        cams = _buscar_falhas_de_captura(conn)
+        if limit:
+            cams = cams[:limit]
+    else:
+        cams = buscar_candidatas_scoring(conn, apenas_nao_pontuadas=not forcar, limit=limit)
     conn.close()
 
-    print(f"Estágio A: {len(cams)} câmeras candidatas (vivas, fora da aba de teste)"
-          f"{' — incluindo já pontuadas (--forcar)' if forcar else ' — só as ainda não pontuadas'}",
-          file=sys.stderr)
+    if retry_falhas:
+        print(f"Estágio A [retry]: {len(cams)} câmeras com falha total de captura na rodada anterior "
+              f"— reprocessando com concorrência={concorrencia}", file=sys.stderr)
+    else:
+        print(f"Estágio A: {len(cams)} câmeras candidatas (vivas, fora da aba de teste)"
+              f"{' — incluindo já pontuadas (--forcar)' if forcar else ' — só as ainda não pontuadas'}",
+              file=sys.stderr)
     if not cams:
         print("Nada pra fazer.", file=sys.stderr)
         return
 
     resultados: List[Dict[str, Any]] = []
     t0 = time.time()
-    with concurrent.futures.ThreadPoolExecutor(max_workers=CONCURRENCY_CAPTURA) as ex:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=concorrencia) as ex:
         for i, res in enumerate(ex.map(_estagio_a_uma_camera, cams), start=1):
             resultados.append(res)
             _progresso(i, len(cams), t0)
@@ -252,6 +279,11 @@ def main() -> int:
     pa.add_argument("--limit", type=int, default=None)
     pa.add_argument("--dry-run", action="store_true", help="Só relatório, não escreve no banco")
     pa.add_argument("--forcar", action="store_true", help="Reavalia mesmo quem já tem scored_at")
+    pa.add_argument("--concurrency", type=int, default=CONCURRENCY_CAPTURA,
+                     help=f"Threads de captura simultâneas (padrão {CONCURRENCY_CAPTURA})")
+    pa.add_argument("--retry-falhas", action="store_true",
+                     help="Reprocessa só quem teve falha TOTAL de captura (frames_checados=0) "
+                          "na rodada anterior — use com --concurrency baixo se a causa for rate-limit")
 
     pb = sub.add_parser("estagio-b", help="Score completo (ALPR+rosto) nas promissoras do Estágio A")
     pb.add_argument("--limit", type=int, default=None)
@@ -264,7 +296,7 @@ def main() -> int:
     args = p.parse_args()
 
     if args.comando == "estagio-a":
-        rodar_estagio_a(args.limit, args.dry_run, args.forcar)
+        rodar_estagio_a(args.limit, args.dry_run, args.forcar, args.concurrency, args.retry_falhas)
     else:
         rodar_estagio_b(args.limit, args.dry_run, args.forcar_todas, args.frames, args.interval)
 
