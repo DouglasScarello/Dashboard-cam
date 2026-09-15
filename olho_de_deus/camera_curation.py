@@ -198,7 +198,12 @@ def curate(refresh_liveness: bool, concurrency: int) -> Tuple[List[Dict[str, Any
             continue
 
         status = liveness.get(cid, {}).get("status")
-        if status in ("DEAD", "ENDED_BUT_EXISTS"):
+        # Achado (2026-09-15): "ENDED_BUT_EXISTS" nunca é retornado por
+        # status_de_liveness() (só "DEAD"/"LIVE"/"AGUARDANDO_CONFIRMACAO"/
+        # None) — era um branch morto que dava a falsa impressão de que
+        # streams HLS encerrados eram tratados aqui. A normalização de
+        # verdade agora acontece em hls_liveness.py antes da escrita.
+        if status == "DEAD":
             entry["_removed_reason"] = f"DEAD ({status})"
             entry["_removed_at"] = now
             removed.append(entry)
