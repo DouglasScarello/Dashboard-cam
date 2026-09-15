@@ -47,21 +47,55 @@ def garante_schema_liveness(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE cameras ADD COLUMN dead_streak INTEGER DEFAULT 0")
 
 
-def buscar_candidatas(conn: sqlite3.Connection, stream_formats: Iterable[str],
+def buscar_candidatas(conn: sqlite3.Connection,
+                       stream_formats: Optional[Iterable[str]] = None,
+                       excluir_stream_formats: Optional[Iterable[str]] = None,
+                       excluir_youtube_por_url: bool = False,
                        limit: Optional[int] = None) -> List[Dict[str, Any]]:
-    """Câmeras de um ou mais `stream_format` ainda não confirmadas mortas.
+    """Câmeras elegíveis pra checagem de rotina, usada pelos 3 checadores.
 
-    Câmeras já confirmadas mortas (`confirmed_dead=1`) saem da varredura —
-    quem quiser reavaliar uma morta precisa de outro caminho (ex: a
-    recuperação por canal do YouTube), não da checagem de rotina, senão o
-    custo de varrer o catálogo cresce sem necessidade."""
-    formatos = list(stream_formats)
-    placeholders = ",".join("?" for _ in formatos)
+    Achado (2026-09-15, revisado 2026-09-15): a versão anterior filtrava
+    `confirmed_dead = 0` — mas essa coluna já vira 1 na PRIMEIRA checagem
+    morta (`aplicar_resultados` grava otimista, é o que permite o streak
+    contar), bem antes do streak de `STREAK_MINIMO_PRA_CONFIRMAR_MORTA`
+    confirmações completar. Resultado real, confirmado no banco: 4912
+    câmeras ficaram presas em `confirmed_dead=1, dead_streak=1` para
+    sempre — excluídas de toda checagem futura antes de chegar à 2ª
+    confirmação, sem chance de virar DEAD de verdade nem de provar que
+    voltaram a ficar LIVE. O filtro certo é o mesmo veredito usado pra
+    decidir remoção/exibição pública (`status_de_liveness`): só sai da
+    varredura de rotina quem JÁ tem streak completo (confirmado morto de
+    verdade); quem tem streak insuficiente (`AGUARDANDO_CONFIRMACAO`)
+    PRECISA continuar sendo candidata, senão nunca sai do limbo.
+
+    stream_formats: se dado, exige `stream_format IN (...)`.
+    excluir_stream_formats: se dado, exige `stream_format` NULL ou fora
+    dessa lista (usado pelo checador HLS, que herda tudo que não é
+    SNAPSHOT_JPEG/YOUTUBE, incluindo o legado com stream_format vazio).
+    excluir_youtube_por_url: filtra fora URLs de youtube.com/youtu.be
+    mesmo quando stream_format não identifica isso (legado)."""
+    condicoes = ["NOT (confirmed_dead = 1 AND dead_streak >= ?)", "url IS NOT NULL AND url != ''"]
+    params: List[Any] = [STREAK_MINIMO_PRA_CONFIRMAR_MORTA]
+
+    if stream_formats:
+        formatos = list(stream_formats)
+        placeholders = ",".join("?" for _ in formatos)
+        condicoes.append(f"stream_format IN ({placeholders})")
+        params.extend(formatos)
+
+    if excluir_stream_formats:
+        formatos = list(excluir_stream_formats)
+        placeholders = ",".join("?" for _ in formatos)
+        condicoes.append(f"(stream_format IS NULL OR stream_format NOT IN ({placeholders}))")
+        params.extend(formatos)
+
+    if excluir_youtube_por_url:
+        condicoes.append("url NOT LIKE '%youtube.com%' AND url NOT LIKE '%youtu.be%'")
+
     query = (
-        f"SELECT id, url, video_id, dead_streak FROM cameras "
-        f"WHERE stream_format IN ({placeholders}) AND confirmed_dead = 0"
+        "SELECT id, url, video_id, channel_url, dead_streak FROM cameras WHERE "
+        + " AND ".join(condicoes)
     )
-    params: List[Any] = list(formatos)
     if limit:
         query += " LIMIT ?"
         params.append(limit)

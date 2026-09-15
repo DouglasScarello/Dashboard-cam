@@ -31,6 +31,7 @@ from typing import Any, Dict, List, Optional
 from liveness_common import (
     DB_PATH,
     aplicar_resultados,
+    buscar_candidatas,
     garante_schema_liveness,
 )
 
@@ -86,12 +87,11 @@ def check_one_snapshot(url: str) -> Dict[str, Any]:
 
 
 def buscar_candidatas_snapshot(conn: sqlite3.Connection, limit: Optional[int] = None) -> List[Dict[str, Any]]:
-    query = "SELECT id, url, dead_streak FROM cameras WHERE confirmed_dead = 0 AND stream_format = 'SNAPSHOT_JPEG' AND url IS NOT NULL AND url != ''"
-    params: List[Any] = []
-    if limit:
-        query += " LIMIT ?"
-        params.append(limit)
-    return [dict(r) for r in conn.execute(query, params).fetchall()]
+    """Seleção de candidatas centralizada em `liveness_common.buscar_candidatas`
+    (achado 2026-09-15, revisado: a condição antiga aqui era
+    `confirmed_dead = 0`, que travava uma câmera fora da varredura já na
+    1ª falha, antes do streak de confirmações completar)."""
+    return buscar_candidatas(conn, stream_formats=["SNAPSHOT_JPEG"], limit=limit)
 
 
 def run(concurrency: int, limit: Optional[int], dry_run: bool) -> Dict[str, Any]:

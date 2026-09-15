@@ -51,6 +51,7 @@ from typing import Any, Dict, List, Optional
 from liveness_common import (
     DB_PATH,
     aplicar_resultados,
+    buscar_candidatas,
     garante_schema_liveness,
 )
 
@@ -127,20 +128,16 @@ def buscar_candidatas_hls(conn: sqlite3.Connection, limit: Optional[int] = None)
     2209 câmeras do catálogo têm `stream_format` vazio mas URL de Wowza/
     CDN direta — mesma família de `stream_format='M3U8'`, só sem o rótulo).
     Exclui explicitamente SNAPSHOT_JPEG e YOUTUBE, que têm checador
-    próprio."""
-    query = """
-        SELECT id, url, dead_streak FROM cameras
-        WHERE confirmed_dead = 0
-          AND (stream_format IS NULL OR stream_format NOT IN ('SNAPSHOT_JPEG', 'YOUTUBE'))
-          AND url IS NOT NULL AND url != ''
-          AND url NOT LIKE '%youtube.com%'
-          AND url NOT LIKE '%youtu.be%'
-    """
-    params: List[Any] = []
-    if limit:
-        query += " LIMIT ?"
-        params.append(limit)
-    return [dict(r) for r in conn.execute(query, params).fetchall()]
+    próprio. Seleção de candidatas centralizada em
+    `liveness_common.buscar_candidatas` (achado 2026-09-15, revisado: a
+    condição antiga aqui era `confirmed_dead = 0`, que travava uma câmera
+    fora da varredura já na 1ª falha — ver o docstring de lá)."""
+    return buscar_candidatas(
+        conn,
+        excluir_stream_formats=["SNAPSHOT_JPEG", "YOUTUBE"],
+        excluir_youtube_por_url=True,
+        limit=limit,
+    )
 
 
 def run(concurrency: int, limit: Optional[int], dry_run: bool) -> Dict[str, Any]:
@@ -155,7 +152,16 @@ def run(concurrency: int, limit: Optional[int], dry_run: bool) -> Dict[str, Any]
     def work(cam):
         r = check_one_hls(cam["url"])
         r["dead_streak_anterior"] = cam.get("dead_streak") or 0
+        # live_status guarda o texto ORIGINAL (distingue "ended_but_exists"
+        # de um 404 puro pra quem for depurar depois) — mas o campo "status"
+        # que vai pra aplicar_resultados precisa virar DEAD explicitamente.
+        # Achado (2026-09-15): sem essa normalização, "ENDED_BUT_EXISTS"
+        # (stream que virou gravação encerrada) não é nem "LIVE" nem "DEAD"
+        # pro vocabulário que aplicar_resultados entende — era descartado
+        # como "sem voto" pra sempre, nunca confirmado morto, re-testado
+        # em toda rodada futura sem nunca chegar a uma conclusão.
         r["live_status"] = "is_live" if r["status"] == "LIVE" else (r.get("status") or "offline").lower()
+        r["status"] = "LIVE" if r["status"] == "LIVE" else "DEAD"
         return cam["id"], r
 
     results: Dict[str, Any] = {}

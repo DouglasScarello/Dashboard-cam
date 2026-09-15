@@ -55,7 +55,7 @@ from typing import Any, Dict, Optional
 
 import yt_dlp
 
-from liveness_common import DB_PATH, aplicar_resultados, garante_schema_liveness
+from liveness_common import DB_PATH, aplicar_resultados, buscar_candidatas, garante_schema_liveness
 
 ROOT = Path(__file__).resolve().parent.parent
 CAMERAS_PATH = ROOT / "database" / "live_cameras.json"
@@ -180,11 +180,11 @@ def run(concurrency: int, limit: Optional[int], attempt_recovery: bool) -> Dict[
     # verdade, todas já com stream_format='YOUTUBE'. Filtrar aqui evita
     # tentativa inútil de yt-dlp em milhares de URLs que não são YouTube, e
     # evita sobreposição de escopo com hls_liveness.py/snapshot_liveness.py.
-    query = "SELECT id, url, video_id, channel_url, dead_streak FROM cameras WHERE stream_format = 'YOUTUBE' AND confirmed_dead = 0"
-    if limit:
-        query += f" LIMIT {limit}"
-
-    cameras = [dict(r) for r in conn.execute(query).fetchall()]
+    #
+    # Achado (2026-09-15, revisado): a query também usava `confirmed_dead =
+    # 0` direto, que exclui uma câmera da varredura já na 1ª falha, antes do
+    # streak de confirmações completar — ver `liveness_common.buscar_candidatas`.
+    cameras = buscar_candidatas(conn, stream_formats=["YOUTUBE"], limit=limit)
     conn.close()
 
     now = datetime.now(timezone.utc).isoformat()
