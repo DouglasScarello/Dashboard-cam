@@ -65,11 +65,17 @@ export default function CameraGrid() {
     const [geoFilter, setGeoFilter] = useState<'ALL' | 'NO_GEO' | 'WITH_GEO'>('ALL');
     const [areaFilter, setAreaFilter] = useState('');
     const [statusFilter, setStatusFilter] = useState<'ALL' | 'ONLINE' | 'OFFLINE'>('ALL');
+    // Aba de aptidão CONFIRMADA (Estágio B da triagem, ver
+    // camera_scoring_batch.py) — "TODAS" é a maioria do catálogo, "ALPR"/
+    // "ROSTO" só as câmeras com veredito='SERVE' de verdade, não achismo.
+    const [capacidadeFilter, setCapacidadeFilter] = useState<'TODAS' | 'ALPR' | 'ROSTO'>('TODAS');
     const [displayLimit, setDisplayLimit] = useState(10);
     const [totalCameras, setTotalCameras] = useState(0);
 
     const [uniqueCountries, setUniqueCountries] = useState<string[]>([]);
     const [uniqueAreas, setUniqueAreas] = useState<string[]>([]);
+    const [alprConfirmadas, setAlprConfirmadas] = useState(0);
+    const [rostoConfirmadas, setRostoConfirmadas] = useState(0);
 
     useEffect(() => {
         fetch(`${(import.meta as any).env.VITE_API_URL || 'http://localhost:8001'}/api/metadata/countries`)
@@ -81,6 +87,14 @@ export default function CameraGrid() {
             .then(res => res.json())
             .then(data => setUniqueAreas(data))
             .catch(err => console.error("Erro areas:", err));
+
+        fetch(`${(import.meta as any).env.VITE_API_URL || 'http://localhost:8001'}/api/metadata/stats`)
+            .then(res => res.json())
+            .then(data => {
+                setAlprConfirmadas(data.alpr_confirmadas || 0);
+                setRostoConfirmadas(data.rosto_confirmadas || 0);
+            })
+            .catch(err => console.error("Erro stats:", err));
     }, []);
 
     useEffect(() => {
@@ -96,6 +110,8 @@ export default function CameraGrid() {
         if (statusFilter !== 'ALL') params.append('status', statusFilter);
         if (geoFilter === 'NO_GEO' || geoFilter === 'WITH_GEO') params.append('geo', geoFilter);
         if (searchQuery) params.append('search', searchQuery);
+        if (capacidadeFilter === 'ALPR') params.append('capacidade', 'alpr');
+        else if (capacidadeFilter === 'ROSTO') params.append('capacidade', 'rosto');
 
         fetch(`${(import.meta as any).env.VITE_API_URL || 'http://localhost:8001'}/api/cameras?${params.toString()}`)
             .then(res => {
@@ -118,7 +134,7 @@ export default function CameraGrid() {
             });
 
         return () => { mounted = false; };
-    }, [countryFilter, areaFilter, statusFilter, geoFilter, searchQuery, displayLimit]);
+    }, [countryFilter, areaFilter, statusFilter, geoFilter, searchQuery, displayLimit, capacidadeFilter]);
 
     useEffect(() => {
         const fetchAlerts = () => {
@@ -240,6 +256,38 @@ export default function CameraGrid() {
 
                 {/* Filtros Geográficos */}
                 <div className="flex flex-col sm:flex-row flex-wrap items-end sm:items-center gap-4">
+                    {/* Abas de aptidão confirmada (placa/rosto) — veredito real
+                        da triagem (Estágio B), não achismo de resolução/distância */}
+                    <div className="flex items-center gap-1.5 bg-black/40 border border-white/10 rounded-lg p-1">
+                        <button
+                            onClick={() => { setCapacidadeFilter('TODAS'); setDisplayLimit(10); }}
+                            className={cn(
+                                "px-3 py-1.5 rounded-md text-[10px] font-black tracking-wider uppercase transition-all",
+                                capacidadeFilter === 'TODAS' ? "bg-white/10 text-white" : "text-muted hover:text-white"
+                            )}
+                        >
+                            TODAS AS CÂMERAS
+                        </button>
+                        <button
+                            onClick={() => { setCapacidadeFilter('ALPR'); setDisplayLimit(10); }}
+                            className={cn(
+                                "px-3 py-1.5 rounded-md text-[10px] font-black tracking-wider uppercase transition-all",
+                                capacidadeFilter === 'ALPR' ? "bg-accent-emerald/20 text-accent-emerald" : "text-muted hover:text-white"
+                            )}
+                        >
+                            ✅ PLACA CONFIRMADA ({alprConfirmadas})
+                        </button>
+                        <button
+                            onClick={() => { setCapacidadeFilter('ROSTO'); setDisplayLimit(10); }}
+                            className={cn(
+                                "px-3 py-1.5 rounded-md text-[10px] font-black tracking-wider uppercase transition-all",
+                                capacidadeFilter === 'ROSTO' ? "bg-accent-emerald/20 text-accent-emerald" : "text-muted hover:text-white"
+                            )}
+                        >
+                            ✅ ROSTO CONFIRMADO ({rostoConfirmadas})
+                        </button>
+                    </div>
+
                     {/* Filtro de Sem Local */}
                     <div className="flex items-center gap-1.5 bg-black/40 border border-white/10 rounded-lg p-1">
                         <button
