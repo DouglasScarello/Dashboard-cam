@@ -47,12 +47,15 @@ import concurrent.futures
 import json
 import logging
 import os
+import sqlite3
 import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional
 
 import yt_dlp
+
+from liveness_common import DB_PATH, aplicar_resultados, garante_schema_liveness
 
 ROOT = Path(__file__).resolve().parent.parent
 CAMERAS_PATH = ROOT / "database" / "live_cameras.json"
@@ -153,27 +156,31 @@ def save_json(path: Path, data):
     tmp.replace(path)
 
 
-def _garante_schema(conn) -> None:
-    """`channel_url` e `dead_streak` não existiam na tabela original — a
-    primeira ficou pra trás numa migração (era a causa do SELECT quebrado que
-    derrubava o timer diário), a segunda é nova, pro gate de remoção. Guarda
-    de idempotência igual à usada pra `is_test_candidate`/`test_notes`."""
+def _garante_schema_youtube(conn) -> None:
+    """`channel_url` é específica deste checador (recuperação por canal do
+    YouTube) — ficou pra trás numa migração (era a causa do SELECT quebrado
+    que derrubava o timer diário). `dead_streak` é compartilhada com os
+    outros dois checadores, garantida por `liveness_common`."""
     colunas = {row[1] for row in conn.execute("PRAGMA table_info(cameras)")}
     if "channel_url" not in colunas:
         conn.execute("ALTER TABLE cameras ADD COLUMN channel_url TEXT")
-    if "dead_streak" not in colunas:
-        conn.execute("ALTER TABLE cameras ADD COLUMN dead_streak INTEGER DEFAULT 0")
+    garante_schema_liveness(conn)
 
 
 def run(concurrency: int, limit: Optional[int], attempt_recovery: bool) -> Dict[str, Any]:
-    import sqlite3
-    db_path = ROOT / "database" / "live_cameras.db"
-    conn = sqlite3.connect(db_path)
+    conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
-    _garante_schema(conn)
+    _garante_schema_youtube(conn)
     conn.commit()
 
-    query = "SELECT id, url, video_id, channel_url, dead_streak FROM cameras WHERE confirmed_dead = 0"
+    # Achado (2026-09-15): esta query não filtrava por stream_format — o
+    # checador do YouTube estava varrendo TODAS as 8218 câmeras do catálogo
+    # (incluindo 4641 SNAPSHOT_JPEG e 1353+2209 HLS diretas), tentando abrir
+    # cada uma via yt-dlp. Confirmado: só 11 câmeras têm URL de YouTube de
+    # verdade, todas já com stream_format='YOUTUBE'. Filtrar aqui evita
+    # tentativa inútil de yt-dlp em milhares de URLs que não são YouTube, e
+    # evita sobreposição de escopo com hls_liveness.py/snapshot_liveness.py.
+    query = "SELECT id, url, video_id, channel_url, dead_streak FROM cameras WHERE stream_format = 'YOUTUBE' AND confirmed_dead = 0"
     if limit:
         query += f" LIMIT {limit}"
 
@@ -218,37 +225,35 @@ def run(concurrency: int, limit: Optional[int], attempt_recovery: bool) -> Dict[
     log.info(f"Checadas {len(results)} câmeras — LIVE: {live_count} | MORTA/ENCERRADA: {dead_count} "
              f"| recuperadas via canal: {len(recovered)}")
 
-    # Atualizar o SQLite
-    conn = sqlite3.connect(db_path)
-    with conn:
-        for cam_id, r in results.items():
-            esta_morta = r["status"] != "LIVE"
-            confirmed_dead = 1 if esta_morta else 0
-            live_confirmed = 0 if esta_morta else 1
-            live_status_str = r.get("live_status") or "offline"
-            # Streak soma enquanto continuar morta em execuções separadas;
-            # zera assim que uma execução a encontrar viva (inclusive por
-            # recuperação de canal). É essa contagem, não o resultado de uma
-            # execução isolada, que autoriza remoção em camera_curation.py.
-            novo_streak = (r["dead_streak_anterior"] + 1) if esta_morta else 0
+    # Normaliza "status" pro vocabulário LIVE/DEAD que liveness_common
+    # entende (ENDED_BUT_EXISTS é uma variação de morta pra fins de streak).
+    for r in results.values():
+        r["status"] = "LIVE" if r["status"] == "LIVE" else "DEAD"
+        r["live_status"] = r.get("live_status") or "offline"
 
+    conn = sqlite3.connect(DB_PATH)
+    with conn:
+        # Colunas compartilhadas (confirmed_dead/live_confirmed/live_status/
+        # dead_streak/updated_at) via o mesmo gate de streak dos outros
+        # checadores — inclusive pras recuperadas por canal, já normalizadas
+        # como "LIVE" acima, então o streak delas zera corretamente.
+        aplicar_resultados(conn, results)
+
+        # Colunas específicas deste checador (video_id/url/channel_url) —
+        # channel_url pra toda checagem com valor conhecido, video_id/url só
+        # quando houve recuperação de fato (o vídeo antigo morreu e um novo
+        # foi achado no canal).
+        for cam_id, r in results.items():
             if r.get("recovered_video_id"):
-                conn.execute('''
-                    UPDATE cameras
-                    SET confirmed_dead = 0, live_confirmed = 1, live_status = ?,
-                        video_id = ?, url = ?, channel_url = ?, dead_streak = 0,
-                        updated_at = CURRENT_TIMESTAMP
-                    WHERE id = ?
-                ''', (live_status_str, r["recovered_video_id"], r["recovered_url"],
-                      r["channel_url"], cam_id))
-            else:
-                conn.execute('''
-                    UPDATE cameras
-                    SET confirmed_dead = ?, live_confirmed = ?, live_status = ?,
-                        channel_url = ?, dead_streak = ?, updated_at = CURRENT_TIMESTAMP
-                    WHERE id = ?
-                ''', (confirmed_dead, live_confirmed, live_status_str,
-                      r.get("channel_url"), novo_streak, cam_id))
+                conn.execute(
+                    "UPDATE cameras SET video_id = ?, url = ?, channel_url = ? WHERE id = ?",
+                    (r["recovered_video_id"], r["recovered_url"], r["channel_url"], cam_id),
+                )
+            elif r.get("channel_url"):
+                conn.execute(
+                    "UPDATE cameras SET channel_url = ? WHERE id = ?",
+                    (r["channel_url"], cam_id),
+                )
     conn.close()
 
     return {
