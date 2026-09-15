@@ -100,6 +100,7 @@ def get_cameras_by_filters(
     geo: str = "ALL",
     search: str = None,
     source: str = None,
+    capacidade: str = None,
 ) -> List[Dict[str, Any]]:
     """Igual a `get_cameras()`, mas SEM filtro de status e SEM
     limit/offset — usado quando o chamador precisa aplicar o filtro
@@ -108,7 +109,13 @@ def get_cameras_by_filters(
     é dado confiável, só um resíduo do JSON de origem). Dataset atual
     (milhares, não milhões) — trazer tudo que bate no filtro de metadado
     e paginar em Python depois de calcular liveness é rápido o
-    suficiente, não precisa de índice/paginação SQL pra isso."""
+    suficiente, não precisa de índice/paginação SQL pra isso.
+
+    `capacidade` ("alpr" | "rosto" | None): filtro por aptidão CONFIRMADA
+    (`alpr_veredito`/`face_veredito` = 'SERVE', ver camera_scoring_batch.py
+    Estágio B, 2026-09-15). Diferente do filtro de liveness — esse veredito
+    é um valor já definitivo por câmera, não depende de gate de streak, é
+    seguro filtrar direto em SQL."""
     conn = get_connection()
     query = "SELECT * FROM cameras WHERE 1=1"
     params = []
@@ -126,6 +133,10 @@ def get_cameras_by_filters(
         query += " AND lat IS NOT NULL AND long IS NOT NULL"
     elif geo == "NO_GEO":
         query += " AND (lat IS NULL OR long IS NULL)"
+    if capacidade == "alpr":
+        query += " AND alpr_veredito = 'SERVE'"
+    elif capacidade == "rosto":
+        query += " AND face_veredito = 'SERVE'"
     if search:
         search_term = f"%{search.lower()}%"
         query += """ AND (

@@ -512,7 +512,8 @@ async def list_cameras(
     area: Optional[str] = None,
     status: Optional[str] = "ALL",
     geo: Optional[str] = "ALL",
-    source: Optional[str] = None
+    source: Optional[str] = None,
+    capacidade: Optional[str] = None,
 ):
 
     # Achado real (2026-08-31, revisado 2026-09-15): filtrar ONLINE/OFFLINE
@@ -524,7 +525,15 @@ async def list_cameras(
     # (são atributos estáticos, seguros de filtrar ali), mas
     # ONLINE/OFFLINE e a paginação final acontecem em Python, depois de
     # calcular a liveness de verdade pra cada câmera candidata.
-    candidates = db_manager.get_cameras_by_filters(country=country, area=area, geo=geo, search=search, source=source)
+    #
+    # `capacidade` ("alpr"|"rosto") é OUTRO tipo de atributo estático —
+    # veredito definitivo da triagem (ver camera_scoring_batch.py), não
+    # depende de gate de streak — filtra direto no SQL, mesmo grupo que
+    # país/área/geo/busca.
+    candidates = db_manager.get_cameras_by_filters(
+        country=country, area=area, geo=geo, search=search, source=source,
+        capacidade=capacidade,
+    )
 
     enriched = []
     for cam in candidates:
@@ -586,12 +595,18 @@ async def get_stats():
     all_cams = db_manager.get_cameras_by_filters()
 
     online = 0
+    alpr_confirmadas = 0
+    rosto_confirmadas = 0
     by_country: Dict[str, int] = {}
     by_area: Dict[str, int] = {}
     for cam in all_cams:
         cam_id = str(cam.get("id"))
         if not get_camera_liveness(cam_id, cam)["confirmed_dead"]:
             online += 1
+        if cam.get("alpr_veredito") == "SERVE":
+            alpr_confirmadas += 1
+        if cam.get("face_veredito") == "SERVE":
+            rosto_confirmadas += 1
         pais = (cam.get("pais") or "").upper() or "N/D"
         by_country[pais] = by_country.get(pais, 0) + 1
         area = (cam.get("tipo_area") or "").upper() or "N/D"
@@ -602,6 +617,8 @@ async def get_stats():
         "total": total,
         "online": online,
         "offline": total - online,
+        "alpr_confirmadas": alpr_confirmadas,
+        "rosto_confirmadas": rosto_confirmadas,
         "by_country": dict(sorted(by_country.items(), key=lambda x: -x[1])[:20]),
         "by_area": dict(sorted(by_area.items(), key=lambda x: -x[1])),
         "by_source": db_manager.get_sources_with_counts(),
