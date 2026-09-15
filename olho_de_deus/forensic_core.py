@@ -298,24 +298,31 @@ class PAdESLTASigner:
         return signer, False
 
     @staticmethod
-    def _resolve_timestamper(tsa_urls: Optional[List[str]] = None) -> Tuple[Any, Optional[str]]:
-        """Tenta cada TSA RFC 3161 público em ordem; usa DummyTimeStamper
-        (sem validade nenhuma) só se todos falharem. Retorna
-        (timestamper, url_usada_ou_None)."""
-        for url in (tsa_urls or DEFAULT_TSA_URLS):
-            try:
-                stamper = HTTPTimeStamper(url=url, timeout=8)
-                return stamper, url
-            except Exception:
-                continue
-        return None, None
-
-    @staticmethod
     def sign_pdf_bytes(pdf_bytes: bytes, perito_name: str = "PERITO OFICIAL CRIMINAL", matricula: str = "PC-98124") -> Dict[str, Any]:
         """Assina o PDF e retorna o resultado REAL da operação — nunca um
         campo de sucesso fixo. Chamador deve checar `result["signed"]`
-        antes de tratar `pdf_bytes` como assinado."""
+        antes de tratar `pdf_bytes` como assinado.
+
+        Achado (2026-09-15): a versão anterior "escolhia" um TSA só
+        construindo `HTTPTimeStamper(url=url, timeout=8)` dentro de um
+        try/except — mas o `__init__` dessa classe (confirmado no
+        código-fonte da lib pyHanko instalada) só guarda `url`/`timeout`,
+        NUNCA faz uma chamada de rede. A conexão real só acontece bem
+        depois, dentro de `signers.sign_pdf()`, quando o timestamper é de
+        fato invocado pra buscar o carimbo. Resultado: o try/except nunca
+        capturava uma falha real de TSA fora do ar — sempre "escolhia" o
+        primeiro da lista (Digicert), e se ele estivesse fora do ar, a
+        assinatura inteira falhava sem nunca tentar Sectigo/FreeTSA como o
+        design pretendia.
+
+        Correção: o loop de tentativa envolve `signers.sign_pdf(...)`
+        COMPLETO por URL candidata — a única forma real de saber se um TSA
+        responde é tentando assinar de verdade. O `writer` é recriado a
+        cada tentativa (reaproveitar um writer que uma tentativa anterior
+        pode ter mutado parcialmente arrisca um erro diferente, tipo
+        "documento já assinado", na segunda tentativa)."""
         from io import BytesIO
+        from pyhanko.sign.timestamps import TimestampRequestError
 
         result: Dict[str, Any] = {
             "signed": False,
@@ -329,16 +336,6 @@ class PAdESLTASigner:
             signer, accredited = PAdESLTASigner._load_or_generate_signer(perito_name, matricula)
             result["icp_brasil_accredited"] = accredited
 
-            timestamper, tsa_url = PAdESLTASigner._resolve_timestamper()
-            if timestamper is None:
-                # Nenhum TSA público respondeu — usar DummyTimeStamper é a
-                # única alternativa offline, mas isso NÃO é um carimbo real.
-                timestamper = DummyTimeStamper(tsa_cert=signer.signing_cert, tsa_key=signer.signing_key)
-                result["tsa_used"] = None
-            else:
-                result["tsa_used"] = tsa_url
-
-            writer = IncrementalPdfFileWriter(BytesIO(pdf_bytes))
             sig_meta = signers.PdfSignatureMetadata(
                 field_name="Assinatura_Digital_Laudo",
                 reason="Laudo Oficial de Perícia Biométrica Facial",
@@ -347,16 +344,45 @@ class PAdESLTASigner:
                 use_pades_lta=True
             )
 
-            out_stream = BytesIO()
-            signers.sign_pdf(
-                writer,
-                sig_meta,
-                signer=signer,
-                timestamper=timestamper,
-                output=out_stream,
-            )
-            result["pdf_bytes"] = out_stream.getvalue()
-            result["signed"] = True
+            signed_bytes: Optional[bytes] = None
+            tsa_usado: Optional[str] = None
+            ultimo_erro: Optional[Exception] = None
+
+            for url in DEFAULT_TSA_URLS:
+                stamper = HTTPTimeStamper(url=url, timeout=8)
+                writer = IncrementalPdfFileWriter(BytesIO(pdf_bytes))
+                out_stream = BytesIO()
+                try:
+                    signers.sign_pdf(writer, sig_meta, signer=signer, timestamper=stamper, output=out_stream)
+                    signed_bytes = out_stream.getvalue()
+                    tsa_usado = url
+                    break
+                except (TimestampRequestError, OSError, TimeoutError) as e:
+                    ultimo_erro = e
+                    continue
+
+            if signed_bytes is not None:
+                result["pdf_bytes"] = signed_bytes
+                result["tsa_used"] = tsa_usado
+                result["signed"] = True
+            else:
+                # Todos os TSAs reais falharam DE VERDADE (não só "não
+                # tentados") — DummyTimeStamper é a única alternativa
+                # offline, mas isso NÃO é um carimbo real. tsa_used fica
+                # None de propósito, nunca aponta pra uma URL que não
+                # respondeu.
+                writer = IncrementalPdfFileWriter(BytesIO(pdf_bytes))
+                out_stream = BytesIO()
+                dummy = DummyTimeStamper(tsa_cert=signer.signing_cert, tsa_key=signer.signing_key)
+                signers.sign_pdf(writer, sig_meta, signer=signer, timestamper=dummy, output=out_stream)
+                result["pdf_bytes"] = out_stream.getvalue()
+                result["tsa_used"] = None
+                result["signed"] = True
+                if ultimo_erro:
+                    result["error"] = (
+                        f"Nenhum TSA público respondeu (último erro: {ultimo_erro}); "
+                        "assinado com DummyTimeStamper — carimbo de tempo SEM validade RFC 3161 real."
+                    )
         except Exception as e:
             result["error"] = f"{type(e).__name__}: {e}"
 

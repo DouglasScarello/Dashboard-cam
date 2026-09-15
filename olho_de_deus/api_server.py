@@ -511,7 +511,18 @@ async def generate_forensic_laudo(target_id: str):
         os.makedirs(out_dir, exist_ok=True)
         pdf_path = os.path.join(out_dir, f"LAUDO_PERICIAL_{target_id}_{int(time.time())}.pdf")
         
-        generated_path = build_official_forensic_laudo(dossier, pdf_path)
+        # Achado (2026-09-15): build_official_forensic_laudo() chama, lá no
+        # fundo (PAdESLTASigner.sign_pdf_bytes -> pyhanko), a versão SÍNCRONA
+        # de sign_pdf, que internamente faz `asyncio.run(...)`. Chamada direto
+        # daqui (dentro do event loop do FastAPI/uvicorn) sempre falhava com
+        # "RuntimeError: asyncio.run() cannot be called from a running event
+        # loop" — a assinatura PAdES nunca tinha chance de funcionar por este
+        # endpoint, independente do TSA estar no ar ou não. asyncio.to_thread
+        # roda a chamada síncrona inteira numa thread separada, sem loop
+        # rodando ali dentro, resolvendo o conflito. (live_pipeline.py já
+        # chama a mesma função dentro de uma threading.Thread comum, por isso
+        # nunca teve esse sintoma.)
+        generated_path = await asyncio.to_thread(build_official_forensic_laudo, dossier, pdf_path)
         manifest_path = generated_path.replace(".pdf", "_manifest_audit.json")
 
         # Ler de volta o status REAL da assinatura gravado pelo próprio
