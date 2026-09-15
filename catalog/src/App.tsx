@@ -741,10 +741,17 @@ function DossierModal({ detail, onClose }: { detail: IndividualDetail, onClose: 
                                         try {
                                             const res = await fetch(`http://localhost:8000/api/forensics/generate-laudo/${detail.id}`, { method: 'POST' });
                                             const data = await res.json();
-                                            if (data.status === 'SUCCESS') {
+                                            if (res.ok && data.status === 'SUCCESS') {
                                                 alert(`✅ Laudo Pericial PAdES-LTA gerado com sucesso!\nArquivo: ${data.laudo_pdf_path}\nManifesto: ${data.manifest_audit_path}`);
+                                            } else if (res.status === 409) {
+                                                // Achado (2026-09-15): o backend agora recusa gerar laudo pra
+                                                // indivíduo nunca avistado ao vivo (sem confronto biométrico real)
+                                                // — antes disso o botão sempre "funcionava" com um número
+                                                // inventado. `detail` é o corpo padrão do FastAPI pra HTTPException,
+                                                // não `message` (esse era o formato do branch antigo de erro).
+                                                alert(`⚠️ Não é possível gerar o laudo: ${data.detail}`);
                                             } else {
-                                                alert(`⚠️ Erro ao gerar laudo: ${data.message}`);
+                                                alert(`⚠️ Erro ao gerar laudo: ${data.detail || data.message || 'erro desconhecido'}`);
                                             }
                                         } catch (e) {
                                             alert(`Falha de conexão com a API Forense: ${e}`);
