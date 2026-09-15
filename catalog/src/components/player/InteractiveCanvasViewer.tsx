@@ -10,7 +10,7 @@ import {
 } from './types/player.types';
 import { tacticalAudio } from './audio/TacticalAudioEngine';
 import { Search, Lock, Unlock, Crop, Zap, Sparkles } from 'lucide-react';
-import { HlsVideoPlayer } from './HlsVideoPlayer';
+import { HlsVideoPlayer, HlsStreamTelemetry } from './HlsVideoPlayer';
 import { SnapshotImagePlayer } from './SnapshotImagePlayer';
 
 interface InteractiveCanvasViewerProps {
@@ -23,6 +23,7 @@ interface InteractiveCanvasViewerProps {
     zoomLevel: number;
     onZoomChange: (zoom: number) => void;
     onQuickEnhanceZoomedArea?: (type: EnhanceTargetType, croppedBase64: string) => void;
+    onTelemetry?: (telemetry: HlsStreamTelemetry) => void;
 }
 
 export const InteractiveCanvasViewer: React.FC<InteractiveCanvasViewerProps> = ({
@@ -34,6 +35,7 @@ export const InteractiveCanvasViewer: React.FC<InteractiveCanvasViewerProps> = (
     zoomLevel,
     onZoomChange,
     onQuickEnhanceZoomedArea,
+    onTelemetry,
 }) => {
     const containerRef = useRef<HTMLDivElement | null>(null);
     const loupeCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -49,6 +51,25 @@ export const InteractiveCanvasViewer: React.FC<InteractiveCanvasViewerProps> = (
         setVideoReady(false);
         const timer = setTimeout(() => setVideoReady(true), 3000);
         return () => clearTimeout(timer);
+    }, [videoId, camera.id]);
+
+    // O embed do YouTube é cross-origin (não expõe hls.js nem <video>
+    // real) e o SNAPSHOT_JPEG não é vídeo contínuo — nenhum dos dois tem
+    // telemetria de verdade pra reportar. Sem isto, trocar de uma câmera
+    // HLS pra uma dessas deixaria os últimos números reais "grudados" no
+    // HUD como se ainda fossem do stream atual.
+    useEffect(() => {
+        if (camera.video_id || camera.stream_format === 'SNAPSHOT_JPEG') {
+            onTelemetry?.({
+                fps: null,
+                bitrateMbps: null,
+                resolution: null,
+                bufferSeconds: null,
+                latencyMs: null,
+                qualityLevels: [],
+                currentLevel: -1,
+            });
+        }
     }, [videoId, camera.id]);
 
     // Matriz de Transformação (Pan & Zoom de 1.0x a 16.0x)
@@ -252,7 +273,7 @@ export const InteractiveCanvasViewer: React.FC<InteractiveCanvasViewerProps> = (
     const handleEnhanceZoomedArea = async (type: EnhanceTargetType = 'face') => {
         tacticalAudio.playAlert();
         try {
-            const res = await fetch(`http://localhost:8001/api/cameras/${camera.id}/snapshot`);
+            const res = await fetch(`http://localhost:8001/api/cameras/${camera.id}/snapshot?fresh=true`);
             if (res.ok) {
                 const blob = await res.blob();
                 const reader = new FileReader();
@@ -307,7 +328,7 @@ export const InteractiveCanvasViewer: React.FC<InteractiveCanvasViewerProps> = (
         if (w < 15 || h < 15) return;
 
         try {
-            const res = await fetch(`http://localhost:8001/api/cameras/${camera.id}/snapshot`);
+            const res = await fetch(`http://localhost:8001/api/cameras/${camera.id}/snapshot?fresh=true`);
             if (res.ok) {
                 const blob = await res.blob();
                 const reader = new FileReader();
@@ -429,6 +450,7 @@ export const InteractiveCanvasViewer: React.FC<InteractiveCanvasViewerProps> = (
                         }}
                         className="pointer-events-none select-none"
                         onReady={() => setVideoReady(true)}
+                        onTelemetry={onTelemetry}
                     />
                 ) : null}
 

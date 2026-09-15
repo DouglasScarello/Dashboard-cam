@@ -8,8 +8,10 @@ import cv2
 import numpy as np
 import faiss
 import json
+import logging
 import os
 import time
+from collections import Counter
 from ultralytics import YOLO
 from deepface import DeepFace
 from pathlib import Path
@@ -17,6 +19,25 @@ from typing import List, Dict, Optional, Tuple
 from core.vector_cache import VectorCache
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
+
+# Sem handler/basicConfig própria — reaproveita a config já feita pelo
+# entrypoint (monitor_camera.py -> live_pipeline.py), mesma convenção do
+# resto do projeto (ver live_pipeline.py:91).
+log = logging.getLogger("biometric_processor")
+
+# 2026-09-12: instrumentação temporária pra diagnóstico ao vivo (pedido do
+# usuário) — `_face_quality_ok` sempre soube o motivo exato de rejeitar um
+# rosto (retorna a razão como string), mas ninguém nunca logava isso, então
+# não dava pra saber SE o gate estava rejeitando por rosto pequeno demais,
+# ângulo, blur ou confiança do detector — só que zero pessoa era registrada.
+# Contador agregado (não loga cada frame individualmente, senão em câmera
+# de rua movimentada isso inunda o log) + amostra ocasional com os números
+# reais medidos, pra decidir com dado, não achismo, se vale afrouxar algum
+# limiar ou trocar de câmera.
+_gate_reject_counts = Counter()
+_gate_accept_count = [0]
+_gate_last_report = [0.0]
+_GATE_REPORT_INTERVAL_SEC = 30.0
 
 YUNET_MODEL_PATH = Path(__file__).parent / "models" / "face_detection_yunet_2023mar.onnx"
 
@@ -105,10 +126,12 @@ def _detect_and_align_face(face_detector, crop: np.ndarray, out_size: int = 112)
     """
     h, w = crop.shape[:2]
     if h < 10 or w < 10:
+        _report_gate_result("recorte_pequeno_demais")
         return None
     face_detector.setInputSize((w, h))
     _, faces = face_detector.detect(crop)
     if faces is None or len(faces) == 0:
+        _report_gate_result("nenhum_rosto_no_recorte")
         return None
     best = max(faces, key=lambda f: f[14])  # coluna 14 = score de confiança
     landmarks = best[4:14].reshape(5, 2).astype(np.float32)
@@ -116,13 +139,50 @@ def _detect_and_align_face(face_detector, crop: np.ndarray, out_size: int = 112)
 
     transform, _ = cv2.estimateAffinePartial2D(landmarks, _ARCFACE_112_TEMPLATE, method=cv2.LMEDS)
     if transform is None:
+        _report_gate_result("falha_no_alinhamento")
         return None
     aligned = cv2.warpAffine(crop, transform, (out_size, out_size), borderValue=0.0)
 
-    ok, _reason = _face_quality_ok(landmarks, det_score, aligned)
+    ok, reason = _face_quality_ok(landmarks, det_score, aligned)
     if not ok:
+        _report_gate_result(reason)
         return None
+    _report_gate_result("aceito", accepted=True)
     return aligned
+
+
+def _report_gate_result(reason: str, accepted: bool = False) -> None:
+    """Agrega motivos de rejeição/aceite do gate de qualidade facial e
+    imprime um resumo periódico (não frame a frame — inundaria o log numa
+    câmera de rua movimentada). Instrumentação de diagnóstico pedida pelo
+    usuário em 2026-09-12 (ver MIN_INTEROCULAR_PX etc.) — antes disso o
+    motivo exato existia (a string já vinha pronta) mas nunca era logado,
+    então não dava pra saber SE o gate estava rejeitando por rosto pequeno,
+    ângulo, blur ou falta de rosto na silhueta."""
+    if accepted:
+        _gate_accept_count[0] += 1
+    else:
+        # Agrupa pela categoria (antes do "(") pra não estourar o Counter
+        # com uma chave distinta por valor medido — queremos saber QUAL
+        # limiar está barrando, não cada leitura individual em px/variância.
+        category = reason.split("(")[0].strip()
+        _gate_reject_counts[category] += 1
+
+    now = time.time()
+    if now - _gate_last_report[0] >= _GATE_REPORT_INTERVAL_SEC:
+        _gate_last_report[0] = now
+        total_rejected = sum(_gate_reject_counts.values())
+        total = total_rejected + _gate_accept_count[0]
+        if total == 0:
+            return
+        breakdown = ", ".join(f"{k}={v}" for k, v in _gate_reject_counts.most_common())
+        log.info(
+            f"[face_gate] últimos {_GATE_REPORT_INTERVAL_SEC:.0f}s: "
+            f"{_gate_accept_count[0]}/{total} rostos aceitos ({100*_gate_accept_count[0]/total:.0f}%). "
+            f"Rejeitados por: {breakdown or 'nenhum'}"
+        )
+        _gate_reject_counts.clear()
+        _gate_accept_count[0] = 0
 
 # ─── Confidence score (Etapa 1: calibração → probabilidade → classificação) ───
 # Distância L2 → probabilidade; thresholds para HIGH/MEDIUM/LOW (calibrar com match_logs depois)

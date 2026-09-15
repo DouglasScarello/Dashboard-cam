@@ -83,6 +83,51 @@ class DB:
             self.conn.close()
 
 # ─────────────────────────────────────────────────────────────────
+# CÓDIGOS DE IDENTIFICAÇÃO (VEÍCULOS E PESSOAS ANÔNIMAS)
+# ─────────────────────────────────────────────────────────────────
+# 2026-09-13: pedido do usuário — pensando em escala (o sistema roda 24/7
+# e é pra acumular milhões de veículos/pessoas catalogados com o tempo),
+# um contador zero-padded de 6 dígitos (V-000001) estoura em 1 milhão de
+# registros. Trocado por um esquema coerente com documentos reais tipo
+# CPF/RG: capacidade grande + dígito verificador — só que "de máquina",
+# sem tentar imitar a formatação exata de um documento oficial.
+#
+# - 9 dígitos sequenciais por categoria (cabe até 999.999.999 cada)
+# - 1 dígito verificador via algoritmo de Luhn (ISO/IEC 7812 — o mesmo
+#   usado em número de cartão de crédito e IMEI) — detecta erro de
+#   digitação/leitura de 1 dígito na hora, sem precisar consultar o banco.
+
+
+def _luhn_check_digit(digits: str) -> str:
+    """Calcula o dígito verificador de Luhn pra uma sequência numérica."""
+    total = 0
+    for i, ch in enumerate(reversed(digits)):
+        d = int(ch)
+        if i % 2 == 0:  # dobra a cada segundo dígito a partir da direita
+            d *= 2
+            if d > 9:
+                d -= 9
+        total += d
+    return str((10 - (total % 10)) % 10)
+
+
+def generate_entity_code(prefix: str, seq_id: int) -> str:
+    """Gera um código tipo 'V-000000001-7' — prefixo de categoria, 9 dígitos
+    sequenciais e 1 dígito verificador de Luhn."""
+    seq = f"{seq_id:09d}"
+    return f"{prefix}-{seq}-{_luhn_check_digit(seq)}"
+
+
+def validate_entity_code(code: str) -> bool:
+    """Confere se um código já emitido é internamente consistente (dígito
+    verificador bate) — útil pra pegar erro de digitação antes de consultar
+    o banco, mesmo raciocínio de validar um CPF antes de buscar no cadastro."""
+    parts = code.strip().upper().split("-")
+    if len(parts) != 3 or not parts[1].isdigit() or not parts[2].isdigit():
+        return False
+    return _luhn_check_digit(parts[1]) == parts[2]
+
+# ─────────────────────────────────────────────────────────────────
 # SCHEMA E INICIALIZAÇÃO
 # ─────────────────────────────────────────────────────────────────
 
@@ -311,6 +356,12 @@ def init_db():
         "ALTER TABLE vehicles ADD COLUMN color TEXT",
         "ALTER TABLE vehicles ADD COLUMN body_type TEXT",
         "ALTER TABLE vehicles ADD COLUMN code TEXT",
+        # 2026-09-13: `evidence_path` sempre foi o recorte do VEÍCULO inteiro
+        # (ver monitor_plates.py). Pedido do usuário: guardar também um
+        # recorte só da PLACA (o mesmo que passou no OCR vencedor) — dá pra
+        # ver a placa de perto E o veículo completo (cor/carroceria/etc) na
+        # mesma leitura, em vez de só uma foto genérica do carro.
+        "ALTER TABLE plate_reads ADD COLUMN plate_evidence_path TEXT",
     ):
         try:
             db.execute(stmt)
@@ -686,7 +737,8 @@ def register_match_log(db: DB, individual_id: str, distance: float, probability:
 def register_plate_read(db: DB, camera_id: str, country_code: str, plate_text: str,
                          plate_format: str, confidence: float, frames_voted: int,
                          evidence_path: str = None, vehicle_id: int = None,
-                         vehicle_color: str = None, vehicle_type: str = None) -> None:
+                         vehicle_color: str = None, vehicle_type: str = None,
+                         plate_evidence_path: str = None) -> None:
     """Registra uma leitura de placa consolidada (monitor_plates.py) — só chamado
     depois da votação por consenso entre vários frames, nunca por frame único.
 
@@ -694,13 +746,18 @@ def register_plate_read(db: DB, camera_id: str, country_code: str, plate_text: s
     com qualquer lista de observação — pedido explícito do usuário: isso é
     um registro de movimentação urbana (pra treinar/calibrar a própria IA
     depois), não só um alarme de "achou o procurado". vehicle_color/
-    vehicle_type vêm do CLIP zero-shot (vehicle_attributes.py)."""
+    vehicle_type vêm do CLIP zero-shot (vehicle_attributes.py).
+
+    2026-09-13: `evidence_path` é o recorte do VEÍCULO INTEIRO (cor,
+    carroceria, contexto); `plate_evidence_path` é o recorte só da PLACA
+    (o mesmo que fechou o consenso de OCR) — pedido do usuário pra ver as
+    duas fotos, não só uma foto genérica do carro."""
     q = """INSERT INTO plate_reads
            (camera_id, country_code, plate_text, plate_format, confidence, frames_voted,
-            evidence_path, vehicle_id, vehicle_color, vehicle_type)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
+            evidence_path, vehicle_id, vehicle_color, vehicle_type, plate_evidence_path)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
     db.execute(q, (camera_id, country_code, plate_text, plate_format, confidence, frames_voted,
-                   evidence_path, vehicle_id, vehicle_color, vehicle_type))
+                   evidence_path, vehicle_id, vehicle_color, vehicle_type, plate_evidence_path))
     db.commit()
 
 
@@ -733,24 +790,47 @@ def find_or_create_vehicle(db: DB, plate_text: str, country_code: str, camera_id
     if match:
         matched_text, score = match
         vehicle = known[matched_text]
-        cameras = set(c for c in (vehicle.get("cameras_seen") or "").split(",") if c)
+        
+        # Lógica de estacionamento: se visto na mesma câmera há menos de 15 minutos,
+        # consideramos que o veículo está apenas parado/estacionado, não é uma "nova passagem".
+        import datetime
+        try:
+            last_seen = datetime.datetime.strptime(vehicle["last_seen_at"], "%Y-%m-%d %H:%M:%S")
+            now = datetime.datetime.utcnow()
+            diff_minutes = (now - last_seen).total_seconds() / 60.0
+        except Exception:
+            diff_minutes = 999.0
+            
+        cameras_str = vehicle.get("cameras_seen") or ""
+        is_parked = (diff_minutes < 15.0) and (camera_id in cameras_str)
+
+        cameras = set(c for c in cameras_str.split(",") if c)
         cameras.add(camera_id)
         # Só sobrescreve cor/carroceria se essa leitura conseguiu classificar
-        # (evita apagar um dado bom com um None de uma tentativa que falhou).
         new_color = color or vehicle.get("color")
         new_body = body_type or vehicle.get("body_type")
-        db.execute(
-            "UPDATE vehicles SET last_seen_at=CURRENT_TIMESTAMP, times_seen=times_seen+1, "
-            "cameras_seen=?, color=?, body_type=? WHERE id=?",
-            (",".join(sorted(cameras)), new_color, new_body, vehicle["id"]),
-        )
+        
+        if not is_parked:
+            db.execute(
+                "UPDATE vehicles SET last_seen_at=CURRENT_TIMESTAMP, times_seen=times_seen+1, "
+                "cameras_seen=?, color=?, body_type=? WHERE id=?",
+                (",".join(sorted(cameras)), new_color, new_body, vehicle["id"]),
+            )
+            vehicle["times_seen"] = vehicle["times_seen"] + 1
+        else:
+            # Se está estacionado, apenas atualiza o last_seen_at sem aumentar times_seen
+            db.execute(
+                "UPDATE vehicles SET last_seen_at=CURRENT_TIMESTAMP WHERE id=?",
+                (vehicle["id"],),
+            )
+            
         db.commit()
-        vehicle["times_seen"] = vehicle["times_seen"] + 1
         vehicle["cameras_seen"] = ",".join(sorted(cameras))
         vehicle["color"] = new_color
         vehicle["body_type"] = new_body
         vehicle["is_recurring"] = True
         vehicle["match_score"] = score
+        vehicle["is_parked"] = is_parked
         return vehicle
 
     cur = db.execute(
@@ -759,7 +839,7 @@ def find_or_create_vehicle(db: DB, plate_text: str, country_code: str, camera_id
     )
     db.commit()
     new_id = cur.lastrowid
-    code = f"V-{new_id:06d}"
+    code = generate_entity_code("V", new_id)
     db.execute("UPDATE vehicles SET code = ? WHERE id = ?", (code, new_id))
     db.commit()
     return {
@@ -842,7 +922,7 @@ def find_or_create_person(db: DB, embedding: List[float], camera_id: str,
     )
     db.commit()
     new_id = cur.lastrowid
-    code = f"P-{new_id:06d}"
+    code = generate_entity_code("P", new_id)
     db.execute("UPDATE anonymous_persons SET code = ? WHERE id = ?", (code, new_id))
     db.commit()
     return {"id": new_id, "code": code, "is_recurring": False, "distance": 0.0, "times_seen": 1}

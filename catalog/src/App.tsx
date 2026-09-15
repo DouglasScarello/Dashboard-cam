@@ -733,7 +733,7 @@ function DossierModal({ detail, onClose }: { detail: IndividualDetail, onClose: 
                         <div className="bg-white/[0.02] border border-white/10 p-6 rounded-xl mb-12 flex flex-col md:flex-row gap-4 items-center justify-between">
                             <div>
                                 <span className="text-[10px] font-black text-accent-emerald tracking-widest uppercase block mb-1">PROTOCOLO C4ISR & PERÍCIA JUDICIAL</span>
-                                <p className="text-xs text-white/60 font-medium">Geração de prova técnica pericial e mobilização de cerco viário.</p>
+                                <p className="text-xs text-white/60 font-medium">Geração de prova técnica pericial (real, assinada) e simulação de mobilização de cerco viário.</p>
                             </div>
                             <div className="flex gap-3">
                                 <button
@@ -760,15 +760,16 @@ function DossierModal({ detail, onClose }: { detail: IndividualDetail, onClose: 
                                             const res = await fetch(`http://localhost:8000/api/tactical/dispatch-containment`, { method: 'POST' });
                                             const data = await res.json();
                                             if (data.status === 'DISPATCH_ENGAGED') {
-                                                alert(`🚨 Cerco Viário LAPJV Acionado!\nViaturas Despachadas: ${data.dispatch_assignments.length}\nChokepoints: ${data.containment_pincer.chokepoints.length} pontos de estrangulamento`);
+                                                alert(`🧪 SIMULAÇÃO de Cerco Viário LAPJV\nEsta é uma frota fictícia fixa (3 viaturas) — não há integração real com nenhuma corporação policial.\n\nViaturas na simulação: ${data.dispatch_assignments.length}\nChokepoints: ${data.containment_pincer.chokepoints.length} pontos de estrangulamento`);
                                             }
                                         } catch (e) {
-                                            alert(`Falha ao acionar despacho: ${e}`);
+                                            alert(`Falha ao rodar simulação de despacho: ${e}`);
                                         }
                                     }}
                                     className="px-4 py-2.5 bg-red-500/20 hover:bg-red-500/30 text-red-500 border border-red-500/40 rounded-lg text-xs font-black tracking-wider uppercase transition-all flex items-center gap-2"
+                                    title="Frota fictícia fixa — algoritmo real (LAPJV/Hungarian), dados de viaturas simulados"
                                 >
-                                    🚨 Despacho & Cerco LAPJV
+                                    🧪 Simular Despacho & Cerco LAPJV
                                 </button>
                             </div>
                         </div>

@@ -2,14 +2,28 @@ import React, { useEffect, useRef, useState } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import Hls from 'hls.js';
 
+// Telemetria real, lida direto do hls.js e do elemento <video> — nunca
+// estimada ou inventada. Campo `null` = essa fonte de stream não expõe
+// esse dado (ex: player nativo do Safari não dá bitrate nem níveis).
+export interface HlsStreamTelemetry {
+    fps: number | null;
+    bitrateMbps: number | null;
+    resolution: string | null;
+    bufferSeconds: number | null;
+    latencyMs: number | null;
+    qualityLevels: string[];
+    currentLevel: number;
+}
+
 interface HlsVideoPlayerProps {
     src: string;
     style?: React.CSSProperties;
     className?: string;
     onReady?: () => void;
+    onTelemetry?: (telemetry: HlsStreamTelemetry) => void;
 }
 
-export const HlsVideoPlayer: React.FC<HlsVideoPlayerProps> = ({ src, style, className, onReady }) => {
+export const HlsVideoPlayer: React.FC<HlsVideoPlayerProps> = ({ src, style, className, onReady, onTelemetry }) => {
     const videoRef = useRef<HTMLVideoElement>(null);
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -26,6 +40,8 @@ export const HlsVideoPlayer: React.FC<HlsVideoPlayerProps> = ({ src, style, clas
     // efeito — só `src` deve reiniciar a conexão.
     const onReadyRef = useRef(onReady);
     onReadyRef.current = onReady;
+    const onTelemetryRef = useRef(onTelemetry);
+    onTelemetryRef.current = onTelemetry;
 
     useEffect(() => {
         const video = videoRef.current;
@@ -33,6 +49,62 @@ export const HlsVideoPlayer: React.FC<HlsVideoPlayerProps> = ({ src, style, clas
 
         let hls: Hls | null = null;
         setErrorMsg(null);
+
+        // FPS real vem da diferença de frames decodificados entre duas
+        // amostras (API padrão do browser), não de um valor fixo — precisa
+        // de estado entre chamadas do interval, por isso o ref aqui fora.
+        let lastFrameSample: { time: number; frames: number } | null = null;
+
+        const sampleTelemetry = () => {
+            if (!onTelemetryRef.current) return;
+
+            let fps: number | null = null;
+            const quality = video.getVideoPlaybackQuality?.();
+            if (quality && typeof quality.totalVideoFrames === 'number') {
+                const now = performance.now();
+                if (lastFrameSample) {
+                    const dtSeconds = (now - lastFrameSample.time) / 1000;
+                    const frameDelta = quality.totalVideoFrames - lastFrameSample.frames;
+                    if (dtSeconds > 0.2) {
+                        fps = Math.round(frameDelta / dtSeconds);
+                    }
+                }
+                lastFrameSample = { time: now, frames: quality.totalVideoFrames };
+            }
+
+            let bufferSeconds: number | null = null;
+            if (video.buffered.length > 0) {
+                bufferSeconds = Math.max(0, video.buffered.end(video.buffered.length - 1) - video.currentTime);
+            }
+
+            let resolution: string | null = video.videoWidth && video.videoHeight
+                ? `${video.videoWidth}x${video.videoHeight}`
+                : null;
+
+            let bitrateMbps: number | null = null;
+            let qualityLevels: string[] = [];
+            let currentLevel = -1;
+            let latencyMs: number | null = null;
+
+            if (hls) {
+                if (typeof hls.bandwidthEstimate === 'number' && hls.bandwidthEstimate > 0) {
+                    bitrateMbps = Math.round((hls.bandwidthEstimate / 1_000_000) * 10) / 10;
+                }
+                qualityLevels = hls.levels.map(level => `${level.height}p`);
+                currentLevel = hls.currentLevel;
+                if (hls.currentLevel >= 0 && hls.levels[hls.currentLevel]) {
+                    const level = hls.levels[hls.currentLevel];
+                    resolution = `${level.width}x${level.height}`;
+                }
+                if (Number.isFinite(hls.latency) && hls.latency > 0) {
+                    latencyMs = Math.round(hls.latency * 1000);
+                }
+            }
+
+            onTelemetryRef.current({ fps, bitrateMbps, resolution, bufferSeconds, latencyMs, qualityLevels, currentLevel });
+        };
+
+        const telemetryInterval = window.setInterval(sampleTelemetry, 1000);
 
         if (Hls.isSupported()) {
             hls = new Hls({
@@ -65,12 +137,14 @@ export const HlsVideoPlayer: React.FC<HlsVideoPlayerProps> = ({ src, style, clas
             hls.on(Hls.Events.MANIFEST_PARSED, () => {
                 video.play().catch(e => console.log('Autoplay prevented', e));
                 if (onReadyRef.current) onReadyRef.current();
+                sampleTelemetry();
             });
         } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
             video.src = src;
             video.addEventListener('loadedmetadata', () => {
                 video.play().catch(e => console.log('Autoplay prevented', e));
                 if (onReadyRef.current) onReadyRef.current();
+                sampleTelemetry();
             });
             video.addEventListener('error', () => {
                 setErrorMsg("CÂMERA OFFLINE (Sinal indisponível)");
@@ -78,6 +152,7 @@ export const HlsVideoPlayer: React.FC<HlsVideoPlayerProps> = ({ src, style, clas
         }
 
         return () => {
+            window.clearInterval(telemetryInterval);
             if (hls) {
                 hls.destroy();
             }

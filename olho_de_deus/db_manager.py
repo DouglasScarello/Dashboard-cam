@@ -67,7 +67,14 @@ def get_cameras(
     real_cam_clause = " AND (video_id IS NOT NULL OR url IS NOT NULL AND url != '')"
     query += real_cam_clause
     count_query += real_cam_clause
-    
+
+    # 2026-09-13: candidatas de teste (aba "Câmeras Teste") não devem
+    # aparecer misturadas na grade principal de 8 mil câmeras — ficam só
+    # na própria aba, até serem promovidas a uma pipeline de verdade.
+    not_test_clause = " AND (is_test_candidate IS NULL OR is_test_candidate = 0)"
+    query += not_test_clause
+    count_query += not_test_clause
+
     query += " LIMIT ? OFFSET ?"
     params_with_limit = params + [limit, offset]
     
@@ -132,6 +139,7 @@ def get_cameras_by_filters(
         params.extend([search_term] * 6)
 
     query += " AND (video_id IS NOT NULL OR url IS NOT NULL AND url != '')"
+    query += " AND (is_test_candidate IS NULL OR is_test_candidate = 0)"
 
     cursor = conn.cursor()
     cursor.execute(query, params)
@@ -199,3 +207,57 @@ def get_camera_by_id(camera_id: str) -> Optional[Dict[str, Any]]:
     if row:
         return dict(row)
     return None
+
+
+# ─────────────────────────────────────────────────────────────────
+# CÂMERAS CANDIDATAS (ABA "CÂMERAS TESTE")
+# ─────────────────────────────────────────────────────────────────
+# 2026-09-13: pedido do usuário — workspace pra testar candidatas de
+# câmera AO VIVO na própria interface (mesmo player tático de zoom/pan das
+# câmeras de verdade) antes de promover uma pra virar a câmera oficial de
+# um pipeline. Reaproveita a mesma tabela `cameras` (mesmo formato que o
+# TacticalVideoPlayer já sabe renderizar) marcada com `is_test_candidate=1`
+# pra não aparecer misturada na grade principal.
+
+def get_test_candidates() -> List[Dict[str, Any]]:
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT * FROM cameras WHERE is_test_candidate = 1 ORDER BY created_at DESC"
+    )
+    rows = cursor.fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def add_test_candidate(
+    camera_id: str, nome: str, video_id: Optional[str] = None,
+    url: Optional[str] = None, pais: Optional[str] = None,
+    local: Optional[str] = None, test_notes: Optional[str] = None,
+) -> Dict[str, Any]:
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        """INSERT OR REPLACE INTO cameras
+           (id, nome, local, pais, tipo_area, setor, video_id, url,
+            is_test_candidate, test_notes, created_at, updated_at)
+           VALUES (?, ?, ?, ?, 'TESTE_PLACA', 'TESTE', ?, ?, 1, ?,
+                   COALESCE((SELECT created_at FROM cameras WHERE id = ?), CURRENT_TIMESTAMP),
+                   CURRENT_TIMESTAMP)""",
+        (camera_id, nome, local, pais, video_id, url, test_notes, camera_id),
+    )
+    conn.commit()
+    conn.close()
+    return get_camera_by_id(camera_id)
+
+
+def delete_test_candidate(camera_id: str) -> bool:
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "DELETE FROM cameras WHERE id = ? AND is_test_candidate = 1", (camera_id,)
+    )
+    deleted = cursor.rowcount > 0
+    conn.commit()
+    conn.close()
+    return deleted

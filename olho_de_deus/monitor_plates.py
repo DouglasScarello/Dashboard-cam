@@ -149,11 +149,28 @@ def main():
                     fmt_name = track.resolved_format if track else None
 
                     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+
+                    # Duas fotos por leitura — pedido do usuário: uma da placa
+                    # de perto (o recorte exato que fechou o consenso de OCR,
+                    # guardado em plate_processor.py no momento da resolução)
+                    # e uma do veículo inteiro (cor/carroceria/contexto). Se
+                    # por algum motivo o recorte da placa não foi guardado
+                    # (não devia acontecer quando resolved=True), cai pro
+                    # crop do veículo a partir da caixa atual como reserva.
+                    x1, y1, x2, y2 = res["box"]
+                    fallback_vehicle_crop = frame[max(0, y1):y2, max(0, x1):x2]
+                    vehicle_crop = track.resolved_vehicle_crop if track and track.resolved_vehicle_crop is not None else fallback_vehicle_crop
+                    plate_crop = track.resolved_plate_crop if track else None
+
                     filename = f"plate_{res['plate_text']}_{timestamp}.jpg"
                     evidence_path = EVIDENCE_DIR / filename
-                    x1, y1, x2, y2 = res["box"]
-                    vehicle_crop = frame[max(0, y1):y2, max(0, x1):x2]
                     cv2.imwrite(str(evidence_path), vehicle_crop)
+
+                    plate_evidence_path = None
+                    if plate_crop is not None and plate_crop.size > 0:
+                        plate_filename = f"plate_{res['plate_text']}_{timestamp}_crop.jpg"
+                        plate_evidence_path = EVIDENCE_DIR / plate_filename
+                        cv2.imwrite(str(plate_evidence_path), plate_crop)
 
                     color, body_type, color_conf, body_conf = vehicle_attribute_classifier.classify(vehicle_crop)
 
@@ -161,21 +178,28 @@ def main():
                         db, plate_text=res["plate_text"], country_code=country,
                         camera_id=args.camera_id, color=color, body_type=body_type,
                     )
-                    register_plate_read(
-                        db, camera_id=args.camera_id, country_code=country,
-                        plate_text=res["plate_text"], plate_format=fmt_name or "INCERTO",
-                        confidence=res["plate_conf"], frames_voted=res["votes_so_far"],
-                        evidence_path=str(evidence_path), vehicle_id=vehicle["id"],
-                        vehicle_color=color, vehicle_type=body_type,
-                    )
+                    
                     descricao = f"{color or '?'} {body_type or '?'}"
-                    if vehicle["is_recurring"]:
-                        log.info(f"[REGISTRADO] placa='{res['plate_text']}' ({descricao}) conf={res['plate_conf']:.0%} "
-                                 f"— 🔁 JÁ VISTO ANTES (veículo #{vehicle['id']}, "
-                                 f"{vehicle['times_seen']}ª vez, match={vehicle['match_score']:.0%})")
+                    
+                    if vehicle.get("is_parked"):
+                        log.info(f"[ESTACIONADO] placa='{res['plate_text']}' ({descricao}) "
+                                 f"— Veículo já visto nesta mesma câmera recentemente. Tempo de estacionamento atualizado.")
                     else:
-                        log.info(f"[REGISTRADO] placa='{res['plate_text']}' ({descricao}) conf={res['plate_conf']:.0%} "
-                                 f"formato={fmt_name} evidencia={filename} (veículo novo #{vehicle['id']})")
+                        register_plate_read(
+                            db, camera_id=args.camera_id, country_code=country,
+                            plate_text=res["plate_text"], plate_format=fmt_name or "INCERTO",
+                            confidence=res["plate_conf"], frames_voted=res["votes_so_far"],
+                            evidence_path=str(evidence_path), vehicle_id=vehicle["id"],
+                            vehicle_color=color, vehicle_type=body_type,
+                            plate_evidence_path=str(plate_evidence_path) if plate_evidence_path else None,
+                        )
+                        if vehicle.get("is_recurring"):
+                            log.info(f"[REGISTRADO] placa='{res['plate_text']}' ({descricao}) conf={res['plate_conf']:.0%} "
+                                     f"— 🔁 JÁ VISTO ANTES (veículo #{vehicle['id']}, "
+                                     f"{vehicle['times_seen']}ª vez, match={vehicle.get('match_score', 0):.0%})")
+                        else:
+                            log.info(f"[REGISTRADO] placa='{res['plate_text']}' ({descricao}) conf={res['plate_conf']:.0%} "
+                                     f"formato={fmt_name} evidencia={filename} (veículo novo #{vehicle['id']})")
 
                     hit = check_plate_watchlist(db, res["plate_text"])
                     if hit:
@@ -187,8 +211,8 @@ def main():
             display = frame.copy()
             _draw_hud(display, results, fps)
             try:
-                cv2.imwrite(str(liveview_tmp), display)
-                os.replace(liveview_tmp, liveview_path)
+                if cv2.imwrite(str(liveview_tmp), display):
+                    os.replace(liveview_tmp, liveview_path)
             except Exception as e:
                 log.error(f"[liveview] falha ao escrever frame: {e}")
 

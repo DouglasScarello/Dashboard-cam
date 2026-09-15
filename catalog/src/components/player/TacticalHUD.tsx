@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
+import * as mgrs from 'mgrs';
 import { StreamTelemetry, CameraData } from './types/player.types';
-import { Shield, Radio, Activity, Compass, Clock, MapPin, Eye } from 'lucide-react';
+import { Shield, Radio, Activity, Clock, MapPin, Eye } from 'lucide-react';
 
 interface TacticalHUDProps {
     telemetry: StreamTelemetry;
@@ -21,7 +22,6 @@ export const TacticalHUD: React.FC<TacticalHUDProps> = ({
 }) => {
     const [timeZulu, setTimeZulu] = useState('');
     const [timeLocal, setTimeLocal] = useState('');
-    const [azimuth, setAzimuth] = useState(142);
 
     useEffect(() => {
         const updateTime = () => {
@@ -40,15 +40,22 @@ export const TacticalHUD: React.FC<TacticalHUDProps> = ({
         ? `${camera.lat.toFixed(5)}, ${camera.long.toFixed(5)}` 
         : 'GEO-N/D';
 
-    // Conversão MGRS simulada para fidelidade tática
-    const mgrsCoord = camera.lat && camera.long
-        ? `23K PR ${Math.abs(Math.floor(camera.long * 1000) % 100000)} ${Math.abs(Math.floor(camera.lat * 1000) % 100000)}`
-        : '23K PR 33410 88204';
+    // Conversão MGRS real (WGS84 -> UTM -> MGRS, biblioteca `mgrs`,
+    // portada do proj4js) a partir das coordenadas reais da câmera — antes
+    // disto era uma fórmula decorativa que nunca correspondia a um ponto
+    // real no solo, mesmo parecendo uma referência militar válida.
+    let mgrsCoord = 'MGRS-N/D';
+    if (camera.lat != null && camera.long != null) {
+        try {
+            mgrsCoord = mgrs.forward([camera.long, camera.lat]);
+        } catch {
+            mgrsCoord = 'MGRS-N/D';
+        }
+    }
 
     return (
         <div className="absolute inset-0 pointer-events-none z-20 flex flex-col justify-between p-4 overflow-hidden select-none font-mono">
-            {/* Scanlines Sutis Militares */}
-            <div className="absolute inset-0 bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.35)_50%)] bg-[length:100%_4px] opacity-20 pointer-events-none" />
+            {/* Scanlines Sutis Militares removidos a pedido do usuario para maximizar qualidade da camera */}
 
             {/* Cantos Táticos de Alvo (Target Brackets) */}
             <div className="absolute top-4 left-4 w-7 h-7 border-t-2 border-l-2 border-accent-emerald shadow-[0_0_10px_rgba(16,185,129,0.5)]" />
@@ -91,7 +98,7 @@ export const TacticalHUD: React.FC<TacticalHUDProps> = ({
                             {isFrozen ? 'FREEZE FRAME // ANÁLISE ESTÁTICA' : 'LIVE C4ISR STREAM'}
                         </span>
                         <span className="text-white/30">|</span>
-                        <span className="text-accent-emerald font-bold">{telemetry.protocol || 'HLS-DIRECT'}</span>
+                        <span className="text-accent-emerald font-bold">{telemetry.protocol}</span>
                         <span className="text-white/30">|</span>
                         <span className="text-accent-amber font-bold">{zoomLevel.toFixed(1)}x MAG</span>
                     </div>
@@ -103,14 +110,15 @@ export const TacticalHUD: React.FC<TacticalHUDProps> = ({
                     </div>
                 </div>
 
-                {/* Bússola Tática & Azimute Central */}
+                {/* Referência de Grade Militar (MGRS real, sem azimute —
+                    nenhuma câmera do catálogo expõe orientação/bússola de
+                    verdade, então não fingimos uma) */}
                 <div className="hidden md:flex flex-col items-center bg-black/65 backdrop-blur-md px-4 py-1 rounded-lg border border-white/10">
-                    <div className="flex items-center gap-1 text-[10px] text-accent-emerald font-bold">
-                        <Compass className="w-3.5 h-3.5" />
-                        <span>AZM: {azimuth}° [SSE]</span>
+                    <div className="text-[10px] text-accent-emerald font-bold tracking-widest">
+                        MGRS
                     </div>
-                    <div className="text-[8px] text-white/50 tracking-widest mt-0.5">
-                        MGRS: {mgrsCoord}
+                    <div className="text-[9px] text-white/70 tracking-widest mt-0.5 font-mono">
+                        {mgrsCoord}
                     </div>
                 </div>
 
@@ -148,22 +156,22 @@ export const TacticalHUD: React.FC<TacticalHUDProps> = ({
                 <div className="bg-black/75 backdrop-blur-md px-3.5 py-2 rounded-lg border border-white/10 flex items-center gap-4 text-[10px] text-white/80 shadow-lg">
                     <div>
                         <span className="text-white/40 text-[8px] block uppercase font-bold">FPS</span>
-                        <span className="text-accent-emerald font-black text-xs">{telemetry.fps || 30}</span>
+                        <span className="text-accent-emerald font-black text-xs">{telemetry.fps ?? 'N/D'}</span>
                     </div>
                     <div className="h-5 w-[1px] bg-white/10" />
                     <div>
                         <span className="text-white/40 text-[8px] block uppercase font-bold">RES</span>
-                        <span className="text-white font-bold text-[10px]">{telemetry.resolution || '1080p'}</span>
+                        <span className="text-white font-bold text-[10px]">{telemetry.resolution ?? 'N/D'}</span>
                     </div>
                     <div className="h-5 w-[1px] bg-white/10" />
                     <div>
                         <span className="text-white/40 text-[8px] block uppercase font-bold">BITRATE</span>
-                        <span className="text-accent-emerald font-black text-xs">{telemetry.bitrateMbps || 4.2} Mb/s</span>
+                        <span className="text-accent-emerald font-black text-xs">{telemetry.bitrateMbps != null ? `${telemetry.bitrateMbps} Mb/s` : 'N/D'}</span>
                     </div>
                     <div className="h-5 w-[1px] bg-white/10" />
                     <div>
                         <span className="text-white/40 text-[8px] block uppercase font-bold">BUFFER</span>
-                        <span className="text-accent-amber font-bold text-xs">{telemetry.bufferSeconds || 0.8}s</span>
+                        <span className="text-accent-amber font-bold text-xs">{telemetry.bufferSeconds != null ? `${telemetry.bufferSeconds.toFixed(1)}s` : 'N/D'}</span>
                     </div>
                 </div>
             </div>

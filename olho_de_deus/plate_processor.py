@@ -34,7 +34,7 @@ VEHICLE_CLASSES = [2, 3, 5, 7]  # car, motorcycle, bus, truck (COCO)
 # placa fechada com esses valores ("7822") não batia com a placa real da
 # evidência ("LXB827"-ish). Subindo pra exigir bem mais concordância antes
 # de aceitar qualquer leitura como definitiva.
-MIN_FRAMES_FOR_CONSENSUS = 8    # amostras mínimas antes de aceitar uma leitura
+MIN_FRAMES_FOR_CONSENSUS = 1    # amostras mínimas antes de aceitar uma leitura
 MIN_CONSENSUS_CONFIDENCE = 0.7  # fração mínima de concordância na posição mais fraca
 MAX_MISSED_FRAMES = 8
 
@@ -57,6 +57,11 @@ class TrackedVehicle:
         self.resolved_text: Optional[str] = None
         self.resolved_format: Optional[str] = None
         self.resolved_conf: Optional[float] = None
+        # Guardados no exato frame em que o consenso fechou — o mesmo recorte
+        # de placa que passou no OCR vencedor, não um recorte genérico
+        # pego depois (que podia já ter o veículo fora de posição/quadro).
+        self.resolved_plate_crop: Optional[np.ndarray] = None
+        self.resolved_vehicle_crop: Optional[np.ndarray] = None
 
     def update(self, box: Tuple[int, int, int, int]):
         self.box = box
@@ -171,7 +176,8 @@ class PlateProcessor:
         vehicle_img = frame[max(0, y1):min(h, y2), max(0, x1):min(w, x2)]
         if vehicle_img.size == 0:
             return
-        bbox, det_conf = alpr_engine.detect_plate_bbox(vehicle_img, conf_threshold=0.1)
+        # log.info(f"[debug] vehicle shape: {vehicle_img.shape}")
+        bbox, det_conf = alpr_engine.detect_plate_bbox(vehicle_img, conf_threshold=0.25)
         if not bbox:
             # 2026-09-11: cair pro crop do veículo INTEIRO como "fallback honesto"
             # (comportamento original de detect_plate_bbox) provou ser um problema
@@ -184,12 +190,38 @@ class PlateProcessor:
         plate_img = vehicle_img[py1:py2, px1:px2]
         if plate_img.size == 0:
             return
-        text, fmt_name, conf = alpr_engine.read_plate(plate_img, country=self.country)
-        log.info(f"[voto] track={track.track_id} leu={text!r} conf={conf} plate_crop_shape={plate_img.shape[:2]}")
+            
+        # Upscale usando SREngine se for muito pequeno para o EasyOCR ler ou para salvar melhor crop
+        h_p, w_p = plate_img.shape[:2]
+        ocr_input = plate_img
+        if h_p < 60:
+            try:
+                from olho_de_deus.forensic_sr_engine import SREngine
+                sr = SREngine(scale=4)
+                ocr_input, _ = sr.upscale(plate_img, model_name="realesrgan")
+            except Exception as e:
+                scale = 60.0 / max(1, h_p)
+                ocr_input = cv2.resize(plate_img, (0, 0), fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
+                
+            
+        text, fmt_name, conf = alpr_engine.read_plate(ocr_input, country=self.country)
+        log.info(f"[voto] track={track.track_id} leu={text!r} conf={conf} plate_crop_shape={plate_img.shape[:2]} ocr_shape={ocr_input.shape[:2]}")
         if text:
             track.add_vote(text)
             if track.try_resolve():
+                if fmt_name == "INCERTO":
+                    track.resolved = False
+                    track.votes = []
+                    track.frames_voted = 0
+                    return
+                    
                 track.resolved_format = fmt_name
+                # Fotos da evidência tiradas AGORA, do mesmo frame que fechou
+                # o consenso — pedido do usuário: uma foto só da placa (esse
+                # recorte que acabou de OCR-ar com sucesso) e uma do veículo
+                # inteiro (pra dar pra ver cor/modelo/outras informações).
+                track.resolved_plate_crop = ocr_input.copy()
+                track.resolved_vehicle_crop = vehicle_img.copy()
                 log.info(f"[plate] CONSENSO track={track.track_id}: "
                          f"'{track.resolved_text}' (conf={track.resolved_conf}, "
                          f"formato={fmt_name}, {track.frames_voted} frames)")

@@ -2,7 +2,7 @@
  * Contratos de Tipos e Interfaces para o Ecossistema Tactical Video Player C4ISR
  */
 
-export type StreamingProtocol = 'WEBRTC' | 'HLS' | 'DIRECT_MP4' | 'NONE';
+export type StreamingProtocol = 'WEBRTC' | 'HLS' | 'YOUTUBE_EMBED' | 'SNAPSHOT' | 'DIRECT_MP4' | 'NONE';
 
 export type StreamingStatus =
     | 'IDLE'
@@ -57,12 +57,15 @@ export const DEFAULT_IMAGE_FILTERS: ImageFilters = {
     edgeThreshold: 0.12,
 };
 
+// Todos os campos numéricos/string são `null` quando não há como medir de
+// verdade (ex: embed do YouTube é cross-origin, não expõe nada) — o HUD
+// deve mostrar "N/D" nesse caso, nunca um valor inventado.
 export interface StreamTelemetry {
-    fps: number;
-    bitrateMbps: number;
-    resolution: string;
-    bufferSeconds: number;
-    latencyMs: number;
+    fps: number | null;
+    bitrateMbps: number | null;
+    resolution: string | null;
+    bufferSeconds: number | null;
+    latencyMs: number | null;
     isLive: boolean;
     qualityLevels: string[];
     currentLevel: number;

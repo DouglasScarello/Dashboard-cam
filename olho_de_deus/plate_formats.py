@@ -27,8 +27,10 @@ _FALLBACK = {
     "country_code": "XX",
     "country_name_pt": "Desconhecido",
     "layout": "single_line",
+    "script": "latin",
+    "pattern_desc_pt": "Formato desconhecido",
     "regex": None,
-    "ocr_langs": ["en"],
+    "ocr_langs": "en",
 }
 
 

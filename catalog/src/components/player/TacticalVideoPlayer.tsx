@@ -8,18 +8,21 @@ import {
     EnhanceTargetType 
 } from './types/player.types';
 import { InteractiveCanvasViewer } from './InteractiveCanvasViewer';
+import { HlsStreamTelemetry } from './HlsVideoPlayer';
 import { TacticalHUD } from './TacticalHUD';
 import { ImageEnhancementToolbar } from './ImageEnhancementToolbar';
 import { ForensicPlateInspector } from './ForensicPlateInspector';
 import { tacticalAudio } from './audio/TacticalAudioEngine';
-import { X, Volume2, VolumeX, Pause, Play, AlertTriangle, Sparkles } from 'lucide-react';
+import { X, Volume2, VolumeX, Pause, Play, AlertTriangle, Sparkles, ChevronLeft, ChevronRight, FileCheck2 } from 'lucide-react';
 
 interface TacticalVideoPlayerProps {
     camera: CameraData;
     onClose: () => void;
+    onNext?: () => void;
+    onPrev?: () => void;
 }
 
-export const TacticalVideoPlayer: React.FC<TacticalVideoPlayerProps> = ({ camera, onClose }) => {
+export const TacticalVideoPlayer: React.FC<TacticalVideoPlayerProps> = ({ camera, onClose, onNext, onPrev }) => {
     const containerRef = useRef<HTMLDivElement | null>(null);
 
     // Identificador de Vídeo
@@ -45,18 +48,31 @@ export const TacticalVideoPlayer: React.FC<TacticalVideoPlayerProps> = ({ camera
     const [activeForensicImage, setActiveForensicImage] = useState<string | null>(null);
     const [forensicTargetType, setForensicTargetType] = useState<EnhanceTargetType>('plate');
 
-    // Telemetria
+    // Telemetria — começa "vazia" (N/D) porque ainda não existe stream
+    // conectado; só recebe valores de verdade a partir do onTelemetry do
+    // HlsVideoPlayer (via InteractiveCanvasViewer), nunca é chutada.
+    const initialProtocol = camera.video_id
+        ? 'YOUTUBE_EMBED'
+        : camera.stream_format === 'SNAPSHOT_JPEG'
+            ? 'SNAPSHOT'
+            : camera.url
+                ? 'HLS'
+                : 'NONE';
     const [telemetry, setTelemetry] = useState<StreamTelemetry>({
-        fps: 30,
-        bitrateMbps: 4.5,
-        resolution: '1080p FHD',
-        bufferSeconds: 1.2,
-        latencyMs: 120,
+        fps: null,
+        bitrateMbps: null,
+        resolution: null,
+        bufferSeconds: null,
+        latencyMs: null,
         isLive: true,
-        qualityLevels: ['1080p', '720p', '480p'],
-        currentLevel: 0,
-        protocol: 'HLS',
+        qualityLevels: [],
+        currentLevel: -1,
+        protocol: initialProtocol,
     });
+
+    const handleTelemetry = useCallback((real: HlsStreamTelemetry) => {
+        setTelemetry(prev => ({ ...prev, ...real }));
+    }, []);
 
     // =========================================================================
     // 1. CARREGAMENTO E RESOLUÇÃO DA CÂMERA
@@ -64,6 +80,30 @@ export const TacticalVideoPlayer: React.FC<TacticalVideoPlayerProps> = ({ camera
     useEffect(() => {
         let isMounted = true;
         tacticalAudio.playRadioSquelch();
+
+        // Reset video state on camera change
+        setVideoId(initialVideoId);
+
+        // Zera a telemetria ao trocar de câmera — sem isto os números
+        // reais da câmera anterior ficariam exibidos por engano até a
+        // nova conexão HLS mandar a primeira amostra.
+        setTelemetry(prev => ({
+            ...prev,
+            fps: null,
+            bitrateMbps: null,
+            resolution: null,
+            bufferSeconds: null,
+            latencyMs: null,
+            qualityLevels: [],
+            currentLevel: -1,
+            protocol: camera.video_id
+                ? 'YOUTUBE_EMBED'
+                : camera.stream_format === 'SNAPSHOT_JPEG'
+                    ? 'SNAPSHOT'
+                    : camera.url
+                        ? 'HLS'
+                        : 'NONE',
+        }));
 
         fetch(`http://localhost:8001/api/cameras/${camera.id}/live_url`)
             .then(res => res.json())
@@ -78,7 +118,7 @@ export const TacticalVideoPlayer: React.FC<TacticalVideoPlayerProps> = ({ camera
         return () => {
             isMounted = false;
         };
-    }, [camera.id]);
+    }, [camera.id, initialVideoId]);
 
     // =========================================================================
     // 2. CAPTURA DE SNAPSHOT FORENSE MASTER & DISPARO DE IA EM TEMPO REAL
@@ -124,7 +164,7 @@ export const TacticalVideoPlayer: React.FC<TacticalVideoPlayerProps> = ({ camera
 
         // 3. Captura o frame em alta resolução
         try {
-            const res = await fetch(`http://localhost:8001/api/cameras/${camera.id}/snapshot`);
+            const res = await fetch(`http://localhost:8001/api/cameras/${camera.id}/snapshot?fresh=true`);
             if (res.ok) {
                 const blob = await res.blob();
                 const reader = new FileReader();
@@ -148,7 +188,7 @@ export const TacticalVideoPlayer: React.FC<TacticalVideoPlayerProps> = ({ camera
         tacticalAudio.playShutter();
 
         try {
-            const res = await fetch(`http://localhost:8001/api/cameras/${camera.id}/snapshot`);
+            const res = await fetch(`http://localhost:8001/api/cameras/${camera.id}/snapshot?fresh=true`);
             if (res.ok) {
                 const blob = await res.blob();
                 const reader = new FileReader();
@@ -221,12 +261,26 @@ export const TacticalVideoPlayer: React.FC<TacticalVideoPlayerProps> = ({ camera
                         onClose();
                     }
                     break;
+                case 'arrowright':
+                    e.preventDefault();
+                    if (onNext && !forensicDrawerOpen) {
+                        tacticalAudio.playClick();
+                        onNext();
+                    }
+                    break;
+                case 'arrowleft':
+                    e.preventDefault();
+                    if (onPrev && !forensicDrawerOpen) {
+                        tacticalAudio.playClick();
+                        onPrev();
+                    }
+                    break;
             }
         };
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [isFrozen, forensicDrawerOpen, handleTakeSnapshot, handleOpenForensicEnhance, onClose]);
+    }, [isFrozen, forensicDrawerOpen, handleTakeSnapshot, handleOpenForensicEnhance, onClose, onNext, onPrev]);
 
     const toggleFullscreen = () => {
         if (!containerRef.current) return;
@@ -262,6 +316,17 @@ export const TacticalVideoPlayer: React.FC<TacticalVideoPlayerProps> = ({ camera
                     <button
                         onClick={() => {
                             tacticalAudio.playClick();
+                            window.open(`http://localhost:8001/api/cameras/${camera.id}/comprovante`, '_blank');
+                        }}
+                        className="p-1.5 hover:bg-white/10 rounded-lg text-muted hover:text-accent-emerald transition-colors"
+                        title="Gerar Comprovante de Geolocalização (Prova Pericial)"
+                    >
+                        <FileCheck2 className="w-5 h-5" />
+                    </button>
+
+                    <button
+                        onClick={() => {
+                            tacticalAudio.playClick();
                             onClose();
                         }}
                         className="p-1.5 hover:bg-white/10 rounded-lg text-muted hover:text-white transition-colors"
@@ -273,7 +338,38 @@ export const TacticalVideoPlayer: React.FC<TacticalVideoPlayerProps> = ({ camera
             </div>
 
             {/* Viewport Interativo Central */}
-            <div className="relative flex-1 bg-black flex items-center justify-center overflow-hidden">
+            <div className="relative flex-1 bg-black flex items-center justify-center overflow-hidden group/viewport">
+                
+                {/* Seta Esquerda (Anterior) */}
+                {onPrev && (
+                    <button
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            tacticalAudio.playClick();
+                            onPrev();
+                        }}
+                        className="absolute left-6 z-40 p-3 bg-black/40 hover:bg-black/80 text-white/50 hover:text-accent-emerald rounded-full border border-white/10 hover:border-accent-emerald/50 backdrop-blur-sm transition-all duration-300 opacity-0 group-hover/viewport:opacity-100 transform -translate-x-4 group-hover/viewport:translate-x-0"
+                        title="Câmera Anterior (Seta Esquerda)"
+                    >
+                        <ChevronLeft className="w-8 h-8" />
+                    </button>
+                )}
+
+                {/* Seta Direita (Próxima) */}
+                {onNext && (
+                    <button
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            tacticalAudio.playClick();
+                            onNext();
+                        }}
+                        className="absolute right-6 z-40 p-3 bg-black/40 hover:bg-black/80 text-white/50 hover:text-accent-emerald rounded-full border border-white/10 hover:border-accent-emerald/50 backdrop-blur-sm transition-all duration-300 opacity-0 group-hover/viewport:opacity-100 transform translate-x-4 group-hover/viewport:translate-x-0"
+                        title="Próxima Câmera (Seta Direita)"
+                    >
+                        <ChevronRight className="w-8 h-8" />
+                    </button>
+                )}
+
                 {/* Viewport com Pan, Zoom (1x a 16x) e Lupa */}
                 <InteractiveCanvasViewer
                     camera={camera}
@@ -289,6 +385,7 @@ export const TacticalVideoPlayer: React.FC<TacticalVideoPlayerProps> = ({ camera
                     onQuickEnhanceZoomedArea={(type, croppedBase64) => {
                         handleOpenForensicEnhance(type, croppedBase64);
                     }}
+                    onTelemetry={handleTelemetry}
                 />
 
                 {/* HUD Tático Sobreposto */}
