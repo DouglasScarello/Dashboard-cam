@@ -147,9 +147,27 @@ class LivePipeline:
         # Ring Buffer de 2 slots para latência física mínima.
         self.frame_bus = AtomicFrameRing(size=2)
         
-        # Throttling de IA: Só processa se o frame mudar.
-        self._last_frame_hash = 0
-        self._hash_threshold = 2.0 # Sensibilidade do reator
+        # Throttling de IA: só processa se o frame mudar de verdade.
+        #
+        # Achado (2026-09-15, Fase 3 do plano de mesclar técnicas de projetos
+        # maduros — conceito do Frigate, detecção condicionada a movimento):
+        # a versão original comparava só `np.mean(frame)` — o brilho médio do
+        # frame INTEIRO — contra um limiar de 2.0. Testado com câmera real:
+        # uma pessoa distante ocupando ~0,2% da área do frame (bem comum no
+        # catálogo — a maioria das câmeras de rua/rodovia vê gente de longe,
+        # não de perto) muda a média do frame inteiro em menos de 0.2,
+        # BEM abaixo do limiar — o frame era pulado silenciosamente mesmo
+        # com uma pessoa de verdade aparecendo. Substituído por diferença de
+        # pixel real (cv2.absdiff), localizada, numa versão pequena e em
+        # cinza do frame (barato — o ponto é ser mais barato que o YOLO, não
+        # perfeito). MOTION_MIN_PCT é PROVISÓRIO (0.05% da área da miniatura
+        # 160x90 = ~7 pixels) — testado que captura o caso da pessoa distante
+        # medida nesta sessão, mas não teve exposição a ruído de compressão
+        # de vídeo de muitas câmeras diferentes ainda; calibrar com mais
+        # volume antes de confiar cegamente (mesma ressalva já registrada
+        # pros limiares das Fases 1 e 2).
+        self._last_frame_small = None
+        self._motion_min_pct = 0.0005
         
         # Display Queue (Removido display_thread - imshow deve ser na main)
         self._display_queue = queue.Queue(maxsize=1) 
@@ -294,7 +312,7 @@ class LivePipeline:
                     frame = cv2.resize(frame, (int(w*r), int(h*r)), interpolation=cv2.INTER_LINEAR)
 
             # Push para o FrameBus (RingBuffer)
-            if self._last_frame_hash == 0:
+            if self._last_frame_small is None:
                 log.info(f"[DEBUG] Primeiro frame capturado com sucesso! Dimensões: {frame.shape}")
             self.frame_bus.push(frame)
         cap.release()
@@ -324,7 +342,7 @@ class LivePipeline:
                             if w > self.max_width or h > self.max_height:
                                 r = min(self.max_width / w, self.max_height / h)
                                 frame = cv2.resize(frame, (int(w * r), int(h * r)), interpolation=cv2.INTER_LINEAR)
-                        if self._last_frame_hash == 0:
+                        if self._last_frame_small is None:
                             log.info(f"[DEBUG] Primeiro snapshot capturado com sucesso! Dimensões: {frame.shape}")
                         self._last_capture_dt = time.time() - t0
                         self._last_frame_time = time.time()
@@ -446,16 +464,24 @@ class LivePipeline:
                 time.sleep(0.01)
                 continue
             
-            # FRAME HASHING (Throttling Inteligente)
-            # Evita rodar IA em frames quase idênticos (30-60% economia)
-            current_hash = np.mean(frame)
-            if abs(current_hash - self._last_frame_hash) < self._hash_threshold:
-                # Otimização de Clocks: Pula processamento pesado
-                sleep_time = next_t - time.perf_counter()
-                if sleep_time > 0: time.sleep(sleep_time)
-                continue
-            
-            self._last_frame_hash = current_hash
+            # GATE DE MOVIMENTO (Throttling Inteligente)
+            # Evita rodar IA em frames sem mudança real — diferença de pixel
+            # localizada (cv2.absdiff), não a média do frame inteiro (ver
+            # comentário em __init__ sobre o bug que isso corrigiu: objeto
+            # pequeno/distante não muda a média o suficiente pra disparar).
+            current_frame_small = cv2.resize(
+                cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY), (160, 90)
+            )
+            if self._last_frame_small is not None:
+                diff = cv2.absdiff(current_frame_small, self._last_frame_small)
+                pct_mudado = float(np.count_nonzero(diff > 25)) / diff.size
+                if pct_mudado < self._motion_min_pct:
+                    # Otimização de Clocks: Pula processamento pesado
+                    sleep_time = next_t - time.perf_counter()
+                    if sleep_time > 0: time.sleep(sleep_time)
+                    continue
+
+            self._last_frame_small = current_frame_small
             
             t0 = time.time()
             results = self.processor.process_frame(frame)
