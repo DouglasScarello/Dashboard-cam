@@ -46,6 +46,9 @@ olho_de_deus/data/
 *.faiss
 *.json.bak
 live_cameras.json.bak-*
+# camera_curation.py --apply agora faz backup do banco (não mais do JSON)
+# antes de apagar linha — ver olho_de_deus/camera_curation.py.
+live_cameras.db.bak-*
 # Estado de liveness é gerado por camera_liveness.py, muda a cada rodada —
 # dado de execução, não código-fonte.
 database/camera_liveness_state.json
