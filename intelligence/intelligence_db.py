@@ -734,6 +734,31 @@ def register_match_log(db: DB, individual_id: str, distance: float, probability:
     db.commit()
 
 
+def get_latest_match_for_individual(db: DB, individual_id: str) -> Optional[Dict]:
+    """Retorna o match biométrico ao vivo mais recente pra um indivíduo, ou
+    None se ele nunca foi avistado (caso comum e esperado — `individuals` é
+    povoada por ingestão em lote de bases externas como BNMP/FBI, sem
+    exigir avistamento nenhum pra existir).
+
+    Achado (2026-09-15): `match_logs` era gravada por `register_match_log`
+    mas não tinha NENHUMA função de leitura — o endpoint de laudo pericial
+    (`api_server.py::generate_forensic_laudo`) usava um `match_score`
+    hardcoded (0.85/0.88) porque não havia como puxar o valor real.
+    `get_recent_matches()` não serve pra isso: ela junta `evidence`+
+    `individuals`, não filtra por indivíduo, é outra tabela.
+
+    Usar `probability` (não `distance`): a distância L2 do FAISS é
+    "menor é melhor" e não calibrada — `probability` já é a versão
+    calibrada 0-1 "maior é melhor" (ver `biometric_processor.py::
+    _distance_to_probability`), compatível com a escala que
+    `BayesianSLREngine.compute_slr()` espera."""
+    q = """SELECT * FROM match_logs WHERE individual_id = ?
+           ORDER BY created_at DESC LIMIT 1"""
+    cur = db.execute(q, (individual_id,))
+    row = cur.fetchone()
+    return dict(row) if row else None
+
+
 def register_plate_read(db: DB, camera_id: str, country_code: str, plate_text: str,
                          plate_format: str, confidence: float, frames_voted: int,
                          evidence_path: str = None, vehicle_id: int = None,
