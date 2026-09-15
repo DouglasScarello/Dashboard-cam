@@ -80,16 +80,31 @@ def carrega_cameras_do_db() -> List[Dict[str, Any]]:
         conn.close()
 
 
+# Quantas execuções SEPARADAS de camera_liveness.py precisam confirmar morta
+# antes da curadoria tirar do banco. Existe por causa de um incidente real
+# (2026-09-14): uma varredura de teste marcou 693/823 câmeras como mortas de
+# uma vez só por bloqueio anti-bot do YouTube, não porque estavam mortas.
+# Retry dentro da própria checagem (camera_liveness.py) não protege contra
+# isso — se o bloqueio é sistêmico, a re-tentativa leva o mesmo bloqueio.
+# Só exigir confirmação em rodadas separadas (dias diferentes, já que o timer
+# é diário) filtra esse tipo de evento correlacionado.
+STREAK_MINIMO_PRA_REMOVER = 2
+
+
 def status_de_liveness(cam: Dict[str, Any]) -> Optional[str]:
     """Traduz as colunas do banco pros mesmos rótulos que o JSON usava, pra
     não ter que reescrever a lógica de decisão logo abaixo.
 
     Regra deliberadamente conservadora: só chama de DEAD quem foi de fato
-    checado e reprovado. Linha nunca checada (confirmed_dead=0 e
-    live_confirmed=0, o estado inicial de toda câmera recém-ingerida) devolve
-    None, que a curadoria trata como 'nunca checada — não remove'.
+    checado, reprovado, E confirmado morto em execuções separadas o
+    suficiente (ver STREAK_MINIMO_PRA_REMOVER). Linha nunca checada
+    (confirmed_dead=0 e live_confirmed=0, o estado inicial de toda câmera
+    recém-ingerida) devolve None, que a curadoria trata como 'nunca checada —
+    não remove'.
     """
     if cam.get("confirmed_dead"):
+        if (cam.get("dead_streak") or 0) < STREAK_MINIMO_PRA_REMOVER:
+            return "MORTA_MAS_AGUARDANDO_CONFIRMACAO"
         return "DEAD"
     if cam.get("live_confirmed"):
         return "LIVE"
@@ -198,8 +213,20 @@ def curate(refresh_liveness: bool, concurrency: int) -> Tuple[List[Dict[str, Any
         if status is None:
             # Nunca checada — não remove sem evidência, só sinaliza.
             entry["_liveness_status"] = "NUNCA_CHECADA"
+        elif status == "MORTA_MAS_AGUARDANDO_CONFIRMACAO":
+            # Morta na checagem mais recente, mas ainda sem streak suficiente
+            # pra confiar que não é bloqueio anti-bot pontual — mantém e
+            # espera a próxima rodada confirmar.
+            entry["_liveness_status"] = (
+                f"AGUARDANDO_CONFIRMACAO (streak={cam.get('dead_streak') or 0}"
+                f"/{STREAK_MINIMO_PRA_REMOVER})"
+            )
 
-        kept.append(cam)
+        # `entry`, não `cam` — bug pré-existente pego rodando o teste desta
+        # sessão: guardar `cam` descartava a anotação de status posta acima
+        # em `entry`, então NUNCA_CHECADA/AGUARDANDO_CONFIRMACAO nunca
+        # chegavam a aparecer pra quem lê a lista mantida.
+        kept.append(entry)
 
     summary = {
         "total_original": len(cameras),
@@ -207,6 +234,10 @@ def curate(refresh_liveness: bool, concurrency: int) -> Tuple[List[Dict[str, Any
         "mortas_removidas": sum(1 for r in removed if r["_removed_reason"].startswith("DEAD")),
         "mantidas": len(kept),
         "nunca_checadas_mantidas": sum(1 for c in kept if liveness.get(str(c["id"]), {}).get("status") is None),
+        "aguardando_confirmacao": sum(
+            1 for c in kept
+            if liveness.get(str(c["id"]), {}).get("status") == "MORTA_MAS_AGUARDANDO_CONFIRMACAO"
+        ),
     }
     return kept, removed, summary
 
