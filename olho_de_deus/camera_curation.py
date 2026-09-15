@@ -8,7 +8,9 @@ há entradas duplicadas (mesmo vídeo do YouTube catalogado mais de uma vez,
 ou o mesmo ponto físico reingerido com nome ligeiramente diferente).
 
 Este script NUNCA apaga silenciosamente:
-- Roda (ou reaproveita) a checagem de liveness real via `camera_liveness.py`.
+- Roda (ou reaproveita) a checagem de liveness real via `camera_liveness.py`
+  (YouTube), `hls_liveness.py` (streams .m3u8 diretos) e `snapshot_liveness.py`
+  (câmeras de imagem única) — os três checadores do catálogo.
 - Detecta duplicatas por `video_id` idêntico e por nome+coordenada quase
   idêntica (mesmo ponto físico reingerido).
 - Escreve a lista curada em `live_cameras.json` só com `--apply` — sem essa
@@ -31,6 +33,8 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
+
+from liveness_common import STREAK_MINIMO_PRA_CONFIRMAR_MORTA, status_de_liveness
 
 ROOT = Path(__file__).resolve().parent.parent
 DB_PATH = ROOT / "database" / "live_cameras.db"
@@ -80,35 +84,16 @@ def carrega_cameras_do_db() -> List[Dict[str, Any]]:
         conn.close()
 
 
-# Quantas execuções SEPARADAS de camera_liveness.py precisam confirmar morta
-# antes da curadoria tirar do banco. Existe por causa de um incidente real
-# (2026-09-14): uma varredura de teste marcou 693/823 câmeras como mortas de
-# uma vez só por bloqueio anti-bot do YouTube, não porque estavam mortas.
-# Retry dentro da própria checagem (camera_liveness.py) não protege contra
-# isso — se o bloqueio é sistêmico, a re-tentativa leva o mesmo bloqueio.
-# Só exigir confirmação em rodadas separadas (dias diferentes, já que o timer
-# é diário) filtra esse tipo de evento correlacionado.
-STREAK_MINIMO_PRA_REMOVER = 2
-
-
-def status_de_liveness(cam: Dict[str, Any]) -> Optional[str]:
-    """Traduz as colunas do banco pros mesmos rótulos que o JSON usava, pra
-    não ter que reescrever a lógica de decisão logo abaixo.
-
-    Regra deliberadamente conservadora: só chama de DEAD quem foi de fato
-    checado, reprovado, E confirmado morto em execuções separadas o
-    suficiente (ver STREAK_MINIMO_PRA_REMOVER). Linha nunca checada
-    (confirmed_dead=0 e live_confirmed=0, o estado inicial de toda câmera
-    recém-ingerida) devolve None, que a curadoria trata como 'nunca checada —
-    não remove'.
-    """
-    if cam.get("confirmed_dead"):
-        if (cam.get("dead_streak") or 0) < STREAK_MINIMO_PRA_REMOVER:
-            return "MORTA_MAS_AGUARDANDO_CONFIRMACAO"
-        return "DEAD"
-    if cam.get("live_confirmed"):
-        return "LIVE"
-    return None
+# Streak/status agora vêm de liveness_common.py — usado também por
+# hls_liveness.py, snapshot_liveness.py e camera_grid_server.py. Achado
+# (2026-09-15): esta função e a constante de streak viviam duplicadas aqui
+# desde a correção do incidente de 693/823 câmeras falso-mortas; ter a MESMA
+# regra de segurança escrita em mais de um lugar é como esse tipo de buraco
+# reabre (uma cópia diverge da outra numa correção futura). Ver
+# `STREAK_MINIMO_PRA_CONFIRMAR_MORTA`/`status_de_liveness` em
+# liveness_common.py — o valor do streak (2) e o comportamento são
+# idênticos aos de antes, só a definição saiu daqui.
+STREAK_MINIMO_PRA_REMOVER = STREAK_MINIMO_PRA_CONFIRMAR_MORTA
 
 
 def normalize_name(name: str) -> str:
@@ -174,11 +159,20 @@ def find_duplicates(cameras: List[Dict[str, Any]]) -> Dict[str, str]:
 
 def curate(refresh_liveness: bool, concurrency: int) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], Dict[str, Any]]:
     if refresh_liveness:
-        print(f"Rodando camera_liveness.py --concurrency {concurrency} (pode levar alguns minutos)...", file=sys.stderr)
-        subprocess.run(
-            [sys.executable, str(Path(__file__).resolve().parent / "camera_liveness.py"), "--concurrency", str(concurrency)],
-            check=True,
-        )
+        # Achado (2026-09-15): só camera_liveness.py (canal YouTube, 15 de
+        # 8218 câmeras) era chamado aqui. hls_liveness.py e
+        # snapshot_liveness.py — que cobrem os outros 99,8% do catálogo —
+        # não tinham NENHUM agendamento (sem cron, sem timer, sem chamada
+        # de dentro deste script). O único timer real do projeto
+        # (olho-de-deus-curadoria.timer, diário) passa a acionar os três,
+        # em vez de precisar de um timer novo por checador.
+        script_dir = Path(__file__).resolve().parent
+        for script in ("camera_liveness.py", "hls_liveness.py", "snapshot_liveness.py"):
+            print(f"Rodando {script} --concurrency {concurrency} (pode levar alguns minutos)...", file=sys.stderr)
+            subprocess.run(
+                [sys.executable, str(script_dir / script), "--concurrency", str(concurrency)],
+                check=True,
+            )
 
     cameras = carrega_cameras_do_db()
     # O status de liveness agora mora na própria linha da câmera (colunas
@@ -213,7 +207,7 @@ def curate(refresh_liveness: bool, concurrency: int) -> Tuple[List[Dict[str, Any
         if status is None:
             # Nunca checada — não remove sem evidência, só sinaliza.
             entry["_liveness_status"] = "NUNCA_CHECADA"
-        elif status == "MORTA_MAS_AGUARDANDO_CONFIRMACAO":
+        elif status == "AGUARDANDO_CONFIRMACAO":
             # Morta na checagem mais recente, mas ainda sem streak suficiente
             # pra confiar que não é bloqueio anti-bot pontual — mantém e
             # espera a próxima rodada confirmar.
@@ -236,7 +230,7 @@ def curate(refresh_liveness: bool, concurrency: int) -> Tuple[List[Dict[str, Any
         "nunca_checadas_mantidas": sum(1 for c in kept if liveness.get(str(c["id"]), {}).get("status") is None),
         "aguardando_confirmacao": sum(
             1 for c in kept
-            if liveness.get(str(c["id"]), {}).get("status") == "MORTA_MAS_AGUARDANDO_CONFIRMACAO"
+            if liveness.get(str(c["id"]), {}).get("status") == "AGUARDANDO_CONFIRMACAO"
         ),
     }
     return kept, removed, summary
