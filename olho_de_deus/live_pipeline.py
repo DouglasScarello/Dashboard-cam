@@ -412,6 +412,13 @@ class LivePipeline:
             try:
                 dossier = get_full_individual_dossier(pdf_db, uid)
                 if dossier:
+                    # Achado (2026-09-15): get_full_individual_dossier() não
+                    # inclui match_score — sem isso, build_official_forensic_laudo
+                    # caía no default hardcoded (0.82), mesmo aqui, gerado
+                    # automaticamente logo após um match AO VIVO de verdade.
+                    # `prob` é a mesma probabilidade calibrada já gravada em
+                    # match_logs (register_match_log, algumas linhas acima).
+                    dossier["match_score"] = prob
                     pdf_filename = f"dossier_{uid}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
                     pdf_path = str(self.report_dir / pdf_filename)
                     generate_dossier_pdf(dossier, pdf_path)

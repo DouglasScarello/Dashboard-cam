@@ -366,6 +366,48 @@ class PAdESLTASigner:
 # 5. GERADOR UNIFICADO DE LAUDO PERICIAL OFICIAL (PDF/A-1b)
 # ─────────────────────────────────────────────────────────────────────────────
 
+def _resolve_individual_image_path(img_path: Optional[str]) -> Optional[str]:
+    """individuals.img_path/individual_images.img_path são relativos a
+    intelligence/data/ (ver populate_db.py) — resolve pra caminho absoluto
+    e confirma que o arquivo existe de verdade antes de tentar desenhar."""
+    if not img_path:
+        return None
+    p = Path(img_path)
+    if not p.is_absolute():
+        p = ROOT / "intelligence" / "data" / img_path
+    return str(p) if p.exists() else None
+
+
+def _montar_lineup(dossier: Dict) -> Optional[Dict]:
+    """Monta o lineup duplo-cego (CNJ 484/2022) de verdade — busca o
+    embedding de REFERÊNCIA do alvo (cadastro, não depende de ter havido
+    match ao vivo) e os distratores fenotipicamente mais parecidos na base
+    vetorial via `CNJLineupEngine`, já escrito mas nunca conectado ao
+    gerador de PDF (achado 2026-09-15: toda posição do lineup sempre saía
+    como texto fixo "[FOTO REGISTRADA]", nunca uma foto real).
+
+    Retorna None se não houver embedding de referência pro alvo — nesse
+    caso `build_official_forensic_laudo` deixa a seção explicitamente
+    marcada como indisponível, nunca preenche com placeholder genérico."""
+    target_id = dossier.get("id")
+    if not target_id:
+        return None
+    try:
+        from intelligence.intelligence_db import DB, get_individual_embedding
+        db = DB()
+        try:
+            target_embedding = get_individual_embedding(db, str(target_id))
+            if not target_embedding:
+                return None
+            distractors = CNJLineupEngine.select_distractors(target_embedding, str(target_id), count=4)
+        finally:
+            db.close()
+    except Exception:
+        return None
+
+    return CNJLineupEngine.build_lineup_board(dossier, distractors)
+
+
 def build_official_forensic_laudo(dossier: Dict, output_path: str) -> str:
     """Gera o laudo pericial oficial contendo Lineup CNJ 484, SLR e assinatura PAdES-LTA."""
     from reportlab.lib.colors import HexColor
@@ -433,24 +475,59 @@ def build_official_forensic_laudo(dossier: Dict, output_path: str) -> str:
     c.drawString(40, height - 285, "3. ALINHAMENTO DE RECONHECIMENTO CEGO (RESOLUÇÃO CNJ Nº 484/2022)")
     c.line(40, height - 290, width - 40, height - 290)
 
-    c.setFont("Helvetica-Oblique", 8)
-    c.drawString(40, height - 302, "Prancha de reconhecimento com 4 distratores morfológicos extraídos da base vetorial (STJ HC 598.886).")
+    lineup = _montar_lineup(dossier)
+    positions = lineup["positions"] if lineup else []
 
-    # Desenhar 5 posições do Lineup
+    c.setFont("Helvetica-Oblique", 8)
+    if lineup and len(positions) >= 5:
+        nota_lineup = "Prancha de reconhecimento com 4 distratores morfológicos extraídos da base vetorial (STJ HC 598.886)."
+    elif lineup and positions:
+        # Decisão de produto (2026-09-15): reduzir o lineup ao que existe de
+        # verdade, nunca inventar posição pra completar 5 — mas isso precisa
+        # ficar explícito no próprio documento, não só no código.
+        n_distratores = len(positions) - 1
+        nota_lineup = (
+            f"ATENÇÃO: base vetorial disponibilizou apenas {n_distratores} distrator(es) "
+            f"morfológico(s) (recomendado: 4) — prancha reduzida a {len(positions)} posições."
+        )
+    else:
+        nota_lineup = (
+            "LINEUP INDISPONÍVEL: não há embedding de referência cadastrado para este "
+            "indivíduo na base vetorial — nenhuma prancha de reconhecimento foi gerada."
+        )
+    c.drawString(40, height - 302, nota_lineup)
+
+    # Desenhar as posições do Lineup — uma por distrator/alvo real
+    # encontrado, nunca 5 fixas com texto de preenchimento (achado
+    # 2026-09-15: CNJLineupEngine já existia, calculava distratores reais,
+    # mas nunca era chamado — todo laudo saía com "[FOTO REGISTRADA]" em
+    # 100% das posições, mesmo quando havia foto de verdade disponível).
     x_box = 40
     box_w = 95
     box_h = 75
     y_box = height - 390
 
-    for i in range(5):
+    for pos in positions:
         c.setFillColor(HexColor("#F1F5F9"))
         c.rect(x_box, y_box, box_w, box_h, fill=True, stroke=True)
         c.setFillColor(HexColor("#0F172A"))
         c.setFont("Helvetica-Bold", 8)
-        lbl = f"POSIÇÃO {i+1}"
-        c.drawCentredString(x_box + box_w / 2, y_box + box_h - 15, lbl)
-        c.setFont("Helvetica", 7)
-        c.drawCentredString(x_box + box_w / 2, y_box + 10, "[FOTO REGISTRADA]")
+        lbl = f"POSIÇÃO {pos['position']}"
+        c.drawCentredString(x_box + box_w / 2, y_box + box_h - 12, lbl)
+
+        img_path = _resolve_individual_image_path(pos.get("img_path"))
+        if img_path:
+            try:
+                c.drawImage(img_path, x_box + 5, y_box + 5, width=box_w - 10, height=box_h - 22,
+                            preserveAspectRatio=True, anchor="c")
+            except Exception:
+                img_path = None
+        if not img_path:
+            # Arquivo ausente/corrompido: aviso VISÍVEL, nunca um retângulo
+            # vazio silencioso — é a mesma classe de problema que o
+            # "[FOTO REGISTRADA]" fixo, só que num caso mais raro.
+            c.setFont("Helvetica-Oblique", 7)
+            c.drawCentredString(x_box + box_w / 2, y_box + box_h / 2, "FOTO INDISPONÍVEL")
         x_box += box_w + 10
 
     # 4. Cadeia de Custódia
@@ -520,7 +597,12 @@ def build_official_forensic_laudo(dossier: Dict, output_path: str) -> str:
         "merkle_root": merkle_root,
         "merkle_leaves": len(evidence_hashes),
         "slr_evaluation": slr,
-        "cnj_484_lineup_generated": True,
+        # Achado (2026-09-15): era True incondicional — mesmo padrão de
+        # certificação fabricada já corrigido antes em pades_lta_signed.
+        # Reflete o resultado real de _montar_lineup: quantas posições
+        # (de até 5) tinham embedding/foto de verdade disponível.
+        "cnj_484_lineup_generated": bool(lineup) and len(positions) >= 5,
+        "cnj_484_lineup_positions": len(positions),
         "pades_lta_signed": sign_result["signed"],
         "pades_signing_error": sign_result["error"],
         "icp_brasil_accredited": sign_result["icp_brasil_accredited"],

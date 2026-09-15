@@ -520,6 +520,36 @@ def save_embedding(db: DB, individual_id: str, embedding: List[float]):
         db.execute(q, (individual_id, blob))
     db.commit()
 
+def get_individual_embedding(db: DB, individual_id: str) -> Optional[List[float]]:
+    """Lê o embedding facial de REFERÊNCIA (cadastro) de um indivíduo — não
+    depende de ter havido match ao vivo, é o vetor gerado a partir da foto
+    oficial do cadastro (ver extract_embeddings.py). Usado pelo lineup
+    duplo-cego (CNJ 484/2022, forensic_core.py::CNJLineupEngine) pra achar
+    distratores fenotipicamente parecidos, mesmo quando o indivíduo nunca
+    foi avistado ao vivo."""
+    if db.type == "postgres":
+        cur = db.execute("SELECT embedding FROM face_embeddings WHERE individual_id = ?", (individual_id,))
+        row = cur.fetchone()
+        if not row:
+            return None
+        raw = row[0] if isinstance(row, tuple) else row["embedding"]
+        if raw is None:
+            return None
+        # pgvector devolve string tipo "[0.1,0.2,...]"
+        return [float(x) for x in str(raw).strip("[]").split(",") if x]
+    else:
+        import struct
+        cur = db.execute("SELECT embedding_blob FROM face_embeddings WHERE individual_id = ?", (individual_id,))
+        row = cur.fetchone()
+        if not row:
+            return None
+        blob = row[0] if isinstance(row, tuple) else row["embedding_blob"]
+        if not blob:
+            return None
+        n_floats = len(blob) // 4
+        return list(struct.unpack(f"{n_floats}f", blob))
+
+
 def search_biometric(db: DB, target_embedding: List[float], limit: int = 10) -> List[Dict]:
     """Busca biométrica Two-Stage de ultra-alta velocidade."""
     return search_biometric_twostage(db, target_embedding, top_k=limit)
