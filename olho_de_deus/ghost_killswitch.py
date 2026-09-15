@@ -5,9 +5,25 @@ ghost_killswitch.py — Olho de Deus [Fase 28: Kill-Switch / Protocolo de Defesa
 Daemon que monitora o estado físico do hardware e reage a ameaças passando o sistema
 ao estado de LOCKDOWN imediato:
   - Finaliza todos os processos do Olho de Deus (SIGKILL)
-  - Sobrescreve variáveis de memória com zeros (key zeroization)
+  - Zera variáveis de ambiente sensíveis DO PRÓPRIO PROCESSO DESTE DAEMON
+    (GHOST_MASTER_KEY, DATABASE_ENCRYPTION_KEY, TELEGRAM_TOKEN)
   - Ejeta drives de backup montados
   - Grava log forense do evento com timestamp e causa
+
+Limitação real, documentada aqui de propósito (achado 2026-09-15): a
+"zeroização de chave" acima NÃO alcança a memória dos processos-alvo mortos
+no passo anterior. SIGKILL não pode ser interceptado — não há como pedir a
+um processo pra rodar código de limpeza antes de morrer por SIGKILL, por
+definição do sinal. Qualquer segredo (chave, token) que estivesse residente
+na RAM de live_pipeline.py/biometric_processor.py/etc. no momento do kill
+NÃO é ativamente sobrescrito; fica à mercê de o SO reutilizar aquela página
+de memória (pode continuar em RAM, swap ou núcleo de memória — "core dump"
+— por tempo indeterminado). Isso é uma lacuna estrutural do modelo SIGKILL,
+não um bug de implementação: zeroização de memória de outro processo exige
+que ELE MESMO rode a limpeza antes de sair (SIGTERM + handler + timeout),
+o que trocaria a garantia de "morte instantânea" por uma janela de alguns
+segundos — uma decisão de postura de segurança que este projeto ainda não
+tomou. Ver PLANO de correção 2026-09-15 (Frente D) pra mais contexto.
 
 Gatilhos Configuráveis:
   1. Desconexão de energia AC (cabo removido)
@@ -89,7 +105,20 @@ log = logging.getLogger("ghost_killswitch")
 # ─── Sensor: Energia AC ────────────────────────────────────────────────────────
 
 def is_on_ac_power() -> bool:
-    """Verifica se o notebook está conectado à energia AC."""
+    """Verifica se o notebook está conectado à energia AC.
+
+    Achado (2026-09-15): quando nem psutil nem o sysfs conseguem determinar
+    o estado (hardware com nomenclatura diferente de AC*/ADP*, ou
+    psutil.sensors_battery() retornando None), a função caía num
+    `return True` incondicional e SILENCIOSO — sem log, sem distinguir
+    "verifiquei e está plugado" de "não consegui verificar, estou
+    assumindo". Como o gatilho #1 do kill-switch é justamente a transição
+    plugado->desplugado, esse fallback deixava esse gatilho específico
+    permanentemente inerte em qualquer máquina onde a detecção falhe, sem
+    ninguém perceber. Mantido como fail-safe (decisão de produto: é pior
+    disparar lockdown à toa num notebook sem sensor do que não disparar
+    numa vez rara que ele desconecta de verdade nesse cenário) — mas agora
+    com aviso explícito no log."""
     try:
         # Verificar via psutil primeiro
         if HAS_PSUTIL:
@@ -104,12 +133,17 @@ def is_on_ac_power() -> bool:
         online_file = bat_dir / "online"
         if online_file.exists():
             return online_file.read_text().strip() == "1"
-    
+
     for bat_dir in Path("/sys/class/power_supply").glob("ADP*"):
         online_file = bat_dir / "online"
         if online_file.exists():
             return online_file.read_text().strip() == "1"
-    
+
+    log.warning(
+        "Não foi possível determinar o estado de energia AC (psutil e sysfs "
+        "AC*/ADP* indisponíveis) — assumindo 'plugado' por padrão (fail-safe). "
+        "O gatilho de desconexão de energia fica inerte enquanto isso durar."
+    )
     return True  # Fallback seguro: assumir que está na tomada
 
 # ─── Sensor: SSID de Rede ──────────────────────────────────────────────────────
@@ -173,13 +207,18 @@ def execute_lockdown(trigger: str):
     
     log.info(f"Processos terminados: {killed_count}")
 
-    # Fase 3: Sobrescrever variáveis de ambiente sensíveis com zeros
+    # Fase 3: Zerar variáveis de ambiente sensíveis DESTE processo (o
+    # daemon do kill-switch). Escopo real, sem exagero: isto NÃO zera a
+    # memória dos processos-alvo mortos na Fase 2 — SIGKILL não dá chance
+    # de rodar limpeza neles. Ver docstring do módulo pra a limitação
+    # completa (achado 2026-09-15).
     sensitive_vars = ["GHOST_MASTER_KEY", "DATABASE_ENCRYPTION_KEY", "TELEGRAM_TOKEN"]
     for var in sensitive_vars:
         if var in os.environ:
             os.environ[var] = "\x00" * len(os.environ[var])
             del os.environ[var]
-    log.info("Variáveis sensíveis zeradas da memória do processo.")
+    log.info("Variáveis sensíveis zeradas da memória DESTE processo (daemon) — "
+             "processos-alvo mortos por SIGKILL não recebem essa limpeza.")
 
     # Fase 4: Ejetar drives externos (backups)
     media_base = Path("/run/media") / os.getenv("USER", "douglasdsr")
