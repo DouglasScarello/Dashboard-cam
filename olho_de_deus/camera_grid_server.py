@@ -32,20 +32,21 @@ from fastapi.responses import Response
 
 from youtube_stream import get_live_url
 from forensic_sr_engine import forensic_sr_router
+from liveness_common import status_de_liveness
 
 log = logging.getLogger("camera_grid_server")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [CAM-GRID] %(message)s")
 
 ROOT = Path(__file__).resolve().parent.parent
-LIVE_CAMERAS_PATH = ROOT / "database" / "live_cameras.json"
-OMNI_CAMS_PATH = ROOT / "database" / "omni_cams.json"
-LIVENESS_STATE_PATH = ROOT / "database" / "camera_liveness_state.json"
 
-# Um "LIVE" checado há mais tempo que isso é tratado como desconhecido, não
-# como vivo — evita confiar indefinidamente numa checagem antiga enquanto o
-# intervalo real de rotatividade das lives (ver camera_liveness.py) ainda
-# não foi medido empiricamente. 30 min é um valor conservador de partida.
-LIVENESS_STALE_AFTER_SECONDS = 30 * 60
+# Um "LIVE"/"DEAD" checado há mais tempo que isso é tratado como
+# desconhecido, não como fato atual. Achado (2026-09-15): o valor antigo
+# (30 min) presumia checagens frequentes, mas a única checagem agendada de
+# verdade (`olho-de-deus-curadoria.timer`) roda 1x/dia — com 30 min quase
+# todo o catálogo apareceria "desconhecido" o dia inteiro, exceto no minuto
+# seguinte à rodada. 26h dá folga pra um atraso ocasional do timer sem
+# ainda confiar em dado de dias atrás.
+LIVENESS_STALE_AFTER_SECONDS = 26 * 60 * 60
 
 STREAM_URL_TTL = 240.0  # 4 minutos
 # Captura real via ffmpeg leva alguns segundos (resolve stream + decodifica
@@ -71,28 +72,21 @@ app.add_middleware(
 # Estado / caches em memória
 # --------------------------------------------------------------------------
 
-_liveness_state: Dict[str, Any] = {}
-_liveness_mtime: float = 0.0
-
-
-def _reload_liveness_state_if_changed() -> None:
-    """Recarrega database/camera_liveness_state.json só se o arquivo mudou
-    desde a última leitura — permite rodar `camera_liveness.py` por fora
-    (manual ou cron) e o servidor pega o resultado sem precisar reiniciar."""
-    global _liveness_state, _liveness_mtime
+def _parse_sqlite_timestamp(raw: Optional[str]) -> Optional[datetime]:
+    """`updated_at`/`created_at` no SQLite vêm de `CURRENT_TIMESTAMP`, que o
+    SQLite grava em UTC mas sem informação de fuso ("YYYY-MM-DD HH:MM:SS").
+    Sem tratar isso como UTC explicitamente, a subtração contra
+    `datetime.now(timezone.utc)` mistura datetime aware com naive e lança
+    TypeError."""
+    if not raw:
+        return None
     try:
-        mtime = LIVENESS_STATE_PATH.stat().st_mtime
-    except FileNotFoundError:
-        return
-    if mtime == _liveness_mtime:
-        return
-    try:
-        with open(LIVENESS_STATE_PATH, "r", encoding="utf-8") as f:
-            _liveness_state = json.load(f)
-        _liveness_mtime = mtime
-        log.info(f"Estado de liveness recarregado ({len(_liveness_state)} câmeras checadas).")
-    except Exception as e:
-        log.error(f"Falha ao ler {LIVENESS_STATE_PATH.name}: {e}")
+        return datetime.strptime(raw, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
+    except Exception:
+        try:
+            return datetime.fromisoformat(raw)
+        except Exception:
+            return None
 
 
 def get_camera_liveness(cam_id: str, cam: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
@@ -100,47 +94,47 @@ def get_camera_liveness(cam_id: str, cam: Optional[Dict[str, Any]] = None) -> Di
 
     Duas perguntas diferentes, de propósito:
     - `live_confirmed`: temos evidência POSITIVA recente de que está ao vivo.
-    - `confirmed_dead`: temos evidência NEGATIVA recente (checagem real
-      disse que não está ao vivo). É este campo que o frontend usa pra
-      bloquear a abertura — nunca abrir o que sabemos que está morto.
+    - `confirmed_dead`: temos evidência NEGATIVA recente E CONFIRMADA (ver
+      `liveness_common.status_de_liveness` — exige streak de confirmações
+      em execuções separadas, não só a checagem mais recente). É este campo
+      que o frontend usa pra bloquear a abertura — nunca abrir o que
+      sabemos que está morto.
 
-    Override manual: setar `"manual_dead_override": true` direto no objeto
-    da câmera em live_cameras.json mata ela na hora, sem esperar o próximo
-    scan do camera_liveness.py. Só isso tem efeito de verdade — escrever
-    `"confirmed_dead": true` direto no JSON NÃO funciona, porque esse campo
-    da resposta da API é sempre recalculado aqui, nunca lido do disco (bug
-    já confundiu alguém: editou o JSON, reiniciou o servidor, achou que
-    tinha resolvido, mas por coincidência a câmera já estava morta pelo
-    scan de qualquer forma).
+    Achado (2026-09-15): esta função lia só `database/camera_liveness_state.
+    json`, um arquivo que parou de ser escrito em 2026-08-31 — toda
+    checagem de liveness feita desde então (inclusive a correção de retry/
+    streak/recuperação por canal) ficava invisível pra API pública, porque
+    ela nunca olhava pras colunas do SQLite que os checadores já escrevem
+    corretamente. Agora lê direto da linha da câmera (`cam`, já buscada pelo
+    chamador — ou buscada aqui se não foi passada), com staleness calculada
+    a partir de `updated_at` da PRÓPRIA linha (resolve sozinho o problema de
+    cada checador rodar numa cadência diferente).
 
-    Sem checagem nenhuma ainda (cold start, ou checagem velha demais) os
-    dois ficam False — não travamos a UI inteira só porque a varredura
-    ainda não rodou; só bloqueamos quando há prova real de que morreu."""
-    if cam and cam.get("manual_dead_override"):
-        return {"live_confirmed": False, "confirmed_dead": True, "live_status": "MANUAL_OVERRIDE", "checked_at": None}
-
-    entry = _liveness_state.get(cam_id)
-    if not entry:
+    Sem checagem nenhuma ainda (cold start, streak insuficiente, ou
+    checagem velha demais) os dois ficam False — não travamos a UI inteira
+    só porque a varredura ainda não rodou/confirmou; só bloqueamos quando
+    há prova real e confirmada de que morreu."""
+    if cam is None:
+        cam = db_manager.get_camera_by_id(cam_id)
+    if not cam:
         return {"live_confirmed": False, "confirmed_dead": False, "live_status": "UNKNOWN", "checked_at": None}
 
-    checked_at = entry.get("checked_at")
+    checked_at = cam.get("updated_at")
+    updated_dt = _parse_sqlite_timestamp(checked_at)
     is_stale = True
-    if checked_at:
-        try:
-            checked_dt = datetime.fromisoformat(checked_at)
-            age = (datetime.now(timezone.utc) - checked_dt).total_seconds()
-            is_stale = age > LIVENESS_STALE_AFTER_SECONDS
-        except Exception:
-            is_stale = True
+    if updated_dt:
+        age = (datetime.now(timezone.utc) - updated_dt).total_seconds()
+        is_stale = age > LIVENESS_STALE_AFTER_SECONDS
 
-    if is_stale:
+    status = status_de_liveness(cam)  # "DEAD" | "LIVE" | "AGUARDANDO_CONFIRMACAO" | None
+
+    if is_stale or status in (None, "AGUARDANDO_CONFIRMACAO"):
         return {"live_confirmed": False, "confirmed_dead": False, "live_status": "UNKNOWN", "checked_at": checked_at}
 
-    status = entry.get("status", "UNKNOWN")
     return {
         "live_confirmed": status == "LIVE",
-        "confirmed_dead": status in ("DEAD", "ENDED_BUT_EXISTS"),
-        "live_status": status,
+        "confirmed_dead": status == "DEAD",
+        "live_status": cam.get("live_status") or status,
         "checked_at": checked_at,
     }
 
@@ -520,15 +514,13 @@ async def list_cameras(
     geo: Optional[str] = "ALL",
     source: Optional[str] = None
 ):
-    _reload_liveness_state_if_changed()
 
-    # Achado real (2026-08-31): filtrar ONLINE/OFFLINE direto no SQL usava
-    # a coluna `confirmed_dead` do banco, que é só um resíduo do JSON de
-    # origem e não reflete `get_camera_liveness()` (a fonte de verdade
-    # real, calculada a partir de camera_liveness_state.json +
-    # manual_dead_override). Isso podia esconder do usuário câmeras
-    # genuinamente vivas cujo campo antigo no JSON estava desatualizado.
-    # Agora: filtros de metadado (país/área/geo/busca) continuam no SQL
+    # Achado real (2026-08-31, revisado 2026-09-15): filtrar ONLINE/OFFLINE
+    # direto no SQL usando a coluna `confirmed_dead` crua ignora o gate de
+    # streak — uma câmera com uma única checagem morta ainda não confirmada
+    # (ver `liveness_common.status_de_liveness`) sumiria do ONLINE cedo
+    # demais. `get_camera_liveness()` é quem aplica esse gate; por isso
+    # filtros de metadado (país/área/geo/busca) continuam no SQL
     # (são atributos estáticos, seguros de filtrar ali), mas
     # ONLINE/OFFLINE e a paginação final acontecem em Python, depois de
     # calcular a liveness de verdade pra cada câmera candidata.
@@ -591,7 +583,6 @@ async def get_stats():
     a mesma fonte de verdade usada em /api/cameras — nunca a coluna crua
     confirmed_dead), e top países/áreas. Custo aceitável: mesmo padrão de
     calcular liveness pra todo o catálogo já usado em /api/cameras."""
-    _reload_liveness_state_if_changed()
     all_cams = db_manager.get_cameras_by_filters()
 
     online = 0
@@ -619,7 +610,6 @@ async def get_stats():
 
 @app.get("/api/cameras/map")
 async def list_cameras_map(north: float, south: float, east: float, west: float, limit: int = 1000):
-    _reload_liveness_state_if_changed()
     cams = db_manager.get_cameras_in_bbox(north, south, east, west, limit)
     result = []
     for cam in cams:
@@ -654,7 +644,6 @@ async def get_camera_detail(camera_id: str):
     do servidor (`displayLimit`), a câmera de um alerta quase nunca está
     no lote já carregado no frontend. Sem isso, o deep-link simplesmente
     não achava a câmera (achado real 2026-08-31)."""
-    _reload_liveness_state_if_changed()
     cam = db_manager.get_camera_by_id(camera_id)
     if not cam:
         raise HTTPException(status_code=404, detail="Câmera não encontrada")
