@@ -365,11 +365,8 @@ class LivePipeline:
 
         try:
             distance = match["score"]
-            prob = match.get("match_probability")
+            prob = _resolve_match_probability(match)
             conf = match.get("identity_confidence", "LOW")
-            if prob is None:
-                import math
-                prob = math.exp(-distance * 1.2)
             register_match_log(db, uid, distance, prob, conf, camera_id=self.camera_id)
         except Exception as e:
             log.debug(f"match_log: {e}")
@@ -749,6 +746,23 @@ def load_cameras_from_json(path="cameras.json"):
         print(f"[error] Falha ao ler {path}: {e}")
         return []
 
+def _resolve_match_probability(match: dict) -> float:
+    """`match_probability` pode faltar em entradas de cache Redis antigas
+    (gravadas antes desse campo existir — ver biometric_processor.py,
+    guarda de backfill só cobre cache com "score" presente). Sem esse
+    fallback, `None` vazava até `register_match_log` (match_logs.probability
+    = NULL) e depois até `BayesianSLREngine.compute_slr(None)` no laudo
+    pericial, estourando TypeError numa conta gaussiana. Usado pelos dois
+    call sites de registro de match (`LivePipeline._process_match` e
+    `_handle_event_match`) — extraído pra um lugar só depois de achar
+    (2026-09-15) que só um dos dois tinha esse fallback."""
+    prob = match.get("match_probability")
+    if prob is None:
+        import math
+        prob = math.exp(-match["score"] * 1.2)
+    return prob
+
+
 def _event_worker_process(event_queue, running_flag, camera_id):
     """PROCESSO DE EVENTOS (Fase 33-Giga): Isolado da IA para evitar bloqueio de IO.
     Lida com SQLite, Redis, Telegram e Geração de PDFs.
@@ -814,7 +828,7 @@ def _handle_event_match(frame, match, track_id, db, cache, camera_id):
 
     try:
         register_match_log(db, individual_id=uid, distance=match["score"],
-                            probability=match.get("match_probability"),
+                            probability=_resolve_match_probability(match),
                             confidence=match.get("identity_confidence"), camera_id=camera_id)
     except Exception as e:
         log.error(f"[event] Falha ao registrar match_log: {e}")
